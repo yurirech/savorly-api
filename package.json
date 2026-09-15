@@ -1,0 +1,23 @@
+{
+  "name": "savorly",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev -w @savorly/api",
+    "dev:mobile": "npm run start -w @savorly/mobile",
+    "test": "npm run test -w @savorly/api && npm run test -w @savorly/shared",
+    "db:generate": "npm run db:generate -w @savorly/api",
+    "db:migrate": "npm run db:migrate -w @savorly/api",
+    "host:api": "docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "sharp": "^0.35.4"
+  }
+}

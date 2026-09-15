@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "Savorly",
+    "slug": "savorly",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "scheme": "savorly",
+    "newArchEnabled": true,
+    "plugins": ["expo-router", "expo-sqlite", "expo-secure-store"],
+    "splash": {
+      "image": "./assets/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0E1116"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "app.savorly.mobile",
+      "infoPlist": {
+        "UIUserInterfaceStyle": "Dark"
+      }
+    },
+    "android": {
+      "package": "app.savorly.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#0E1116",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

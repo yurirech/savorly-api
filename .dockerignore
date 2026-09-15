@@ -1,0 +1,16 @@
+.git
+.cursor
+.expo
+**/.env
+**/.env.*
+!**/.env.example
+**/node_modules
+**/dist
+**/.turbo
+**/*.log
+apps/mobile
+docs
+scripts
+coverage
+*.apk
+*.aab

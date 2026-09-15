@@ -1,0 +1,25 @@
+export const tokens = {
+  background: "#0E1116",
+  surface: "#171C24",
+  elevated: "#222A35",
+  text: "#F4F1EA",
+  muted: "#A8A093",
+  accent: "#E8A87C",
+  danger: "#E26D5A",
+  border: "#2C3440",
+  success: "#8FBF9F",
+  radius: 20,
+  space: {
+    xs: 6,
+    sm: 10,
+    md: 16,
+    lg: 24,
+    xl: 32,
+  },
+  type: {
+    display: 32,
+    title: 22,
+    body: 16,
+    caption: 13,
+  },
+} as const;

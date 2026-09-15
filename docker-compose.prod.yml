@@ -1,0 +1,34 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: savorly
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: savorly
+    volumes:
+      - savorly_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U savorly -d savorly"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    build: .
+    ports:
+      - "4000:4000"
+    environment:
+      PORT: 4000
+      DATABASE_URL: postgres://savorly:${POSTGRES_PASSWORD}@postgres:5432/savorly
+      JWT_SECRET: ${JWT_SECRET}
+      USE_MOCK_IMPORTS: ${USE_MOCK_IMPORTS:-true}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      APIFY_TOKEN: ${APIFY_TOKEN:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  savorly_pg:
