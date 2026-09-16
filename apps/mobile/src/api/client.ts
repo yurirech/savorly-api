@@ -1,11 +1,14 @@
 import type {
   ApiErrorBody,
   AuthResponse,
+  CookbookDetail,
+  CookbookSummary,
   GeneratedRecipe,
+  RecipeGenerateRequest,
   RecipeImportRequest,
   SavedRecipe,
 } from "@savorly/shared";
-import { getToken } from "../auth/session";
+import { getToken, clearSession } from "../auth/session";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -30,17 +33,38 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     },
   });
 
+  if (response.status === 401) {
+    await clearSession();
+  }
+
   if (response.status === 204) {
     return undefined as T;
   }
 
-  const data = (await response.json()) as T & ApiErrorBody;
+  const raw = await response.text();
+  let data: (T & ApiErrorBody) | null = null;
+  if (raw) {
+    try {
+      data = JSON.parse(raw) as T & ApiErrorBody;
+    } catch {
+      throw new ApiRequestError(
+        "internal_error",
+        response.status === 404
+          ? "This API does not have cookbooks yet. Use the local API or deploy the latest backend."
+          : "The server returned something that was not JSON.",
+      );
+    }
+  }
+
   if (!response.ok) {
     throw new ApiRequestError(
-      data.error?.code ?? "internal_error",
-      data.error?.message ?? "Request failed",
-      Boolean(data.error?.offerTextPaste),
+      data?.error?.code ?? "internal_error",
+      data?.error?.message ?? "Request failed",
+      Boolean(data?.error?.offerTextPaste),
     );
+  }
+  if (!data) {
+    throw new ApiRequestError("internal_error", "Empty response from the API.");
   }
   return data;
 }
@@ -66,6 +90,13 @@ export function importRecipe(body: RecipeImportRequest) {
   });
 }
 
+export function generateRecipe(body: RecipeGenerateRequest) {
+  return request<{ recipe: GeneratedRecipe }>("/generations", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 export function listRecipes(q?: string) {
   const query = q ? `?q=${encodeURIComponent(q)}` : "";
   return request<{ recipes: SavedRecipe[] }>(`/recipes${query}`);
@@ -86,5 +117,53 @@ export function updateRecipe(id: string, recipe: GeneratedRecipe) {
   return request<{ recipe: SavedRecipe }>(`/recipes/${id}`, {
     method: "PUT",
     body: JSON.stringify(recipe),
+  });
+}
+
+export function listCookbooks() {
+  return request<{ cookbooks: CookbookSummary[] }>("/cookbooks");
+}
+
+export function createCookbook(name: string) {
+  return request<{ cookbook: CookbookSummary }>("/cookbooks", {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export function getCookbook(id: string) {
+  return request<{ cookbook: CookbookDetail }>(`/cookbooks/${id}`);
+}
+
+export function updateCookbook(id: string, name: string) {
+  return request<{ cookbook: CookbookSummary }>(`/cookbooks/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export function deleteCookbook(id: string) {
+  return request<void>(`/cookbooks/${id}`, { method: "DELETE" });
+}
+
+export function addRecipesToCookbook(id: string, recipeIds: string[]) {
+  return request<{ cookbook: CookbookDetail }>(`/cookbooks/${id}/recipes`, {
+    method: "POST",
+    body: JSON.stringify({ recipeIds }),
+  });
+}
+
+export function removeRecipeFromCookbook(id: string, recipeId: string) {
+  return request<void>(`/cookbooks/${id}/recipes/${recipeId}`, { method: "DELETE" });
+}
+
+export function listRecipeCookbooks(recipeId: string) {
+  return request<{ cookbookIds: string[] }>(`/recipes/${recipeId}/cookbooks`);
+}
+
+export function setRecipeCookbooks(recipeId: string, cookbookIds: string[]) {
+  return request<{ cookbookIds: string[] }>(`/recipes/${recipeId}/cookbooks`, {
+    method: "PUT",
+    body: JSON.stringify({ cookbookIds }),
   });
 }

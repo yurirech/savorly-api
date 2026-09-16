@@ -1,6 +1,7 @@
-import { Pressable, ScrollView, StyleSheet, Text } from "react-native";
+import { Pressable, ScrollView, StyleSheet } from "react-native";
 import { FOOD_CATEGORIES, type FoodCategory } from "@savorly/shared";
 import { tokens } from "../theme/tokens";
+import { AppText } from "./AppText";
 
 type CategoryPickerProps = {
   value: FoodCategory;
@@ -19,7 +20,9 @@ export function CategoryPicker(props: CategoryPickerProps) {
             onPress={() => onChange(category)}
             style={[styles.chip, selected && styles.selected]}
           >
-            <Text style={[styles.label, selected && styles.selectedLabel]}>{category}</Text>
+            <AppText variant="caption" style={selected ? styles.selectedLabel : styles.chipLabel}>
+              {category}
+            </AppText>
           </Pressable>
         );
       })}
@@ -30,27 +33,26 @@ export function CategoryPicker(props: CategoryPickerProps) {
 const styles = StyleSheet.create({
   row: {
     gap: tokens.space.sm,
-    paddingVertical: 4,
+    paddingVertical: tokens.space.xs,
   },
   chip: {
-    borderRadius: 999,
+    borderRadius: tokens.radius.full,
     borderWidth: 1,
     borderColor: tokens.border,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: tokens.space.md,
+    paddingVertical: tokens.space.sm,
     backgroundColor: tokens.surface,
   },
   selected: {
     backgroundColor: tokens.accent,
     borderColor: tokens.accent,
   },
-  label: {
-    color: tokens.text,
-    fontSize: tokens.type.caption,
+  chipLabel: {
     textTransform: "capitalize",
   },
   selectedLabel: {
-    color: tokens.background,
-    fontWeight: "700",
+    color: tokens.bg,
+    fontFamily: tokens.font.bodyBold,
+    textTransform: "capitalize",
   },
 });

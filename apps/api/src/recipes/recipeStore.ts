@@ -112,7 +112,7 @@ function toRow(userId: string, recipe: GeneratedRecipe) {
   };
 }
 
-function fromRow(row: typeof recipes.$inferSelect): SavedRecipe {
+export function recipeFromRow(row: typeof recipes.$inferSelect): SavedRecipe {
   return {
     id: row.id,
     userId: row.userId,
@@ -130,4 +130,8 @@ function fromRow(row: typeof recipes.$inferSelect): SavedRecipe {
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
+}
+
+function fromRow(row: typeof recipes.$inferSelect): SavedRecipe {
+  return recipeFromRow(row);
 }

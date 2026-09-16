@@ -8,7 +8,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://REPLACE_WITH_PUBLIC_API_URL"
+        "EXPO_PUBLIC_API_URL": "https://savorly-api-exyh.onrender.com"
       }
     },
     "production": {

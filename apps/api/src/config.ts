@@ -24,7 +24,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     databaseUrl,
     jwtSecret,
     geminiApiKey: source.GEMINI_API_KEY || undefined,
-    geminiModel: source.GEMINI_MODEL ?? "gemini-2.0-flash",
+    geminiModel: source.GEMINI_MODEL ?? "gemini-3.5-flash-lite",
     apifyToken: source.APIFY_TOKEN || undefined,
     apifyInstagramActor: source.APIFY_INSTAGRAM_ACTOR ?? "apify/instagram-reel-scraper",
     useMockImports: source.USE_MOCK_IMPORTS === "true",

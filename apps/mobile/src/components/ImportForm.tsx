@@ -1,13 +1,13 @@
 import { router } from "expo-router";
 import { useState } from "react";
-import { Pressable, StyleSheet, Text } from "react-native";
+import { Pressable } from "react-native";
 import type { RecipeImportRequest } from "@savorly/shared";
 import { ApiRequestError, importRecipe } from "../api/client";
 import { setReviewDraft } from "../store/reviewDraft";
-import { tokens } from "../theme/tokens";
 import { Button } from "./Button";
 import { Field } from "./Field";
 import { Screen } from "./Screen";
+import { AppText } from "./AppText";
 
 type ImportFormProps = {
   title: string;
@@ -48,8 +48,10 @@ export function ImportForm(props: ImportFormProps) {
 
   return (
     <Screen>
-      <Text style={styles.title}>{title}</Text>
-      <Text style={styles.subtitle}>{subtitle}</Text>
+      <AppText variant="display">{title}</AppText>
+      <AppText variant="body" color="muted">
+        {subtitle}
+      </AppText>
       <Field
         label={label}
         value={value}
@@ -59,33 +61,19 @@ export function ImportForm(props: ImportFormProps) {
         multiline={multiline}
         autoCapitalize="none"
       />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? (
+        <AppText variant="body" color="danger">
+          {error}
+        </AppText>
+      ) : null}
       {offerPaste ? (
         <Pressable onPress={() => router.push("/(app)/import/text")}>
-          <Text style={styles.link}>Paste the recipe text instead</Text>
+          <AppText variant="body" color="accent">
+            Paste the recipe text instead
+          </AppText>
         </Pressable>
       ) : null}
       <Button label="Import" onPress={() => void onSubmit()} loading={loading} disabled={!value.trim()} />
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  title: {
-    color: tokens.text,
-    fontSize: tokens.type.display,
-    fontWeight: "700",
-  },
-  subtitle: {
-    color: tokens.muted,
-    fontSize: tokens.type.body,
-    lineHeight: 22,
-  },
-  error: {
-    color: tokens.danger,
-  },
-  link: {
-    color: tokens.accent,
-    fontSize: tokens.type.body,
-  },
-});

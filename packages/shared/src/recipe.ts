@@ -64,3 +64,27 @@ export type RecipeSearchQuery = {
   q?: string;
   category?: import("./foodCategory").FoodCategory;
 };
+
+export type CreateAgent = "creami" | "bread" | "bake" | "chef";
+
+export type CreamiGenerateRequest = {
+  agent: "creami";
+  size: "big" | "small";
+  macros: "lean" | "balanced";
+  base: "lean" | "mixed";
+  texture: "gelato" | "standard";
+  sweetener: "stevia" | "sucralose" | "both";
+  flavor?: string;
+  notes?: string;
+  previousRecipe?: GeneratedRecipe;
+  adaptNote?: string;
+};
+
+export type NotesGenerateRequest = {
+  agent: "bread" | "bake" | "chef";
+  notes: string;
+  previousRecipe?: GeneratedRecipe;
+  adaptNote?: string;
+};
+
+export type RecipeGenerateRequest = CreamiGenerateRequest | NotesGenerateRequest;

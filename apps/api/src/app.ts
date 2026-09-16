@@ -2,13 +2,25 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { ZodError } from "zod";
 import { z } from "zod";
-import { FOOD_CATEGORIES, type GeneratedRecipe } from "@savorly/shared";
+import { FOOD_CATEGORIES, type GeneratedRecipe, type RecipeGenerateRequest } from "@savorly/shared";
 import type { Env } from "./config";
 import type { Database } from "./db/client";
 import { createAuthApp, requireUser } from "./auth/auth";
 import { AppError } from "./errors";
+import { generateRecipe } from "./create/generateRecipe";
 import { importRecipe } from "./import/importRecipe";
 import { deleteRecipe, getRecipe, saveRecipe, searchRecipes, updateRecipe } from "./recipes/recipeStore";
+import {
+  addRecipesToCookbook,
+  createCookbook,
+  deleteCookbook,
+  getCookbook,
+  listCookbookIdsForRecipe,
+  listCookbooks,
+  removeRecipeFromCookbook,
+  renameCookbook,
+  setRecipeCookbooks,
+} from "./cookbooks/cookbookStore";
 
 const importSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("instagram"), url: z.string().url() }),
@@ -52,6 +64,49 @@ const generatedRecipeSchema = z.object({
   }),
 });
 
+const generateSchema = z
+  .discriminatedUnion("agent", [
+    z.object({
+      agent: z.literal("creami"),
+      size: z.enum(["big", "small"]),
+      macros: z.enum(["lean", "balanced"]),
+      base: z.enum(["lean", "mixed"]),
+      texture: z.enum(["gelato", "standard"]),
+      sweetener: z.enum(["stevia", "sucralose", "both"]),
+      flavor: z.string().trim().optional(),
+      notes: z.string().trim().optional(),
+      previousRecipe: generatedRecipeSchema.optional(),
+      adaptNote: z.string().trim().min(1).optional(),
+    }),
+    z.object({
+      agent: z.enum(["bread", "bake", "chef"]),
+      notes: z.string(),
+      previousRecipe: generatedRecipeSchema.optional(),
+      adaptNote: z.string().trim().min(1).optional(),
+    }),
+  ])
+  .superRefine((value, ctx) => {
+    if (value.adaptNote && !value.previousRecipe) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Adapt needs the current recipe.",
+        path: ["previousRecipe"],
+      });
+    }
+  });
+
+const cookbookNameSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+});
+
+const recipeIdsSchema = z.object({
+  recipeIds: z.array(z.string().uuid()).min(1),
+});
+
+const cookbookIdsSchema = z.object({
+  cookbookIds: z.array(z.string().uuid()),
+});
+
 export function createApp(db: Database, env: Env) {
   const app = new Hono();
 
@@ -90,6 +145,13 @@ export function createApp(db: Database, env: Env) {
     return c.json({ recipe });
   });
 
+  app.post("/generations", async (c) => {
+    await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = generateSchema.parse(await c.req.json());
+    const recipe = await generateRecipe(body as RecipeGenerateRequest, env);
+    return c.json({ recipe });
+  });
+
   app.get("/recipes", async (c) => {
     const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
     const q = c.req.query("q");
@@ -108,6 +170,19 @@ export function createApp(db: Database, env: Env) {
     return c.json({ recipe: saved }, 201);
   });
 
+  app.get("/recipes/:id/cookbooks", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const cookbookIds = await listCookbookIdsForRecipe(db, user.id, c.req.param("id"));
+    return c.json({ cookbookIds });
+  });
+
+  app.put("/recipes/:id/cookbooks", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = cookbookIdsSchema.parse(await c.req.json());
+    const cookbookIds = await setRecipeCookbooks(db, user.id, c.req.param("id"), body.cookbookIds);
+    return c.json({ cookbookIds });
+  });
+
   app.get("/recipes/:id", async (c) => {
     const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
     const recipe = await getRecipe(db, user.id, c.req.param("id"));
@@ -124,6 +199,51 @@ export function createApp(db: Database, env: Env) {
   app.delete("/recipes/:id", async (c) => {
     const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
     await deleteRecipe(db, user.id, c.req.param("id"));
+    return c.body(null, 204);
+  });
+
+  app.get("/cookbooks", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const cookbooks = await listCookbooks(db, user.id);
+    return c.json({ cookbooks });
+  });
+
+  app.post("/cookbooks", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = cookbookNameSchema.parse(await c.req.json());
+    const cookbook = await createCookbook(db, user.id, body.name);
+    return c.json({ cookbook }, 201);
+  });
+
+  app.get("/cookbooks/:id", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const cookbook = await getCookbook(db, user.id, c.req.param("id"));
+    return c.json({ cookbook });
+  });
+
+  app.patch("/cookbooks/:id", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = cookbookNameSchema.parse(await c.req.json());
+    const cookbook = await renameCookbook(db, user.id, c.req.param("id"), body.name);
+    return c.json({ cookbook });
+  });
+
+  app.delete("/cookbooks/:id", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    await deleteCookbook(db, user.id, c.req.param("id"));
+    return c.body(null, 204);
+  });
+
+  app.post("/cookbooks/:id/recipes", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = recipeIdsSchema.parse(await c.req.json());
+    const cookbook = await addRecipesToCookbook(db, user.id, c.req.param("id"), body.recipeIds);
+    return c.json({ cookbook });
+  });
+
+  app.delete("/cookbooks/:id/recipes/:recipeId", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    await removeRecipeFromCookbook(db, user.id, c.req.param("id"), c.req.param("recipeId"));
     return c.body(null, 204);
   });
 

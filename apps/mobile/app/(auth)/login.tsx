@@ -1,8 +1,9 @@
-import { Link, router } from "expo-router";
+import { Link, router, type Href } from "expo-router";
 import { useState } from "react";
-import { StyleSheet, Text } from "react-native";
+import { StyleSheet } from "react-native";
 import { login } from "../../src/api/client";
 import { saveSession } from "../../src/auth/session";
+import { AppText } from "../../src/components/AppText";
 import { Button } from "../../src/components/Button";
 import { Field } from "../../src/components/Field";
 import { Screen } from "../../src/components/Screen";
@@ -20,7 +21,7 @@ export default function LoginScreen() {
     try {
       const session = await login(email.trim(), password);
       await saveSession(session);
-      router.replace("/(app)");
+      router.replace("/(app)" as Href);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not sign in.");
     } finally {
@@ -30,12 +31,20 @@ export default function LoginScreen() {
 
   return (
     <Screen>
-      <Text style={styles.kicker}>Savorly</Text>
-      <Text style={styles.title}>Save recipes without the noise.</Text>
-      <Text style={styles.hint}>Default login is admin / admin.</Text>
+      <AppText variant="label" color="accent">
+        Savorly
+      </AppText>
+      <AppText variant="display">Recipes without the noise.</AppText>
+      <AppText variant="body" color="muted">
+        Sign in to your kitchen.
+      </AppText>
       <Field label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
       <Field label="Password" value={password} onChangeText={setPassword} secureTextEntry autoCapitalize="none" />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? (
+        <AppText variant="body" color="danger">
+          {error}
+        </AppText>
+      ) : null}
       <Button label="Sign in" onPress={() => void onSubmit()} loading={loading} />
       <Link href="/(auth)/register" style={styles.link}>
         Create an account
@@ -45,29 +54,10 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  kicker: {
-    color: tokens.accent,
-    fontSize: tokens.type.caption,
-    fontWeight: "700",
-    letterSpacing: 2,
-    textTransform: "uppercase",
-  },
-  title: {
-    color: tokens.text,
-    fontSize: tokens.type.display,
-    fontWeight: "700",
-    lineHeight: 38,
-  },
-  hint: {
-    color: tokens.muted,
-    fontSize: tokens.type.body,
-  },
-  error: {
-    color: tokens.danger,
-  },
   link: {
     color: tokens.accent,
     textAlign: "center",
-    fontSize: tokens.type.body,
+    fontSize: tokens.type.body.fontSize,
+    fontFamily: tokens.font.bodyMedium,
   },
 });

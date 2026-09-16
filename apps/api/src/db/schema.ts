@@ -1,11 +1,12 @@
 import {
   index,
+  integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uuid,
-  integer,
 } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
@@ -42,5 +43,36 @@ export const recipes = pgTable(
     index("recipes_user_category_idx").on(table.userId, table.category),
     index("recipes_tags_idx").using("gin", table.tags),
     index("recipes_ingredient_names_idx").using("gin", table.ingredientNames),
+  ],
+);
+
+export const cookbooks = pgTable(
+  "cookbooks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("cookbooks_user_updated_idx").on(table.userId, table.updatedAt)],
+);
+
+export const cookbookRecipes = pgTable(
+  "cookbook_recipes",
+  {
+    cookbookId: uuid("cookbook_id")
+      .notNull()
+      .references(() => cookbooks.id, { onDelete: "cascade" }),
+    recipeId: uuid("recipe_id")
+      .notNull()
+      .references(() => recipes.id, { onDelete: "cascade" }),
+    addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.cookbookId, table.recipeId] }),
+    index("cookbook_recipes_recipe_idx").on(table.recipeId),
   ],
 );

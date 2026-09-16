@@ -1,21 +1,28 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import type { ReactNode } from "react";
+import { Pressable, StyleSheet, View } from "react-native";
+import { CaretRight } from "phosphor-react-native";
 import { tokens } from "../theme/tokens";
+import { AppText } from "./AppText";
 
 type SourceCardProps = {
   title: string;
   subtitle: string;
   onPress: () => void;
+  icon?: ReactNode;
 };
 
 export function SourceCard(props: SourceCardProps) {
-  const { title, subtitle, onPress } = props;
+  const { title, subtitle, onPress, icon } = props;
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
-      <View>
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.subtitle}>{subtitle}</Text>
+      {icon ? <View style={styles.icon}>{icon}</View> : null}
+      <View style={styles.copy}>
+        <AppText variant="title">{title}</AppText>
+        <AppText variant="caption" color="muted">
+          {subtitle}
+        </AppText>
       </View>
-      <Text style={styles.arrow}>→</Text>
+      <CaretRight size={20} color={tokens.accent} weight="bold" />
     </Pressable>
   );
 }
@@ -23,30 +30,29 @@ export function SourceCard(props: SourceCardProps) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: tokens.surface,
-    borderRadius: tokens.radius,
-    padding: tokens.space.lg,
+    borderRadius: tokens.radius.md,
+    padding: tokens.space.md,
     borderWidth: 1,
     borderColor: tokens.border,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    minHeight: 88,
+    gap: tokens.space.md,
+    minHeight: 80,
   },
   pressed: {
     borderColor: tokens.accent,
+    backgroundColor: tokens.bgElevated,
   },
-  title: {
-    color: tokens.text,
-    fontSize: tokens.type.title,
-    fontWeight: "600",
+  icon: {
+    width: 44,
+    height: 44,
+    borderRadius: tokens.radius.sm,
+    backgroundColor: tokens.accentMuted,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  subtitle: {
-    color: tokens.muted,
-    fontSize: tokens.type.caption,
-    marginTop: 4,
-  },
-  arrow: {
-    color: tokens.accent,
-    fontSize: 24,
+  copy: {
+    flex: 1,
+    gap: tokens.space.xs,
   },
 });

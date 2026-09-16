@@ -1,10 +1,12 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { Image, StyleSheet, Text, View } from "react-native";
-import type { SavedRecipe } from "@savorly/shared";
-import { getRecipe } from "../../../src/api/client";
+import { Image, StyleSheet, View } from "react-native";
+import type { CookbookSummary, SavedRecipe } from "@savorly/shared";
+import { getRecipe, listCookbooks, listRecipeCookbooks, setRecipeCookbooks } from "../../../src/api/client";
 import { imageForCategory } from "../../../src/assets/categoryImages";
+import { AppText } from "../../../src/components/AppText";
 import { Button } from "../../../src/components/Button";
+import { CookbookPickerSheet } from "../../../src/components/CookbookPickerSheet";
 import { Screen } from "../../../src/components/Screen";
 import { getCachedRecipe } from "../../../src/db/cache";
 import { setReviewDraft } from "../../../src/store/reviewDraft";
@@ -13,17 +15,31 @@ import { tokens } from "../../../src/theme/tokens";
 export default function RecipeDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [recipe, setRecipe] = useState<SavedRecipe | null>(null);
+  const [cookbooks, setCookbooks] = useState<CookbookSummary[]>([]);
+  const [savedCookbookIds, setSavedCookbookIds] = useState<string[]>([]);
+  const [selectedCookbookIds, setSelectedCookbookIds] = useState<string[]>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [savingCookbooks, setSavingCookbooks] = useState(false);
 
   useEffect(() => {
     if (!id) return;
     void (async () => {
-      const cached = await getCachedRecipe(id);
-      if (cached) setRecipe(cached);
+      void getCachedRecipe(id).then((cached) => {
+        if (cached) setRecipe(cached);
+      });
       try {
         const live = await getRecipe(id);
         setRecipe(live.recipe);
       } catch {
         // Cached recipe is enough offline.
+      }
+      try {
+        const [books, membership] = await Promise.all([listCookbooks(), listRecipeCookbooks(id)]);
+        setCookbooks(books.cookbooks);
+        setSavedCookbookIds(membership.cookbookIds);
+        setSelectedCookbookIds(membership.cookbookIds);
+      } catch {
+        // Membership is live-only.
       }
     })();
   }, [id]);
@@ -31,90 +47,168 @@ export default function RecipeDetailScreen() {
   if (!recipe) {
     return (
       <Screen>
-        <Text style={styles.muted}>Loading recipe…</Text>
+        <AppText variant="body" color="muted">
+          Loading recipe…
+        </AppText>
       </Screen>
     );
   }
 
   return (
-    <Screen>
-      <Image source={imageForCategory(recipe.category)} style={styles.hero} />
-      <Text style={styles.category}>{recipe.category}</Text>
-      <Text style={styles.title}>{recipe.title}</Text>
-      <Text style={styles.source}>
-        {recipe.source.author || recipe.source.sourceName || recipe.source.type}
-      </Text>
-      <Text style={styles.heading}>Ingredients</Text>
-      {recipe.ingredients.map((ingredient) => (
-        <Text key={ingredient.name} style={styles.body}>
-          {[ingredient.quantity, ingredient.unit, ingredient.name].filter(Boolean).join(" ")}
-        </Text>
-      ))}
-      <Text style={styles.heading}>Steps</Text>
-      {recipe.steps.map((step) => (
-        <Text key={step.order} style={styles.body}>
-          {step.order}. {step.text}
-        </Text>
-      ))}
-      {recipe.uncertainties.length > 0 ? (
-        <View style={styles.box}>
-          <Text style={styles.heading}>Uncertainties</Text>
-          {recipe.uncertainties.map((item) => (
-            <Text key={item} style={styles.body}>
-              {item}
-            </Text>
-          ))}
+    <>
+    <Screen padded={false} edges={[]}>
+      <View style={styles.heroWrap}>
+        <Image source={imageForCategory(recipe.category)} style={styles.hero} />
+        <View style={styles.heroScrim} />
+        <View style={styles.heroCopy}>
+          <AppText variant="label" color="accent">
+            {recipe.category}
+          </AppText>
+          <AppText variant="display">{recipe.title}</AppText>
+          <AppText variant="caption" color="muted">
+            {recipe.source.author || recipe.source.sourceName || recipe.source.type}
+          </AppText>
         </View>
-      ) : null}
-      <Button
-        label="Edit"
-        variant="secondary"
-        onPress={() => {
-          setReviewDraft(recipe, recipe.id);
-          router.push("/(app)/review");
+      </View>
+      <View style={styles.body}>
+        <AppText variant="title">Ingredients</AppText>
+        {recipe.ingredients.map((ingredient) => (
+          <View key={ingredient.name} style={styles.ingredient}>
+            <AppText variant="body">
+              {[ingredient.quantity, ingredient.unit, ingredient.name].filter(Boolean).join(" ")}
+            </AppText>
+          </View>
+        ))}
+        <AppText variant="title">Steps</AppText>
+        {recipe.steps.map((step) => (
+          <View key={step.order} style={styles.step}>
+            <View style={styles.stepIndex}>
+              <AppText variant="label" color="accent">
+                {String(step.order).padStart(2, "0")}
+              </AppText>
+            </View>
+            <AppText variant="body" style={styles.stepText}>
+              {step.text}
+            </AppText>
+          </View>
+        ))}
+        {recipe.uncertainties.length > 0 ? (
+          <View style={styles.box}>
+            <AppText variant="title">Uncertainties</AppText>
+            {recipe.uncertainties.map((item) => (
+              <AppText key={item} variant="body" color="muted">
+                {item}
+              </AppText>
+            ))}
+          </View>
+        ) : null}
+        <Button
+          label="Add to cookbooks"
+          variant="secondary"
+          onPress={() => {
+            setSelectedCookbookIds(savedCookbookIds);
+            setPickerOpen(true);
+          }}
+        />
+        <Button
+          label="Edit"
+          variant="secondary"
+          onPress={() => {
+            setReviewDraft(recipe, recipe.id);
+            router.push("/(app)/review");
+          }}
+        />
+      </View>
+    </Screen>
+      <CookbookPickerSheet
+        visible={pickerOpen}
+        cookbooks={cookbooks}
+        selectedIds={selectedCookbookIds}
+        saving={savingCookbooks}
+        onToggle={(cookbookId) =>
+          setSelectedCookbookIds((current) =>
+            current.includes(cookbookId) ? current.filter((value) => value !== cookbookId) : [...current, cookbookId],
+          )
+        }
+        onClose={() => {
+          setSelectedCookbookIds(savedCookbookIds);
+          setPickerOpen(false);
+        }}
+        onSave={() => {
+          void (async () => {
+            setSavingCookbooks(true);
+            try {
+              const saved = await setRecipeCookbooks(recipe.id, selectedCookbookIds);
+              setSavedCookbookIds(saved.cookbookIds);
+              setSelectedCookbookIds(saved.cookbookIds);
+              setPickerOpen(false);
+            } finally {
+              setSavingCookbooks(false);
+            }
+          })();
         }}
       />
-    </Screen>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
+  heroWrap: {
+    height: 320,
+    justifyContent: "flex-end",
+  },
   hero: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     width: "100%",
-    height: 200,
-    borderRadius: tokens.radius,
+    height: "100%",
   },
-  category: {
-    color: tokens.accent,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    fontWeight: "700",
+  heroScrim: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: tokens.bg,
+    opacity: 0.4,
   },
-  title: {
-    color: tokens.text,
-    fontSize: tokens.type.display,
-    fontWeight: "700",
-  },
-  source: {
-    color: tokens.muted,
-  },
-  heading: {
-    color: tokens.text,
-    fontSize: tokens.type.title,
-    marginTop: tokens.space.sm,
+  heroCopy: {
+    padding: tokens.space.lg,
+    paddingBottom: tokens.space.xl,
+    gap: tokens.space.sm,
   },
   body: {
-    color: tokens.text,
-    fontSize: tokens.type.body,
-    lineHeight: 24,
+    padding: tokens.space.lg,
+    gap: tokens.space.md,
   },
-  muted: {
-    color: tokens.muted,
+  ingredient: {
+    borderBottomWidth: 1,
+    borderBottomColor: tokens.border,
+    paddingVertical: tokens.space.sm,
+  },
+  step: {
+    flexDirection: "row",
+    gap: tokens.space.md,
+    backgroundColor: tokens.surface,
+    borderRadius: tokens.radius.md,
+    padding: tokens.space.md,
+    borderWidth: 1,
+    borderColor: tokens.border,
+  },
+  stepIndex: {
+    width: 32,
+  },
+  stepText: {
+    flex: 1,
   },
   box: {
     backgroundColor: tokens.surface,
-    borderRadius: 16,
+    borderRadius: tokens.radius.md,
     padding: tokens.space.md,
+    gap: tokens.space.sm,
     borderWidth: 1,
     borderColor: tokens.border,
   },

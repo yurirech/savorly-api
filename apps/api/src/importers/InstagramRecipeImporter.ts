@@ -21,15 +21,25 @@ export class InstagramRecipeImporter implements RecipeSourceImporter<{ url: stri
 
   async import(input: { url: string }): Promise<ImportedRecipeSource> {
     const url = parsePublicHttpUrl(input.url);
-    if (!isInstagramUrl(url)) {
+    if (!isInstagramReelUrl(url)) {
       throw new AppError("validation_error", "Enter a public Instagram Reel URL.", 400);
     }
 
     const client = new ApifyClient({ token: this.token });
-    const run = await client.actor(this.actorId).call({
-      directUrls: [url.href],
-      resultsLimit: 1,
-    });
+    let run;
+    try {
+      run = await client.actor(this.actorId).call(instagramReelActorInput(url));
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new AppError(
+        "import_blocked",
+        "Could not read this Reel. Use a public Reel URL or paste the recipe text instead.",
+        502,
+        true,
+      );
+    }
 
     if (!run?.defaultDatasetId) {
       throw new AppError(
@@ -67,7 +77,17 @@ export class InstagramRecipeImporter implements RecipeSourceImporter<{ url: stri
   }
 }
 
-function isInstagramUrl(url: URL): boolean {
+export function instagramReelActorInput(url: URL) {
+  return {
+    username: [url.href],
+    resultsLimit: 1,
+  };
+}
+
+function isInstagramReelUrl(url: URL): boolean {
   const host = url.hostname.replace(/^www\./, "");
-  return host === "instagram.com" || host === "instagr.am";
+  if (host !== "instagram.com" && host !== "instagr.am") {
+    return false;
+  }
+  return /\/(reel|reels|p)\//i.test(url.pathname);
 }

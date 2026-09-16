@@ -1,8 +1,8 @@
-import { router } from "expo-router";
-import { useMemo, useState } from "react";
-import { Image, StyleSheet, Text, View } from "react-native";
-import type { FoodCategory, GeneratedRecipe } from "@savorly/shared";
-import { createRecipe, updateRecipe } from "../../src/api/client";
+import { router, type Href } from "expo-router";
+import { useEffect, useMemo, useState } from "react";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import type { CookbookSummary, FoodCategory, GeneratedRecipe } from "@savorly/shared";
+import { createRecipe, listCookbooks, listRecipeCookbooks, setRecipeCookbooks, updateRecipe } from "../../src/api/client";
 import { imageForCategory } from "../../src/assets/categoryImages";
 import { Button } from "../../src/components/Button";
 import { CategoryPicker } from "../../src/components/CategoryPicker";
@@ -17,12 +17,29 @@ export default function ReviewScreen() {
   const [recipe, setRecipe] = useState<GeneratedRecipe | null>(initial?.recipe ?? null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cookbooks, setCookbooks] = useState<CookbookSummary[]>([]);
+  const [selectedCookbookIds, setSelectedCookbookIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const live = await listCookbooks();
+        setCookbooks(live.cookbooks);
+        if (initial?.editingId) {
+          const membership = await listRecipeCookbooks(initial.editingId);
+          setSelectedCookbookIds(membership.cookbookIds);
+        }
+      } catch {
+        // Saving still works without cookbook chips.
+      }
+    })();
+  }, [initial?.editingId]);
 
   if (!recipe) {
     return (
       <Screen>
         <Text style={styles.title}>Nothing to review.</Text>
-        <Button label="Back home" onPress={() => router.replace("/(app)")} />
+        <Button label="Back home" onPress={() => router.replace("/(app)" as Href)} />
       </Screen>
     );
   }
@@ -35,7 +52,10 @@ export default function ReviewScreen() {
       const saved = initial?.editingId
         ? await updateRecipe(initial.editingId, recipe)
         : await createRecipe(recipe);
-      await upsertCachedRecipe(saved.recipe);
+      void upsertCachedRecipe(saved.recipe);
+      if (selectedCookbookIds.length > 0 || initial?.editingId) {
+        await setRecipeCookbooks(saved.recipe.id, selectedCookbookIds);
+      }
       clearReviewDraft();
       router.replace(`/(app)/recipe/${saved.recipe.id}`);
     } catch (err) {
@@ -98,6 +118,29 @@ export default function ReviewScreen() {
           })
         }
       />
+      {cookbooks.length > 0 ? (
+        <View style={styles.cookbookBlock}>
+          <Text style={styles.label}>Cookbooks</Text>
+          <View style={styles.chipRow}>
+            {cookbooks.map((cookbook) => {
+              const selected = selectedCookbookIds.includes(cookbook.id);
+              return (
+                <Pressable
+                  key={cookbook.id}
+                  onPress={() =>
+                    setSelectedCookbookIds((current) =>
+                      selected ? current.filter((id) => id !== cookbook.id) : [...current, cookbook.id],
+                    )
+                  }
+                  style={[styles.chip, selected && styles.chipSelected]}
+                >
+                  <Text style={selected ? styles.chipSelectedLabel : styles.chipLabel}>{cookbook.name}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      ) : null}
       <Text style={styles.source}>
         Source: {recipe.source.author || recipe.source.sourceName || recipe.source.type}
         {recipe.source.originalUrl ? `\n${recipe.source.originalUrl}` : ""}
@@ -127,33 +170,34 @@ const styles = StyleSheet.create({
   hero: {
     width: "100%",
     height: 180,
-    borderRadius: tokens.radius,
+    borderRadius: tokens.radius.md,
   },
   kicker: {
     color: tokens.accent,
-    fontSize: tokens.type.caption,
-    fontWeight: "700",
+    fontSize: tokens.type.caption.fontSize,
+    fontFamily: tokens.font.bodyBold,
     textTransform: "uppercase",
   },
   title: {
     color: tokens.text,
-    fontSize: tokens.type.title,
+    fontSize: tokens.type.title.fontSize,
+    fontFamily: tokens.font.display,
   },
   label: {
-    color: tokens.muted,
-    fontSize: tokens.type.caption,
-    fontWeight: "700",
+    color: tokens.textMuted,
+    fontSize: tokens.type.caption.fontSize,
+    fontFamily: tokens.font.bodyBold,
     textTransform: "uppercase",
   },
   source: {
-    color: tokens.muted,
+    color: tokens.textMuted,
     lineHeight: 20,
   },
   uncertainties: {
     backgroundColor: tokens.surface,
-    borderRadius: 16,
+    borderRadius: tokens.radius.md,
     padding: tokens.space.md,
-    gap: 6,
+    gap: tokens.space.sm,
     borderWidth: 1,
     borderColor: tokens.border,
   },
@@ -162,5 +206,35 @@ const styles = StyleSheet.create({
   },
   error: {
     color: tokens.danger,
+  },
+  cookbookBlock: {
+    gap: tokens.space.sm,
+  },
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: tokens.space.sm,
+  },
+  chip: {
+    borderRadius: tokens.radius.full,
+    borderWidth: 1,
+    borderColor: tokens.border,
+    paddingHorizontal: tokens.space.md,
+    paddingVertical: tokens.space.sm,
+    backgroundColor: tokens.surface,
+  },
+  chipSelected: {
+    backgroundColor: tokens.accent,
+    borderColor: tokens.accent,
+  },
+  chipLabel: {
+    color: tokens.text,
+    fontFamily: tokens.font.body,
+    fontSize: tokens.type.caption.fontSize,
+  },
+  chipSelectedLabel: {
+    color: tokens.bg,
+    fontFamily: tokens.font.bodyBold,
+    fontSize: tokens.type.caption.fontSize,
   },
 });

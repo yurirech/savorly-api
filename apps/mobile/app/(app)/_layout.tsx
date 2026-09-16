@@ -5,19 +5,22 @@ export default function AppLayout() {
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: tokens.background },
+        headerStyle: { backgroundColor: tokens.bg },
         headerTintColor: tokens.text,
+        headerTitleStyle: { fontFamily: tokens.font.bodyBold },
         headerShadowVisible: false,
-        contentStyle: { backgroundColor: tokens.background },
+        contentStyle: { backgroundColor: tokens.bg },
       }}
     >
-      <Stack.Screen name="index" options={{ title: "Savorly" }} />
-      <Stack.Screen name="library" options={{ title: "Recipes" }} />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="account" options={{ title: "Account" }} />
       <Stack.Screen name="import/instagram" options={{ title: "Instagram" }} />
       <Stack.Screen name="import/website" options={{ title: "Website" }} />
       <Stack.Screen name="import/text" options={{ title: "Paste text" }} />
       <Stack.Screen name="review" options={{ title: "Review recipe" }} />
-      <Stack.Screen name="recipe/[id]" options={{ title: "Recipe" }} />
+      <Stack.Screen name="recipe/[id]" options={{ title: "Recipe", headerTransparent: true, headerTintColor: tokens.text }} />
+      <Stack.Screen name="cookbook/new" options={{ title: "New cookbook" }} />
+      <Stack.Screen name="cookbook/[id]" options={{ title: "Cookbook" }} />
     </Stack>
   );
 }

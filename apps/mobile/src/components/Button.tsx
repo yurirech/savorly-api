@@ -1,5 +1,7 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text } from "react-native";
+import type { ReactNode } from "react";
+import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
 import { tokens } from "../theme/tokens";
+import { AppText } from "./AppText";
 
 type ButtonProps = {
   label: string;
@@ -7,10 +9,11 @@ type ButtonProps = {
   variant?: "primary" | "secondary" | "ghost";
   loading?: boolean;
   disabled?: boolean;
+  icon?: ReactNode;
 };
 
 export function Button(props: ButtonProps) {
-  const { label, onPress, variant = "primary", loading, disabled } = props;
+  const { label, onPress, variant = "primary", loading, disabled, icon } = props;
   return (
     <Pressable
       onPress={onPress}
@@ -25,9 +28,14 @@ export function Button(props: ButtonProps) {
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={variant === "primary" ? tokens.background : tokens.text} />
+        <ActivityIndicator color={variant === "primary" ? tokens.bg : tokens.text} />
       ) : (
-        <Text style={[styles.label, variant === "primary" && styles.primaryLabel]}>{label}</Text>
+        <View style={styles.row}>
+          {icon}
+          <AppText variant="body" style={[styles.label, variant === "primary" && styles.primaryLabel]}>
+            {label}
+          </AppText>
+        </View>
       )}
     </Pressable>
   );
@@ -36,7 +44,7 @@ export function Button(props: ButtonProps) {
 const styles = StyleSheet.create({
   base: {
     minHeight: 52,
-    borderRadius: tokens.radius,
+    borderRadius: tokens.radius.md,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: tokens.space.lg,
@@ -53,17 +61,22 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   pressed: {
-    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
   },
   disabled: {
-    opacity: 0.5,
+    opacity: 0.45,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.space.sm,
   },
   label: {
+    fontFamily: tokens.font.bodyBold,
     color: tokens.text,
-    fontSize: tokens.type.body,
-    fontWeight: "600",
   },
   primaryLabel: {
-    color: tokens.background,
+    color: tokens.bg,
+    fontFamily: tokens.font.bodyBold,
   },
 });

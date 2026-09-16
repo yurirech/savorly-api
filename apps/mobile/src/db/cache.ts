@@ -1,6 +1,9 @@
+import { Platform } from "react-native";
 import * as SQLite from "expo-sqlite";
 import type { SavedRecipe } from "@savorly/shared";
 
+const memory = new Map<string, SavedRecipe>();
+const useSqlite = Platform.OS !== "web";
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
 function openDb() {
@@ -30,7 +33,31 @@ function openDb() {
   return dbPromise;
 }
 
+function sortByUpdated(recipes: SavedRecipe[]): SavedRecipe[] {
+  return [...recipes].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+function matchesQuery(recipe: SavedRecipe, q: string): boolean {
+  const term = q.trim().toLowerCase();
+  if (!term) return true;
+  const haystack = [
+    recipe.title,
+    recipe.category,
+    recipe.tags.join(" "),
+    recipe.ingredients.map((item) => item.name).join(" "),
+    recipe.source.sourceName ?? "",
+    recipe.source.author ?? "",
+  ]
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(term);
+}
+
 export async function upsertCachedRecipe(recipe: SavedRecipe): Promise<void> {
+  if (!useSqlite) {
+    memory.set(recipe.id, recipe);
+    return;
+  }
   const db = await openDb();
   await db.runAsync(
     `INSERT OR REPLACE INTO recipes
@@ -52,6 +79,13 @@ export async function upsertCachedRecipe(recipe: SavedRecipe): Promise<void> {
 }
 
 export async function replaceCache(recipes: SavedRecipe[]): Promise<void> {
+  if (!useSqlite) {
+    memory.clear();
+    for (const recipe of recipes) {
+      memory.set(recipe.id, recipe);
+    }
+    return;
+  }
   const db = await openDb();
   await db.execAsync("DELETE FROM recipes");
   for (const recipe of recipes) {
@@ -60,6 +94,9 @@ export async function replaceCache(recipes: SavedRecipe[]): Promise<void> {
 }
 
 export async function searchCachedRecipes(q: string): Promise<SavedRecipe[]> {
+  if (!useSqlite) {
+    return sortByUpdated([...memory.values()].filter((recipe) => matchesQuery(recipe, q)));
+  }
   const db = await openDb();
   const term = `%${q.trim()}%`;
   const rows = q.trim()
@@ -81,6 +118,9 @@ export async function searchCachedRecipes(q: string): Promise<SavedRecipe[]> {
 }
 
 export async function getCachedRecipe(id: string): Promise<SavedRecipe | null> {
+  if (!useSqlite) {
+    return memory.get(id) ?? null;
+  }
   const db = await openDb();
   const row = await db.getFirstAsync<{ payload: string }>(
     "SELECT payload FROM recipes WHERE id = ?",

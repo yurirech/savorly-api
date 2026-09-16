@@ -6,7 +6,7 @@ const env: Env = {
   port: 4000,
   databaseUrl: "postgres://savorly:savorly@localhost:5433/savorly",
   jwtSecret: "test-secret",
-  geminiModel: "gemini-2.0-flash",
+  geminiModel: "gemini-3.5-flash-lite",
   apifyInstagramActor: "apify/instagram-reel-scraper",
   useMockImports: true,
 };

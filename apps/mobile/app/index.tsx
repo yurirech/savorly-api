@@ -1,4 +1,4 @@
-import { Redirect } from "expo-router";
+import { Redirect, type Href } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { getToken } from "../src/auth/session";
@@ -13,11 +13,11 @@ export default function Index() {
 
   if (token === undefined) {
     return (
-      <View style={{ flex: 1, backgroundColor: tokens.background, alignItems: "center", justifyContent: "center" }}>
+      <View style={{ flex: 1, backgroundColor: tokens.bg, alignItems: "center", justifyContent: "center" }}>
         <ActivityIndicator color={tokens.accent} />
       </View>
     );
   }
 
-  return <Redirect href={token ? "/(app)" : "/(auth)/login"} />;
+  return <Redirect href={(token ? "/(app)" : "/(auth)/login") as Href} />;
 }
