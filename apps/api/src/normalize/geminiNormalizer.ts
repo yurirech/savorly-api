@@ -1,4 +1,5 @@
 import type { GeneratedRecipe } from "@savorly/shared";
+import { pantryCanonicalKeyHint } from "@savorly/shared";
 import type { ImportedRecipeSource } from "../importers/types";
 import { generateGeminiJson, parseGeminiRecipe } from "./geminiRecipeSchema";
 
@@ -9,7 +10,8 @@ Rules:
 - If a quantity, temperature, or duration is not explicitly stated, set that field to null and add a short note to uncertainties.
 - Pick exactly one category from the provided enum. If unsure, use "other".
 - Keep ingredient names concrete. Do not add pantry items that were not mentioned.
-- Preserve the cooking method described by the source.`;
+- Preserve the cooking method described by the source.
+- ${pantryCanonicalKeyHint()}`;
 
 export async function normalizeImportedSource(options: {
   apiKey: string;

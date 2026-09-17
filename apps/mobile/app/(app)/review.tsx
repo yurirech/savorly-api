@@ -2,7 +2,8 @@ import { router, type Href } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import type { CookbookSummary, FoodCategory, GeneratedRecipe } from "@savorly/shared";
-import { createRecipe, listCookbooks, listRecipeCookbooks, setRecipeCookbooks, updateRecipe } from "../../src/api/client";
+import { formatIngredientLine, parseIngredientLines, recipeNotesText } from "@savorly/shared";
+import { createCookbook, createRecipe, listCookbooks, listRecipeCookbooks, setRecipeCookbooks, updateRecipe } from "../../src/api/client";
 import { imageForCategory } from "../../src/assets/categoryImages";
 import { Button } from "../../src/components/Button";
 import { CategoryPicker } from "../../src/components/CategoryPicker";
@@ -19,6 +20,8 @@ export default function ReviewScreen() {
   const [error, setError] = useState<string | null>(null);
   const [cookbooks, setCookbooks] = useState<CookbookSummary[]>([]);
   const [selectedCookbookIds, setSelectedCookbookIds] = useState<string[]>([]);
+  const [newCookbookName, setNewCookbookName] = useState("");
+  const [creatingCookbook, setCreatingCookbook] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -65,6 +68,26 @@ export default function ReviewScreen() {
     }
   }
 
+  async function onCreateCookbook() {
+    const trimmed = newCookbookName.trim();
+    if (!trimmed) {
+      setError("Give the cookbook a name.");
+      return;
+    }
+    setCreatingCookbook(true);
+    setError(null);
+    try {
+      const created = await createCookbook(trimmed);
+      setCookbooks((current) => [created.cookbook, ...current]);
+      setSelectedCookbookIds((current) => [...current, created.cookbook.id]);
+      setNewCookbookName("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create cookbook.");
+    } finally {
+      setCreatingCookbook(false);
+    }
+  }
+
   return (
     <Screen>
       <Image source={imageForCategory(recipe.category)} style={styles.hero} />
@@ -76,16 +99,27 @@ export default function ReviewScreen() {
         onChange={(category: FoodCategory) => setRecipe({ ...recipe, category })}
       />
       <Field
+        label="Servings"
+        value={recipe.servings != null ? String(recipe.servings) : ""}
+        onChangeText={(value) => {
+          const trimmed = value.trim();
+          if (!trimmed) {
+            setRecipe({ ...recipe, servings: null });
+            return;
+          }
+          const servings = Number(trimmed);
+          setRecipe({ ...recipe, servings: Number.isFinite(servings) && servings > 0 ? servings : recipe.servings });
+        }}
+        keyboardType="numeric"
+        placeholder="Original serving count"
+      />
+      <Field
         label="Ingredients"
-        value={recipe.ingredients.map(formatIngredient).join("\n")}
+        value={recipe.ingredients.map(formatIngredientLine).join("\n")}
         onChangeText={(value) =>
           setRecipe({
             ...recipe,
-            ingredients: value
-              .split("\n")
-              .map((line) => line.trim())
-              .filter(Boolean)
-              .map((name) => ({ name, quantity: null, unit: null, notes: null })),
+            ingredients: parseIngredientLines(value, recipe.ingredients),
           })
         }
         multiline
@@ -118,9 +152,29 @@ export default function ReviewScreen() {
           })
         }
       />
-      {cookbooks.length > 0 ? (
-        <View style={styles.cookbookBlock}>
-          <Text style={styles.label}>Cookbooks</Text>
+      <Field
+        label="Notes"
+        value={recipeNotesText(recipe)}
+        onChangeText={(value) => setRecipe({ ...recipe, notes: value, uncertainties: [] })}
+        multiline
+        placeholder="Anything you want to remember"
+      />
+      <View style={styles.cookbookBlock}>
+        <Text style={styles.label}>Cookbooks</Text>
+        <Field
+          label="New cookbook"
+          value={newCookbookName}
+          onChangeText={setNewCookbookName}
+          placeholder="Weeknight dinners"
+        />
+        <Button
+          label="Create cookbook"
+          variant="secondary"
+          onPress={() => void onCreateCookbook()}
+          loading={creatingCookbook}
+          disabled={!newCookbookName.trim()}
+        />
+        {cookbooks.length > 0 ? (
           <View style={styles.chipRow}>
             {cookbooks.map((cookbook) => {
               const selected = selectedCookbookIds.includes(cookbook.id);
@@ -139,31 +193,18 @@ export default function ReviewScreen() {
               );
             })}
           </View>
-        </View>
-      ) : null}
+        ) : (
+          <Text style={styles.source}>Create a cookbook to file this recipe when you save.</Text>
+        )}
+      </View>
       <Text style={styles.source}>
         Source: {recipe.source.author || recipe.source.sourceName || recipe.source.type}
         {recipe.source.originalUrl ? `\n${recipe.source.originalUrl}` : ""}
       </Text>
-      {recipe.uncertainties.length > 0 ? (
-        <View style={styles.uncertainties}>
-          <Text style={styles.label}>Uncertainties</Text>
-          {recipe.uncertainties.map((item) => (
-            <Text key={item} style={styles.note}>
-              {item}
-            </Text>
-          ))}
-        </View>
-      ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <Button label="Save recipe" onPress={() => void onSave()} loading={saving} />
     </Screen>
   );
-}
-
-function formatIngredient(ingredient: GeneratedRecipe["ingredients"][number]): string {
-  const qty = ingredient.quantity != null ? String(ingredient.quantity) : "";
-  return [qty, ingredient.unit, ingredient.name].filter(Boolean).join(" ");
 }
 
 const styles = StyleSheet.create({
@@ -192,17 +233,6 @@ const styles = StyleSheet.create({
   source: {
     color: tokens.textMuted,
     lineHeight: 20,
-  },
-  uncertainties: {
-    backgroundColor: tokens.surface,
-    borderRadius: tokens.radius.md,
-    padding: tokens.space.md,
-    gap: tokens.space.sm,
-    borderWidth: 1,
-    borderColor: tokens.border,
-  },
-  note: {
-    color: tokens.text,
   },
   error: {
     color: tokens.danger,

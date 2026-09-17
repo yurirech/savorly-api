@@ -113,6 +113,10 @@ export function getRecipe(id: string) {
   return request<{ recipe: SavedRecipe }>(`/recipes/${id}`);
 }
 
+export function deleteRecipe(id: string) {
+  return request<void>(`/recipes/${id}`, { method: "DELETE" });
+}
+
 export function updateRecipe(id: string, recipe: GeneratedRecipe) {
   return request<{ recipe: SavedRecipe }>(`/recipes/${id}`, {
     method: "PUT",

@@ -15,6 +15,13 @@
       "when": 1773510000000,
       "tag": "0001_cookbooks",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1773660000000,
+      "tag": "0002_ingredient_dictionary",
+      "breakpoints": true
     }
   ]
 }

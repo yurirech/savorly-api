@@ -19,7 +19,7 @@ export default function AppLayout() {
       <Stack.Screen name="import/text" options={{ title: "Paste text" }} />
       <Stack.Screen name="review" options={{ title: "Review recipe" }} />
       <Stack.Screen name="recipe/[id]" options={{ title: "Recipe", headerTransparent: true, headerTintColor: tokens.text }} />
-      <Stack.Screen name="cookbook/new" options={{ title: "New cookbook" }} />
+      <Stack.Screen name="new-cookbook" options={{ title: "New cookbook" }} />
       <Stack.Screen name="cookbook/[id]" options={{ title: "Cookbook" }} />
     </Stack>
   );

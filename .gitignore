@@ -16,3 +16,4 @@ apps/mobile/ios
 *.aab
 .idea
 .vscode
+*.stackdump

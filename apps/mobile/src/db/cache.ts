@@ -117,6 +117,15 @@ export async function searchCachedRecipes(q: string): Promise<SavedRecipe[]> {
   return rows.map((row) => JSON.parse(row.payload) as SavedRecipe);
 }
 
+export async function removeCachedRecipe(id: string): Promise<void> {
+  if (!useSqlite) {
+    memory.delete(id);
+    return;
+  }
+  const db = await openDb();
+  await db.runAsync("DELETE FROM recipes WHERE id = ?", [id]);
+}
+
 export async function getCachedRecipe(id: string): Promise<SavedRecipe | null> {
   if (!useSqlite) {
     return memory.get(id) ?? null;

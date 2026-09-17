@@ -1,16 +1,21 @@
-import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
-import { Image, StyleSheet, View } from "react-native";
-import type { CookbookSummary, SavedRecipe } from "@savorly/shared";
-import { getRecipe, listCookbooks, listRecipeCookbooks, setRecipeCookbooks } from "../../../src/api/client";
+import { router, type Href, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { Minus, Plus } from "phosphor-react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Image, Pressable, StyleSheet, View } from "react-native";
+import type { CookbookSummary, DisplayUnit, SavedRecipe } from "@savorly/shared";
+import { displayIngredient, formatIngredientLine, recipeNotesText } from "@savorly/shared";
+import { deleteRecipe, getRecipe, listCookbooks, listRecipeCookbooks, setRecipeCookbooks, updateRecipe } from "../../../src/api/client";
 import { imageForCategory } from "../../../src/assets/categoryImages";
 import { AppText } from "../../../src/components/AppText";
 import { Button } from "../../../src/components/Button";
 import { CookbookPickerSheet } from "../../../src/components/CookbookPickerSheet";
+import { Field } from "../../../src/components/Field";
 import { Screen } from "../../../src/components/Screen";
-import { getCachedRecipe } from "../../../src/db/cache";
+import { SegmentedControl } from "../../../src/components/SegmentedControl";
+import { getCachedRecipe, removeCachedRecipe, upsertCachedRecipe } from "../../../src/db/cache";
 import { setReviewDraft } from "../../../src/store/reviewDraft";
 import { tokens } from "../../../src/theme/tokens";
+import { confirmDestructive } from "../../../src/utils/confirmDestructive";
 
 export default function RecipeDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -19,30 +24,82 @@ export default function RecipeDetailScreen() {
   const [savedCookbookIds, setSavedCookbookIds] = useState<string[]>([]);
   const [selectedCookbookIds, setSelectedCookbookIds] = useState<string[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerOpenRef = useRef(false);
+  pickerOpenRef.current = pickerOpen;
   const [savingCookbooks, setSavingCookbooks] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notesDraft, setNotesDraft] = useState("");
+  const [displayServings, setDisplayServings] = useState<number | null>(null);
+  const [displayUnit, setDisplayUnit] = useState<DisplayUnit>("original");
+
+  const recipeId = Array.isArray(id) ? id[0] : id;
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!recipeId) return;
+      void (async () => {
+        void getCachedRecipe(recipeId).then((cached) => {
+          if (cached) setRecipe(cached);
+        });
+        try {
+          const live = await getRecipe(recipeId);
+          setRecipe(live.recipe);
+        } catch {
+          // Cached recipe is enough offline.
+        }
+        try {
+          const [books, membership] = await Promise.all([listCookbooks(), listRecipeCookbooks(recipeId)]);
+          setCookbooks(books.cookbooks);
+          setSavedCookbookIds(membership.cookbookIds);
+          if (!pickerOpenRef.current) {
+            setSelectedCookbookIds(membership.cookbookIds);
+          }
+        } catch {
+          // Membership is live-only.
+        }
+      })();
+    }, [recipeId]),
+  );
 
   useEffect(() => {
-    if (!id) return;
-    void (async () => {
-      void getCachedRecipe(id).then((cached) => {
-        if (cached) setRecipe(cached);
-      });
-      try {
-        const live = await getRecipe(id);
-        setRecipe(live.recipe);
-      } catch {
-        // Cached recipe is enough offline.
-      }
-      try {
-        const [books, membership] = await Promise.all([listCookbooks(), listRecipeCookbooks(id)]);
-        setCookbooks(books.cookbooks);
-        setSavedCookbookIds(membership.cookbookIds);
-        setSelectedCookbookIds(membership.cookbookIds);
-      } catch {
-        // Membership is live-only.
-      }
-    })();
+    setDisplayServings(null);
+    setDisplayUnit("original");
   }, [id]);
+
+  async function persistMembership(nextIds: string[]) {
+    if (!recipeId) return;
+    setSelectedCookbookIds(nextIds);
+    setSavingCookbooks(true);
+    setError(null);
+    try {
+      const saved = await setRecipeCookbooks(recipeId, nextIds);
+      setSavedCookbookIds(saved.cookbookIds);
+      setSelectedCookbookIds(saved.cookbookIds);
+      try {
+        const books = await listCookbooks();
+        setCookbooks(books.cookbooks);
+      } catch {
+        // Chips can still render from the local list.
+      }
+    } catch (err) {
+      setSelectedCookbookIds(savedCookbookIds);
+      setError(err instanceof Error ? err.message : "Could not update cookbooks.");
+    } finally {
+      setSavingCookbooks(false);
+    }
+  }
+
+  const notesSource = recipe ? recipeNotesText(recipe) : "";
+
+  useEffect(() => {
+    setNotesDraft(notesSource);
+  }, [id, notesSource]);
+
+  useEffect(() => {
+    if (!recipe) return;
+    setDisplayServings((current) => current ?? recipe.servings ?? null);
+  }, [recipe]);
 
   if (!recipe) {
     return (
@@ -51,6 +108,48 @@ export default function RecipeDetailScreen() {
           Loading recipe…
         </AppText>
       </Screen>
+    );
+  }
+
+  const canScale = recipe.servings != null && recipe.servings > 0;
+  const servingsForMath = canScale ? (displayServings ?? recipe.servings ?? 1) : 1;
+
+  async function saveNotes() {
+    const nextNotes = notesDraft.trim() || null;
+    const current = recipeNotesText(recipe).trim() || null;
+    if (nextNotes === current) return;
+    try {
+      const saved = await updateRecipe(recipe.id, {
+        ...recipe,
+        notes: nextNotes,
+        uncertainties: [],
+      });
+      void upsertCachedRecipe(saved.recipe);
+      setRecipe(saved.recipe);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save notes.");
+    }
+  }
+
+  function confirmDelete() {
+    confirmDestructive(
+      "Delete recipe?",
+      "This removes it from your library and cookbooks.",
+      "Delete",
+      () => {
+        void (async () => {
+          setDeleting(true);
+          setError(null);
+          try {
+            await deleteRecipe(recipe.id);
+            void removeCachedRecipe(recipe.id);
+            router.replace("/(app)/(tabs)/recipes" as Href);
+          } catch (err) {
+            setError(err instanceof Error ? err.message : "Could not delete this recipe.");
+            setDeleting(false);
+          }
+        })();
+      },
     );
   }
 
@@ -71,11 +170,61 @@ export default function RecipeDetailScreen() {
         </View>
       </View>
       <View style={styles.body}>
+        <View style={styles.scaleRow}>
+          <AppText variant="label" color="muted">
+            Servings
+          </AppText>
+          {canScale ? (
+            <View style={styles.stepper}>
+              <Pressable
+                onPress={() => setDisplayServings(Math.max(1, servingsForMath - 1))}
+                style={styles.stepperBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Fewer servings"
+              >
+                <Minus size={18} color={tokens.text} />
+              </Pressable>
+              <AppText variant="title">{String(servingsForMath)}</AppText>
+              <Pressable
+                onPress={() => setDisplayServings(servingsForMath + 1)}
+                style={styles.stepperBtn}
+                accessibilityRole="button"
+                accessibilityLabel="More servings"
+              >
+                <Plus size={18} color={tokens.text} />
+              </Pressable>
+            </View>
+          ) : (
+            <AppText variant="body" color="muted">
+              Servings not set
+            </AppText>
+          )}
+          {canScale && recipe.servings != null && servingsForMath !== recipe.servings ? (
+            <AppText variant="caption" color="muted">
+              Scaled from {recipe.servings}
+            </AppText>
+          ) : null}
+        </View>
+        <SegmentedControl
+          value={displayUnit}
+          onChange={setDisplayUnit}
+          options={[
+            { value: "original", label: "As written" },
+            { value: "g", label: "g" },
+            { value: "volume", label: "cups" },
+          ]}
+        />
         <AppText variant="title">Ingredients</AppText>
-        {recipe.ingredients.map((ingredient) => (
-          <View key={ingredient.name} style={styles.ingredient}>
+        {recipe.ingredients.map((ingredient, index) => (
+          <View key={`${index}-${ingredient.name}`} style={styles.ingredient}>
             <AppText variant="body">
-              {[ingredient.quantity, ingredient.unit, ingredient.name].filter(Boolean).join(" ")}
+              {formatIngredientLine(
+                displayIngredient(ingredient, {
+                  originalServings: recipe.servings,
+                  displayServings: servingsForMath,
+                  displayUnit,
+                }),
+              )}
             </AppText>
           </View>
         ))}
@@ -92,18 +241,37 @@ export default function RecipeDetailScreen() {
             </AppText>
           </View>
         ))}
-        {recipe.uncertainties.length > 0 ? (
-          <View style={styles.box}>
-            <AppText variant="title">Uncertainties</AppText>
-            {recipe.uncertainties.map((item) => (
-              <AppText key={item} variant="body" color="muted">
-                {item}
-              </AppText>
-            ))}
+        <Field
+          label="Notes"
+          value={notesDraft}
+          onChangeText={setNotesDraft}
+          onEndEditing={() => void saveNotes()}
+          multiline
+          placeholder="Anything you want to remember"
+        />
+        {savedCookbookIds.length > 0 ? (
+          <View style={styles.cookbookBlock}>
+            <AppText variant="label" color="muted">
+              Cookbooks
+            </AppText>
+            <View style={styles.chipRow}>
+              {savedCookbookIds.map((bookId) => {
+                const book = cookbooks.find((item) => item.id === bookId);
+                return (
+                  <Pressable
+                    key={bookId}
+                    onPress={() => router.push(`/(app)/cookbook/${bookId}` as Href)}
+                    style={styles.chip}
+                  >
+                    <AppText variant="caption">{book?.name ?? "Cookbook"}</AppText>
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
         ) : null}
         <Button
-          label="Add to cookbooks"
+          label={savedCookbookIds.length > 0 ? "Edit cookbooks" : "Add to cookbooks"}
           variant="secondary"
           onPress={() => {
             setSelectedCookbookIds(savedCookbookIds);
@@ -118,6 +286,12 @@ export default function RecipeDetailScreen() {
             router.push("/(app)/review");
           }}
         />
+        {error ? (
+          <AppText variant="body" color="danger">
+            {error}
+          </AppText>
+        ) : null}
+        <Button label="Delete recipe" variant="ghost" onPress={confirmDelete} loading={deleting} disabled={deleting} />
       </View>
     </Screen>
       <CookbookPickerSheet
@@ -125,28 +299,24 @@ export default function RecipeDetailScreen() {
         cookbooks={cookbooks}
         selectedIds={selectedCookbookIds}
         saving={savingCookbooks}
-        onToggle={(cookbookId) =>
-          setSelectedCookbookIds((current) =>
-            current.includes(cookbookId) ? current.filter((value) => value !== cookbookId) : [...current, cookbookId],
-          )
-        }
+        onToggle={(cookbookId) => {
+          const nextIds = selectedCookbookIds.includes(cookbookId)
+            ? selectedCookbookIds.filter((value) => value !== cookbookId)
+            : [...selectedCookbookIds, cookbookId];
+          void persistMembership(nextIds);
+        }}
+        onCreated={(book) => {
+          setCookbooks((current) => [book, ...current.filter((item) => item.id !== book.id)]);
+          const nextIds = selectedCookbookIds.includes(book.id)
+            ? selectedCookbookIds
+            : [...selectedCookbookIds, book.id];
+          void persistMembership(nextIds);
+        }}
         onClose={() => {
           setSelectedCookbookIds(savedCookbookIds);
           setPickerOpen(false);
         }}
-        onSave={() => {
-          void (async () => {
-            setSavingCookbooks(true);
-            try {
-              const saved = await setRecipeCookbooks(recipe.id, selectedCookbookIds);
-              setSavedCookbookIds(saved.cookbookIds);
-              setSelectedCookbookIds(saved.cookbookIds);
-              setPickerOpen(false);
-            } finally {
-              setSavingCookbooks(false);
-            }
-          })();
-        }}
+        onSave={() => setPickerOpen(false)}
       />
     </>
   );
@@ -184,6 +354,24 @@ const styles = StyleSheet.create({
     padding: tokens.space.lg,
     gap: tokens.space.md,
   },
+  scaleRow: {
+    gap: tokens.space.sm,
+  },
+  stepper: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.space.md,
+  },
+  stepperBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: tokens.radius.full,
+    borderWidth: 1,
+    borderColor: tokens.border,
+    backgroundColor: tokens.surface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   ingredient: {
     borderBottomWidth: 1,
     borderBottomColor: tokens.border,
@@ -204,12 +392,20 @@ const styles = StyleSheet.create({
   stepText: {
     flex: 1,
   },
-  box: {
-    backgroundColor: tokens.surface,
-    borderRadius: tokens.radius.md,
-    padding: tokens.space.md,
+  cookbookBlock: {
     gap: tokens.space.sm,
+  },
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: tokens.space.sm,
+  },
+  chip: {
+    borderRadius: tokens.radius.full,
     borderWidth: 1,
     borderColor: tokens.border,
+    paddingHorizontal: tokens.space.md,
+    paddingVertical: tokens.space.sm,
+    backgroundColor: tokens.surface,
   },
 });

@@ -1,6 +1,6 @@
 import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import type { GeneratedRecipe, RecipeSearchQuery, SavedRecipe } from "@savorly/shared";
-import { parseFoodCategory } from "@savorly/shared";
+import { applyPantrySnapshot, parseFoodCategory } from "@savorly/shared";
 import type { Database } from "../db/client";
 import { recipes } from "../db/schema";
 import { AppError } from "../errors";
@@ -102,7 +102,7 @@ function toRow(userId: string, recipe: GeneratedRecipe) {
     servings: recipe.servings ?? null,
     prepTimeMinutes: recipe.prepTimeMinutes ?? null,
     cookTimeMinutes: recipe.cookTimeMinutes ?? null,
-    ingredients: recipe.ingredients,
+    ingredients: recipe.ingredients.map((ingredient) => applyPantrySnapshot(ingredient)),
     steps: recipe.steps,
     tags: recipe.tags,
     notes: recipe.notes ?? null,
@@ -121,7 +121,7 @@ export function recipeFromRow(row: typeof recipes.$inferSelect): SavedRecipe {
     servings: row.servings,
     prepTimeMinutes: row.prepTimeMinutes,
     cookTimeMinutes: row.cookTimeMinutes,
-    ingredients: row.ingredients as SavedRecipe["ingredients"],
+    ingredients: (row.ingredients as SavedRecipe["ingredients"]).map((ingredient) => applyPantrySnapshot(ingredient)),
     steps: row.steps as SavedRecipe["steps"],
     tags: row.tags,
     notes: row.notes,

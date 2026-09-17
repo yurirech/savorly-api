@@ -1,17 +1,23 @@
 import type { GeneratedRecipe, RecipeGenerateRequest } from "@savorly/shared";
 import type { Env } from "../config";
+import type { Database } from "../db/client";
 import { AppError } from "../errors";
+import { resolveIngredients } from "../ingredients/resolveIngredients";
 import { generateGeminiJson, parseGeminiRecipe } from "../normalize/geminiRecipeSchema";
 import { CREATE_AGENT_LABEL, composeSystemInstruction, composeUserMessage } from "./composeGeneratePrompt";
 import { mockGeneratedCreate } from "./mockGenerate";
 
-export async function generateRecipe(request: RecipeGenerateRequest, env: Env): Promise<GeneratedRecipe> {
+export async function generateRecipe(
+  request: RecipeGenerateRequest,
+  env: Env,
+  db?: Database,
+): Promise<GeneratedRecipe> {
   if (request.adaptNote?.trim() && !request.previousRecipe) {
     throw new AppError("validation_error", "Adapt needs the current recipe.", 400);
   }
 
   if (env.useMockImports) {
-    return mockGeneratedCreate(request);
+    return resolveIngredients(mockGeneratedCreate(request), { env, db });
   }
 
   if (!env.geminiApiKey) {
@@ -29,9 +35,10 @@ export async function generateRecipe(request: RecipeGenerateRequest, env: Env): 
     failureMessage: "Could not generate this recipe. Try a shorter adapt note.",
   });
 
-  return parseGeminiRecipe(parsed, {
+  const recipe = parseGeminiRecipe(parsed, {
     type: "manual",
     sourceName: CREATE_AGENT_LABEL[request.agent],
     originalText: userPrompt,
   });
+  return resolveIngredients(recipe, { env, db });
 }

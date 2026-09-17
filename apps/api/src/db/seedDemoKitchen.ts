@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { applyPantrySnapshot } from "@savorly/shared";
 import type { GeneratedRecipe } from "@savorly/shared";
 import type { Database } from "./client";
 import { recipes, users } from "./schema";
@@ -22,7 +23,7 @@ const LEMON_GARLIC_PASTA: GeneratedRecipe = {
     { name: "salt", quantity: null, unit: null, notes: "to taste" },
     { name: "black pepper", quantity: null, unit: null, notes: "to taste" },
     { name: "parsley", quantity: null, unit: null, notes: "optional, chopped" },
-  ],
+  ].map((ingredient) => applyPantrySnapshot(ingredient)),
   steps: [
     {
       order: 1,

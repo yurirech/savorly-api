@@ -30,6 +30,8 @@ export type Ingredient = {
   quantity?: number | null;
   unit?: string | null;
   notes?: string | null;
+  canonicalKey?: string | null;
+  gramsPerCup?: number | null;
 };
 
 export type RecipeStep = {
@@ -59,6 +61,13 @@ export type SavedRecipe = GeneratedRecipe & {
   createdAt: string;
   updatedAt: string;
 };
+
+export function recipeNotesText(recipe: Pick<GeneratedRecipe, "notes" | "uncertainties">): string {
+  return [recipe.notes, ...(recipe.uncertainties ?? [])]
+    .map((item) => item?.trim() ?? "")
+    .filter(Boolean)
+    .join("\n");
+}
 
 export type RecipeSearchQuery = {
   q?: string;

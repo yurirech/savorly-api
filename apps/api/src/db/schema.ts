@@ -4,6 +4,7 @@ import {
   jsonb,
   pgTable,
   primaryKey,
+  real,
   text,
   timestamp,
   uuid,
@@ -76,3 +77,9 @@ export const cookbookRecipes = pgTable(
     index("cookbook_recipes_recipe_idx").on(table.recipeId),
   ],
 );
+
+export const ingredientDictionary = pgTable("ingredient_dictionary", {
+  key: text("key").primaryKey(),
+  gramsPerCup: real("grams_per_cup").notNull(),
+  aliases: text("aliases").array().notNull().default([]),
+});

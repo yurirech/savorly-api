@@ -40,6 +40,8 @@ const generatedRecipeSchema = z.object({
       quantity: z.number().nullable().optional(),
       unit: z.string().nullable().optional(),
       notes: z.string().nullable().optional(),
+      canonicalKey: z.string().nullable().optional(),
+      gramsPerCup: z.number().nullable().optional(),
     }),
   ),
   steps: z.array(
@@ -141,14 +143,14 @@ export function createApp(db: Database, env: Env) {
   app.post("/imports", async (c) => {
     await requireUser(c.req.header("authorization"), env.jwtSecret);
     const body = importSchema.parse(await c.req.json());
-    const recipe = await importRecipe(body, env);
+    const recipe = await importRecipe(body, env, db);
     return c.json({ recipe });
   });
 
   app.post("/generations", async (c) => {
     await requireUser(c.req.header("authorization"), env.jwtSecret);
     const body = generateSchema.parse(await c.req.json());
-    const recipe = await generateRecipe(body as RecipeGenerateRequest, env);
+    const recipe = await generateRecipe(body as RecipeGenerateRequest, env, db);
     return c.json({ recipe });
   });
 

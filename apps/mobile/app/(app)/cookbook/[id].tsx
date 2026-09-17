@@ -1,7 +1,7 @@
-import { Stack, router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { Stack, router, useFocusEffect, useLocalSearchParams, type Href } from "expo-router";
 import { Check } from "phosphor-react-native";
 import { useCallback, useState } from "react";
-import { Alert, Image, Pressable, StyleSheet, View } from "react-native";
+import { Image, Pressable, StyleSheet, View } from "react-native";
 import type { CookbookDetail, SavedRecipe } from "@savorly/shared";
 import {
   addRecipesToCookbook,
@@ -19,9 +19,11 @@ import { RecipeGrid } from "../../../src/components/RecipeGrid";
 import { Screen } from "../../../src/components/Screen";
 import { replaceCache, searchCachedRecipes } from "../../../src/db/cache";
 import { tokens } from "../../../src/theme/tokens";
+import { confirmDestructive } from "../../../src/utils/confirmDestructive";
 
 export default function CookbookDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const cookbookId = Array.isArray(id) ? id[0] : id;
   const [cookbook, setCookbook] = useState<CookbookDetail | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState("");
@@ -32,15 +34,15 @@ export default function CookbookDetailScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!id) return;
+    if (!cookbookId) return;
     try {
-      const live = await getCookbook(id);
+      const live = await getCookbook(cookbookId);
       setCookbook(live.cookbook);
       setName(live.cookbook.name);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load cookbook.");
     }
-  }, [id]);
+  }, [cookbookId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -72,12 +74,15 @@ export default function CookbookDetailScreen() {
       const toAdd = [...next].filter((recipeId) => !current.has(recipeId));
       const toRemove = [...current].filter((recipeId) => !next.has(recipeId));
       if (toAdd.length > 0) {
-        await addRecipesToCookbook(cookbook.id, toAdd);
+        const added = await addRecipesToCookbook(cookbook.id, toAdd);
+        setCookbook(added.cookbook);
       }
       for (const recipeId of toRemove) {
         await removeRecipeFromCookbook(cookbook.id, recipeId);
       }
-      await load();
+      const live = await getCookbook(cookbook.id);
+      setCookbook(live.cookbook);
+      setName(live.cookbook.name);
       setPicking(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update recipes.");
@@ -108,23 +113,21 @@ export default function CookbookDetailScreen() {
 
   function confirmDelete() {
     if (!cookbook) return;
-    Alert.alert("Delete cookbook?", "Recipes stay in your library. Only this grouping is removed.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: () => {
-          void (async () => {
-            try {
-              await deleteCookbook(cookbook.id);
-              router.back();
-            } catch (err) {
-              setError(err instanceof Error ? err.message : "Could not delete cookbook.");
-            }
-          })();
-        },
+    confirmDestructive(
+      "Delete cookbook?",
+      "Recipes stay in your library. Only this grouping is removed.",
+      "Delete",
+      () => {
+        void (async () => {
+          try {
+            await deleteCookbook(cookbook.id);
+            router.replace("/(app)/(tabs)/recipes" as Href);
+          } catch (err) {
+            setError(err instanceof Error ? err.message : "Could not delete cookbook.");
+          }
+        })();
       },
-    ]);
+    );
   }
 
   if (!cookbook) {

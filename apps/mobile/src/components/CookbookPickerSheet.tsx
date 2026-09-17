@@ -1,9 +1,12 @@
+import { useState } from "react";
 import { Check } from "phosphor-react-native";
 import { Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import type { CookbookSummary } from "@savorly/shared";
+import { createCookbook } from "../api/client";
 import { tokens } from "../theme/tokens";
 import { AppText } from "./AppText";
 import { Button } from "./Button";
+import { Field } from "./Field";
 
 type CookbookPickerSheetProps = {
   visible: boolean;
@@ -11,24 +14,61 @@ type CookbookPickerSheetProps = {
   selectedIds: string[];
   saving?: boolean;
   onToggle: (id: string) => void;
+  onCreated: (cookbook: CookbookSummary) => void;
   onSave: () => void;
   onClose: () => void;
 };
 
 export function CookbookPickerSheet(props: CookbookPickerSheetProps) {
-  const { visible, cookbooks, selectedIds, saving, onToggle, onSave, onClose } = props;
+  const { visible, cookbooks, selectedIds, saving, onToggle, onCreated, onSave, onClose } = props;
+  const [name, setName] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onCreate() {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setError("Give the cookbook a name.");
+      return;
+    }
+    setCreating(true);
+    setError(null);
+    try {
+      const created = await createCookbook(trimmed);
+      onCreated(created.cookbook);
+      setName("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create cookbook.");
+    } finally {
+      setCreating(false);
+    }
+  }
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.frame}>
         <Pressable style={styles.backdrop} onPress={onClose} />
         <View style={styles.sheet}>
           <AppText variant="title">Add to cookbooks</AppText>
+          <Field
+            label="New cookbook"
+            value={name}
+            onChangeText={setName}
+            placeholder="Weeknight dinners"
+          />
+          <Button
+            label="Create cookbook"
+            variant="secondary"
+            onPress={() => void onCreate()}
+            loading={creating}
+            disabled={!name.trim()}
+          />
           {cookbooks.length === 0 ? (
             <AppText variant="body" color="muted">
-              Create a cookbook first, then you can file this recipe.
+              Create one above, or pick from your list once you have cookbooks.
             </AppText>
           ) : (
-            <ScrollView style={styles.list}>
+            <ScrollView style={styles.list} keyboardShouldPersistTaps="handled">
               {cookbooks.map((cookbook) => {
                 const selected = selectedIds.includes(cookbook.id);
                 return (
@@ -53,7 +93,12 @@ export function CookbookPickerSheet(props: CookbookPickerSheetProps) {
               })}
             </ScrollView>
           )}
-          <Button label="Save" onPress={onSave} loading={saving} disabled={cookbooks.length === 0} />
+          {error ? (
+            <AppText variant="body" color="danger">
+              {error}
+            </AppText>
+          ) : null}
+          <Button label="Done" onPress={onSave} loading={saving} />
           <Button label="Cancel" variant="ghost" onPress={onClose} />
         </View>
       </View>
@@ -84,7 +129,7 @@ const styles = StyleSheet.create({
     maxHeight: "80%",
   },
   list: {
-    maxHeight: 360,
+    maxHeight: 280,
   },
   row: {
     flexDirection: "row",

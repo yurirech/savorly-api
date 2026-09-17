@@ -77,7 +77,7 @@ export default function RecipesScreen() {
         <AppText variant="display">Recipes</AppText>
         {segment === "cookbooks" ? (
           <Pressable
-            onPress={() => router.push("/(app)/cookbook/new" as Href)}
+            onPress={() => router.push("/(app)/new-cookbook" as Href)}
             style={styles.add}
             accessibilityLabel="Create cookbook"
           >
@@ -109,7 +109,7 @@ export default function RecipesScreen() {
                 : "No cookbooks yet. Create one to group recipes."}
             </AppText>
             {!query.trim() ? (
-              <Pressable onPress={() => router.push("/(app)/cookbook/new" as Href)}>
+              <Pressable onPress={() => router.push("/(app)/new-cookbook" as Href)}>
                 <AppText variant="body" color="accent">
                   Create cookbook
                 </AppText>

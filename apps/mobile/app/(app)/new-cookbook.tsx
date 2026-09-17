@@ -1,10 +1,10 @@
 import { type Href, router } from "expo-router";
 import { useState } from "react";
-import { createCookbook } from "../../../src/api/client";
-import { AppText } from "../../../src/components/AppText";
-import { Button } from "../../../src/components/Button";
-import { Field } from "../../../src/components/Field";
-import { Screen } from "../../../src/components/Screen";
+import { createCookbook } from "../../src/api/client";
+import { AppText } from "../../src/components/AppText";
+import { Button } from "../../src/components/Button";
+import { Field } from "../../src/components/Field";
+import { Screen } from "../../src/components/Screen";
 
 export default function NewCookbookScreen() {
   const [name, setName] = useState("");

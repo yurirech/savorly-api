@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { RecipeGenerateRequest } from "@savorly/shared";
+import { pantryCanonicalKeyHint } from "@savorly/shared";
 
 const promptsDir = join(dirname(fileURLToPath(import.meta.url)), "prompts");
 
@@ -27,9 +28,11 @@ export function promptSlicesFor(request: RecipeGenerateRequest): string[] {
 }
 
 export function composeSystemInstruction(request: RecipeGenerateRequest): string {
-  return promptSlicesFor(request)
+  return `${promptSlicesFor(request)
     .map((relative) => readFileSync(join(promptsDir, relative), "utf8").trim())
-    .join("\n\n");
+    .join("\n\n")}
+
+${pantryCanonicalKeyHint()}`;
 }
 
 export function composeUserMessage(request: RecipeGenerateRequest): string {

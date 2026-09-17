@@ -3,6 +3,7 @@ import { Bread, Cake, ChefHat, IceCream } from "phosphor-react-native";
 import { useState, type ReactNode } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import type { CreateAgent, GeneratedRecipe, RecipeGenerateRequest } from "@savorly/shared";
+import { formatIngredientLine } from "@savorly/shared";
 import { ApiRequestError, generateRecipe } from "../../../src/api/client";
 import { AppText } from "../../../src/components/AppText";
 import { Button } from "../../../src/components/Button";
@@ -207,9 +208,9 @@ export default function CreateScreen() {
           <AppText variant="label" color="muted">
             Ingredients
           </AppText>
-          {recipe.ingredients.map((ingredient) => (
-            <AppText key={`${ingredient.name}-${ingredient.unit}`} variant="body">
-              {formatIngredient(ingredient)}
+          {recipe.ingredients.map((ingredient, index) => (
+            <AppText key={`${index}-${ingredient.name}`} variant="body">
+              {formatIngredientLine(ingredient)}
             </AppText>
           ))}
           <AppText variant="label" color="muted">
@@ -261,11 +262,6 @@ function OptionLabel(props: { label: string }) {
       {props.label}
     </AppText>
   );
-}
-
-function formatIngredient(ingredient: GeneratedRecipe["ingredients"][number]): string {
-  const qty = ingredient.quantity != null ? String(ingredient.quantity) : "";
-  return [qty, ingredient.unit, ingredient.name].filter(Boolean).join(" ");
 }
 
 const styles = StyleSheet.create({

@@ -1,4 +1,4 @@
-import { StyleSheet, TextInput, View } from "react-native";
+import { Platform, StyleSheet, TextInput, View } from "react-native";
 import { MagnifyingGlass } from "phosphor-react-native";
 import { tokens } from "../theme/tokens";
 import { AppText } from "./AppText";
@@ -11,9 +11,10 @@ type FieldProps = {
   multiline?: boolean;
   secureTextEntry?: boolean;
   autoCapitalize?: "none" | "sentences";
-  keyboardType?: "default" | "email-address" | "url";
+    keyboardType?: "default" | "email-address" | "url" | "numeric";
   variant?: "default" | "search";
   editable?: boolean;
+  onEndEditing?: () => void;
 };
 
 export function Field(props: FieldProps) {
@@ -28,6 +29,7 @@ export function Field(props: FieldProps) {
     keyboardType,
     variant = "default",
     editable = true,
+    onEndEditing,
   } = props;
   const isSearch = variant === "search";
   return (
@@ -45,6 +47,8 @@ export function Field(props: FieldProps) {
           autoCapitalize={autoCapitalize ?? (isSearch ? "none" : "sentences")}
           keyboardType={keyboardType}
           editable={editable}
+          onEndEditing={onEndEditing}
+          onBlur={Platform.OS === "web" ? onEndEditing : undefined}
           accessibilityLabel={label}
           style={[styles.input, isSearch && styles.searchInput, multiline && styles.multiline]}
         />

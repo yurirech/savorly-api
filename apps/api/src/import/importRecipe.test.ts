@@ -25,5 +25,7 @@ describe("mocked imports", () => {
       expect(Array.isArray(recipe.uncertainties)).toBe(true);
       expect(recipe.source.type).toMatch(/instagram|website|text/);
     }
+    expect(instagram.ingredients.find((item) => item.name === "flour")?.canonicalKey).toBe("all_purpose_flour");
+    expect(instagram.ingredients.find((item) => item.name === "flour")?.unit).toBe("g");
   });
 });

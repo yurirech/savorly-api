@@ -26,6 +26,7 @@ export const GEMINI_RECIPE_SCHEMA: Schema = {
           quantity: { type: SchemaType.NUMBER, nullable: true },
           unit: { type: SchemaType.STRING, nullable: true },
           notes: { type: SchemaType.STRING, nullable: true },
+          canonicalKey: { type: SchemaType.STRING, nullable: true },
         },
         required: ["name"],
       },
@@ -58,13 +59,14 @@ export async function generateGeminiJson(options: {
   temperature: number;
   failureMessage?: string;
   offerTextPaste?: boolean;
+  responseSchema?: Schema;
 }): Promise<unknown> {
   const genAI = new GoogleGenerativeAI(options.apiKey);
   const model = genAI.getGenerativeModel({
     model: options.model,
     generationConfig: {
       responseMimeType: "application/json",
-      responseSchema: GEMINI_RECIPE_SCHEMA,
+      responseSchema: options.responseSchema ?? GEMINI_RECIPE_SCHEMA,
       temperature: options.temperature,
     },
     systemInstruction: options.systemInstruction,
@@ -137,6 +139,8 @@ function toIngredient(value: unknown): Ingredient | undefined {
     quantity: nullableNumber(item.quantity),
     unit: typeof item.unit === "string" ? item.unit : null,
     notes: typeof item.notes === "string" ? item.notes : null,
+    canonicalKey: typeof item.canonicalKey === "string" && item.canonicalKey.trim() ? item.canonicalKey.trim() : null,
+    gramsPerCup: null,
   };
 }
 
