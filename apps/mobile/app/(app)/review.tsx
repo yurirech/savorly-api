@@ -2,12 +2,13 @@ import { router, type Href } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import type { CookbookSummary, FoodCategory, GeneratedRecipe } from "@savorly/shared";
-import { formatIngredientLine, parseIngredientLines, recipeNotesText } from "@savorly/shared";
+import { formatIngredientLine, isCreamiRecipe, parseIngredientLines, recipeNotesText } from "@savorly/shared";
 import { createCookbook, createRecipe, listCookbooks, listRecipeCookbooks, setRecipeCookbooks, updateRecipe } from "../../src/api/client";
 import { imageForCategory } from "../../src/assets/categoryImages";
 import { Button } from "../../src/components/Button";
 import { CategoryPicker } from "../../src/components/CategoryPicker";
 import { Field } from "../../src/components/Field";
+import { RecipeNutritionSummary } from "../../src/components/RecipeNutritionSummary";
 import { Screen } from "../../src/components/Screen";
 import { upsertCachedRecipe } from "../../src/db/cache";
 import { clearReviewDraft, getReviewDraft } from "../../src/store/reviewDraft";
@@ -124,21 +125,23 @@ export default function ReviewScreen() {
         }
         multiline
       />
-      <Field
-        label="Steps"
-        value={recipe.steps.map((step) => step.text).join("\n")}
-        onChangeText={(value) =>
-          setRecipe({
-            ...recipe,
-            steps: value
-              .split("\n")
-              .map((line) => line.trim())
-              .filter(Boolean)
-              .map((text, index) => ({ order: index + 1, text, durationMinutes: null, temperatureC: null })),
-          })
-        }
-        multiline
-      />
+      {isCreamiRecipe(recipe) ? null : (
+        <Field
+          label="Steps"
+          value={recipe.steps.map((step) => step.text).join("\n")}
+          onChangeText={(value) =>
+            setRecipe({
+              ...recipe,
+              steps: value
+                .split("\n")
+                .map((line) => line.trim())
+                .filter(Boolean)
+                .map((text, index) => ({ order: index + 1, text, durationMinutes: null, temperatureC: null })),
+            })
+          }
+          multiline
+        />
+      )}
       <Field
         label="Tags"
         value={recipe.tags.join(", ")}
@@ -159,6 +162,7 @@ export default function ReviewScreen() {
         multiline
         placeholder="Anything you want to remember"
       />
+      <RecipeNutritionSummary nutrition={recipe.nutrition} />
       <View style={styles.cookbookBlock}>
         <Text style={styles.label}>Cookbooks</Text>
         <Field

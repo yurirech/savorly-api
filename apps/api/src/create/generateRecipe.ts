@@ -16,10 +16,18 @@ export async function generateRecipe(
     throw new AppError("validation_error", "Adapt needs the current recipe.", 400);
   }
 
-  if (env.useMockImports) {
-    return resolveIngredients(mockGeneratedCreate(request), { env, db });
+  const recipe = env.useMockImports
+    ? mockGeneratedCreate(request)
+    : await generateFromGemini(request, env);
+
+  if (request.agent === "creami") {
+    recipe.steps = [];
   }
 
+  return resolveIngredients(recipe, { env, db });
+}
+
+async function generateFromGemini(request: RecipeGenerateRequest, env: Env): Promise<GeneratedRecipe> {
   if (!env.geminiApiKey) {
     throw new AppError("normalizer_failed", "GEMINI_API_KEY is not configured.", 500);
   }
@@ -30,15 +38,14 @@ export async function generateRecipe(
     model: env.geminiModel,
     systemInstruction: composeSystemInstruction(request),
     userPrompt,
-    temperature: 0.6,
+    temperature: 0.35,
     offerTextPaste: false,
-    failureMessage: "Could not generate this recipe. Try a shorter adapt note.",
+    failureMessage: "Could not generate this recipe. Try again.",
   });
 
-  const recipe = parseGeminiRecipe(parsed, {
+  return parseGeminiRecipe(parsed, {
     type: "manual",
     sourceName: CREATE_AGENT_LABEL[request.agent],
     originalText: userPrompt,
   });
-  return resolveIngredients(recipe, { env, db });
 }

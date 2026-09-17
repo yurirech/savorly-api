@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { recipeNotesText } from "./recipe";
+import { isCreamiRecipe, isMixInIngredient, recipeNotesText } from "./recipe";
 
 describe("recipeNotesText", () => {
   it("joins notes and leftover import remarks", () => {
@@ -13,5 +13,18 @@ describe("recipeNotesText", () => {
 
   it("returns an empty string when both are blank", () => {
     expect(recipeNotesText({ notes: "  ", uncertainties: [] })).toBe("");
+  });
+});
+
+describe("Creami helpers", () => {
+  it("detects Creami recipes and mix-in notes", () => {
+    expect(
+      isCreamiRecipe({
+        source: { type: "manual", sourceName: "Creami" },
+        tags: [],
+      }),
+    ).toBe(true);
+    expect(isMixInIngredient({ notes: "mix-in" })).toBe(true);
+    expect(isMixInIngredient({ notes: "toasted" })).toBe(false);
   });
 });

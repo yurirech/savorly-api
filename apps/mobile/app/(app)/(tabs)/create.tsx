@@ -3,11 +3,13 @@ import { Bread, Cake, ChefHat, IceCream } from "phosphor-react-native";
 import { useState, type ReactNode } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import type { CreateAgent, GeneratedRecipe, RecipeGenerateRequest } from "@savorly/shared";
-import { formatIngredientLine } from "@savorly/shared";
+import { isCreamiRecipe } from "@savorly/shared";
 import { ApiRequestError, generateRecipe } from "../../../src/api/client";
 import { AppText } from "../../../src/components/AppText";
 import { Button } from "../../../src/components/Button";
 import { Field } from "../../../src/components/Field";
+import { RecipeIngredientLine } from "../../../src/components/RecipeIngredientLine";
+import { RecipeNutritionSummary } from "../../../src/components/RecipeNutritionSummary";
 import { Screen } from "../../../src/components/Screen";
 import { SegmentedControl } from "../../../src/components/SegmentedControl";
 import { setReviewDraft } from "../../../src/store/reviewDraft";
@@ -22,11 +24,10 @@ const AGENTS: { value: CreateAgent; label: string; subtitle: string; icon: React
 
 export default function CreateScreen() {
   const [agent, setAgent] = useState<CreateAgent>("creami");
-  const [size, setSize] = useState<"big" | "small">("small");
-  const [macros, setMacros] = useState<"lean" | "balanced">("lean");
-  const [base, setBase] = useState<"lean" | "mixed">("mixed");
-  const [texture, setTexture] = useState<"gelato" | "standard">("gelato");
-  const [sweetener, setSweetener] = useState<"stevia" | "sucralose" | "both">("stevia");
+  const [size, setSize] = useState<"big" | "small">("big");
+  const [macros, setMacros] = useState<"lean" | "balanced">("balanced");
+  const [texture, setTexture] = useState<"gelato" | "standard">("standard");
+  const [sweetener, setSweetener] = useState<"stevia" | "xylitol" | "blend">("stevia");
   const [flavor, setFlavor] = useState("");
   const [notes, setNotes] = useState("");
   const [adaptNote, setAdaptNote] = useState("");
@@ -41,7 +42,6 @@ export default function CreateScreen() {
         agent: "creami",
         size,
         macros,
-        base,
         texture,
         sweetener,
         flavor: flavor.trim() || undefined,
@@ -124,11 +124,11 @@ export default function CreateScreen() {
             onChange={setSize}
             disabled={locked}
             options={[
+              { value: "small", label: "Normal" },
               { value: "big", label: "Big" },
-              { value: "small", label: "Small" },
             ]}
           />
-          <OptionLabel label="Macros" />
+          <OptionLabel label="Tier" />
           <SegmentedControl
             value={macros}
             onChange={setMacros}
@@ -136,16 +136,6 @@ export default function CreateScreen() {
             options={[
               { value: "lean", label: "Lean" },
               { value: "balanced", label: "Balanced" },
-            ]}
-          />
-          <OptionLabel label="Base" />
-          <SegmentedControl
-            value={base}
-            onChange={setBase}
-            disabled={locked}
-            options={[
-              { value: "lean", label: "Lean base" },
-              { value: "mixed", label: "Mixed base" },
             ]}
           />
           <OptionLabel label="Texture" />
@@ -165,22 +155,22 @@ export default function CreateScreen() {
             disabled={locked}
             options={[
               { value: "stevia", label: "Stevia" },
-              { value: "sucralose", label: "Sucralose" },
-              { value: "both", label: "Both" },
+              { value: "xylitol", label: "Xylitol" },
+              { value: "blend", label: "Blend" },
             ]}
           />
           <Field
             label="Flavor"
             value={flavor}
             onChangeText={setFlavor}
-            placeholder="Leave blank for a suggestion"
+            placeholder="strawberry and white chocolate"
             editable={!locked}
           />
           <Field
             label="Additional info"
             value={notes}
             onChangeText={setNotes}
-            placeholder="Mix-ins, powders you have, constraints"
+            placeholder="Extra-lean, mix-ins, powders you have, constraints"
             multiline
             editable={!locked}
           />
@@ -209,18 +199,21 @@ export default function CreateScreen() {
             Ingredients
           </AppText>
           {recipe.ingredients.map((ingredient, index) => (
-            <AppText key={`${index}-${ingredient.name}`} variant="body">
-              {formatIngredientLine(ingredient)}
-            </AppText>
+            <RecipeIngredientLine key={`${index}-${ingredient.name}`} ingredient={ingredient} />
           ))}
-          <AppText variant="label" color="muted">
-            Steps
-          </AppText>
-          {recipe.steps.map((step) => (
-            <AppText key={step.order} variant="body">
-              {step.order}. {step.text}
-            </AppText>
-          ))}
+          {!isCreamiRecipe(recipe) && recipe.steps.length > 0 ? (
+            <>
+              <AppText variant="label" color="muted">
+                Steps
+              </AppText>
+              {recipe.steps.map((step) => (
+                <AppText key={step.order} variant="body">
+                  {step.order}. {step.text}
+                </AppText>
+              ))}
+            </>
+          ) : null}
+          <RecipeNutritionSummary nutrition={recipe.nutrition} />
           <Field
             label="Adapt"
             value={adaptNote}

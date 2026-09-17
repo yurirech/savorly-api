@@ -1,8 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { RecipeGenerateRequest } from "@savorly/shared";
-import { pantryCanonicalKeyHint } from "@savorly/shared";
+import type { GeneratedRecipe, RecipeGenerateRequest } from "@savorly/shared";
 
 const promptsDir = join(dirname(fileURLToPath(import.meta.url)), "prompts");
 
@@ -15,24 +14,26 @@ export const CREATE_AGENT_LABEL = {
 
 export function promptSlicesFor(request: RecipeGenerateRequest): string[] {
   if (request.agent === "creami") {
-    return [
+    const slices = [
       "creami/core.md",
+      "creami/science.md",
       "creami/staples.md",
       `creami/size-${request.size}.md`,
       `creami/macros-${request.macros}.md`,
-      `creami/base-${request.base}.md`,
       `creami/texture-${request.texture}.md`,
     ];
+    if (request.adaptNote?.trim()) {
+      slices.push("creami/adapt.md");
+    }
+    return slices;
   }
   return [`${request.agent}/core.md`];
 }
 
 export function composeSystemInstruction(request: RecipeGenerateRequest): string {
-  return `${promptSlicesFor(request)
+  return promptSlicesFor(request)
     .map((relative) => readFileSync(join(promptsDir, relative), "utf8").trim())
-    .join("\n\n")}
-
-${pantryCanonicalKeyHint()}`;
+    .join("\n\n");
 }
 
 export function composeUserMessage(request: RecipeGenerateRequest): string {
@@ -41,18 +42,37 @@ export function composeUserMessage(request: RecipeGenerateRequest): string {
       ? [
           "agent: creami",
           `size: ${request.size}`,
+          `pintFillG: ${request.size === "big" ? 600 : 450}`,
+          `servings: ${request.size === "big" ? 4 : 3}`,
           `macros: ${request.macros}`,
-          `base: ${request.base}`,
           `texture: ${request.texture}`,
           `sweetener: ${request.sweetener}`,
-          `flavor: ${request.flavor?.trim() || "suggest"}`,
+          `flavor: ${request.flavor?.trim() || "invent one dessert combo"}`,
           `notes: ${request.notes?.trim() || ""}`,
         ]
       : [`agent: ${request.agent}`, `notes: ${request.notes.trim() || "suggest"}`];
 
   if (request.previousRecipe && request.adaptNote?.trim()) {
-    lines.push("", "previous recipe:", JSON.stringify(request.previousRecipe), "", `adapt: ${request.adaptNote.trim()}`);
+    lines.push(
+      "",
+      "previous recipe:",
+      JSON.stringify(slimPreviousRecipe(request.previousRecipe)),
+      "",
+      `adapt: ${request.adaptNote.trim()}`,
+    );
   }
 
   return lines.join("\n");
+}
+
+function slimPreviousRecipe(recipe: GeneratedRecipe) {
+  return {
+    title: recipe.title,
+    ingredients: recipe.ingredients.map((ingredient) => ({
+      name: ingredient.name,
+      quantity: ingredient.quantity,
+      unit: ingredient.unit,
+    })),
+    steps: recipe.steps.map((step) => ({ order: step.order, text: step.text })),
+  };
 }

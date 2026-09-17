@@ -34,6 +34,7 @@ export const recipes = pgTable(
     tags: text("tags").array().notNull().default([]),
     notes: text("notes"),
     uncertainties: jsonb("uncertainties").notNull(),
+    nutrition: jsonb("nutrition"),
     source: jsonb("source").notNull(),
     ingredientNames: text("ingredient_names").array().notNull().default([]),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

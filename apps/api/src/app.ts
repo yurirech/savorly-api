@@ -55,6 +55,24 @@ const generatedRecipeSchema = z.object({
   tags: z.array(z.string()),
   notes: z.string().nullable().optional(),
   uncertainties: z.array(z.string()),
+  nutrition: z
+    .object({
+      servingG: z.number(),
+      perServing: z.object({
+        kcal: z.number(),
+        proteinG: z.number(),
+        carbsG: z.number(),
+        fatG: z.number(),
+      }),
+      perPint: z.object({
+        kcal: z.number(),
+        proteinG: z.number(),
+        carbsG: z.number(),
+        fatG: z.number(),
+      }),
+    })
+    .nullable()
+    .optional(),
   source: z.object({
     type: z.enum(["instagram", "website", "text", "manual"]),
     originalUrl: z.string().optional(),
@@ -72,9 +90,8 @@ const generateSchema = z
       agent: z.literal("creami"),
       size: z.enum(["big", "small"]),
       macros: z.enum(["lean", "balanced"]),
-      base: z.enum(["lean", "mixed"]),
       texture: z.enum(["gelato", "standard"]),
-      sweetener: z.enum(["stevia", "sucralose", "both"]),
+      sweetener: z.enum(["stevia", "xylitol", "blend"]),
       flavor: z.string().trim().optional(),
       notes: z.string().trim().optional(),
       previousRecipe: generatedRecipeSchema.optional(),

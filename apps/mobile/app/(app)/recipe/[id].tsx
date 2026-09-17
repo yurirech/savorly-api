@@ -3,13 +3,15 @@ import { Minus, Plus } from "phosphor-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Image, Pressable, StyleSheet, View } from "react-native";
 import type { CookbookSummary, DisplayUnit, SavedRecipe } from "@savorly/shared";
-import { displayIngredient, formatIngredientLine, recipeNotesText } from "@savorly/shared";
+import { displayIngredient, formatIngredientLine, isCreamiRecipe, recipeNotesText } from "@savorly/shared";
 import { deleteRecipe, getRecipe, listCookbooks, listRecipeCookbooks, setRecipeCookbooks, updateRecipe } from "../../../src/api/client";
 import { imageForCategory } from "../../../src/assets/categoryImages";
 import { AppText } from "../../../src/components/AppText";
 import { Button } from "../../../src/components/Button";
 import { CookbookPickerSheet } from "../../../src/components/CookbookPickerSheet";
 import { Field } from "../../../src/components/Field";
+import { RecipeIngredientLine } from "../../../src/components/RecipeIngredientLine";
+import { RecipeNutritionSummary } from "../../../src/components/RecipeNutritionSummary";
 import { Screen } from "../../../src/components/Screen";
 import { SegmentedControl } from "../../../src/components/SegmentedControl";
 import { getCachedRecipe, removeCachedRecipe, upsertCachedRecipe } from "../../../src/db/cache";
@@ -217,30 +219,36 @@ export default function RecipeDetailScreen() {
         <AppText variant="title">Ingredients</AppText>
         {recipe.ingredients.map((ingredient, index) => (
           <View key={`${index}-${ingredient.name}`} style={styles.ingredient}>
-            <AppText variant="body">
-              {formatIngredientLine(
+            <RecipeIngredientLine
+              ingredient={ingredient}
+              line={formatIngredientLine(
                 displayIngredient(ingredient, {
                   originalServings: recipe.servings,
                   displayServings: servingsForMath,
                   displayUnit,
                 }),
               )}
-            </AppText>
+            />
           </View>
         ))}
-        <AppText variant="title">Steps</AppText>
-        {recipe.steps.map((step) => (
-          <View key={step.order} style={styles.step}>
-            <View style={styles.stepIndex}>
-              <AppText variant="label" color="accent">
-                {String(step.order).padStart(2, "0")}
-              </AppText>
-            </View>
-            <AppText variant="body" style={styles.stepText}>
-              {step.text}
-            </AppText>
-          </View>
-        ))}
+        {!isCreamiRecipe(recipe) && recipe.steps.length > 0 ? (
+          <>
+            <AppText variant="title">Steps</AppText>
+            {recipe.steps.map((step) => (
+              <View key={step.order} style={styles.step}>
+                <View style={styles.stepIndex}>
+                  <AppText variant="label" color="accent">
+                    {String(step.order).padStart(2, "0")}
+                  </AppText>
+                </View>
+                <AppText variant="body" style={styles.stepText}>
+                  {step.text}
+                </AppText>
+              </View>
+            ))}
+          </>
+        ) : null}
+        <RecipeNutritionSummary nutrition={recipe.nutrition} />
         <Field
           label="Notes"
           value={notesDraft}

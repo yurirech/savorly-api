@@ -41,6 +41,19 @@ export type RecipeStep = {
   temperatureC?: number | null;
 };
 
+export type RecipeMacros = {
+  kcal: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+};
+
+export type RecipeNutrition = {
+  servingG: number;
+  perServing: RecipeMacros;
+  perPint: RecipeMacros;
+};
+
 export type GeneratedRecipe = {
   title: string;
   category: import("./foodCategory").FoodCategory;
@@ -52,6 +65,7 @@ export type GeneratedRecipe = {
   tags: string[];
   notes?: string | null;
   uncertainties: string[];
+  nutrition?: RecipeNutrition | null;
   source: RecipeSource;
 };
 
@@ -69,6 +83,14 @@ export function recipeNotesText(recipe: Pick<GeneratedRecipe, "notes" | "uncerta
     .join("\n");
 }
 
+export function isCreamiRecipe(recipe: Pick<GeneratedRecipe, "source" | "tags">): boolean {
+  return recipe.source.sourceName === "Creami" || recipe.tags.some((tag) => tag.toLowerCase() === "creami");
+}
+
+export function isMixInIngredient(ingredient: Pick<Ingredient, "notes">): boolean {
+  return /\bmix-?in\b/i.test(ingredient.notes ?? "");
+}
+
 export type RecipeSearchQuery = {
   q?: string;
   category?: import("./foodCategory").FoodCategory;
@@ -80,9 +102,8 @@ export type CreamiGenerateRequest = {
   agent: "creami";
   size: "big" | "small";
   macros: "lean" | "balanced";
-  base: "lean" | "mixed";
   texture: "gelato" | "standard";
-  sweetener: "stevia" | "sucralose" | "both";
+  sweetener: "stevia" | "xylitol" | "blend";
   flavor?: string;
   notes?: string;
   previousRecipe?: GeneratedRecipe;

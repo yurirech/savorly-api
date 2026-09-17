@@ -18,7 +18,6 @@ describe("mocked create generations", () => {
         agent: "creami",
         size: "small",
         macros: "lean",
-        base: "mixed",
         texture: "gelato",
         sweetener: "stevia",
         flavor: "strawberry",
@@ -28,13 +27,15 @@ describe("mocked create generations", () => {
     expect(first.source.type).toBe("manual");
     expect(first.source.sourceName).toBe("Creami");
     expect(first.title.toLowerCase()).toContain("strawberry");
+    expect(first.nutrition?.perServing.kcal).toBeGreaterThan(0);
+    expect(first.steps).toEqual([]);
+    expect(first.ingredients.some((ingredient) => ingredient.notes === "mix-in")).toBe(true);
 
     const adapted = await generateRecipe(
       {
         agent: "creami",
         size: "small",
         macros: "lean",
-        base: "mixed",
         texture: "gelato",
         sweetener: "stevia",
         flavor: "strawberry",

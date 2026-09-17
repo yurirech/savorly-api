@@ -12,13 +12,15 @@ export type {
   NotesGenerateRequest,
   RecipeGenerateRequest,
   RecipeImportRequest,
+  RecipeMacros,
+  RecipeNutrition,
   RecipeSearchQuery,
   RecipeSource,
   RecipeSourceType,
   RecipeStep,
   SavedRecipe,
 } from "./recipe";
-export { recipeNotesText } from "./recipe";
+export { isCreamiRecipe, isMixInIngredient, recipeNotesText } from "./recipe";
 export { CONVERT_UNITS, foldAlias, isConvertUnit, normalizeUnit, type ConvertUnit } from "./ingredients/units";
 export {
   PANTRY_INGREDIENTS,

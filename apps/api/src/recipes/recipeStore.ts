@@ -4,6 +4,7 @@ import { applyPantrySnapshot, parseFoodCategory } from "@savorly/shared";
 import type { Database } from "../db/client";
 import { recipes } from "../db/schema";
 import { AppError } from "../errors";
+import { parseRecipeNutrition } from "../normalize/geminiRecipeSchema";
 
 export async function saveRecipe(db: Database, userId: string, recipe: GeneratedRecipe): Promise<SavedRecipe> {
   const [row] = await db
@@ -107,6 +108,7 @@ function toRow(userId: string, recipe: GeneratedRecipe) {
     tags: recipe.tags,
     notes: recipe.notes ?? null,
     uncertainties: recipe.uncertainties,
+    nutrition: recipe.nutrition ?? null,
     source: recipe.source,
     ingredientNames: search.ingredientNames,
   };
@@ -126,6 +128,7 @@ export function recipeFromRow(row: typeof recipes.$inferSelect): SavedRecipe {
     tags: row.tags,
     notes: row.notes,
     uncertainties: row.uncertainties as string[],
+    nutrition: parseRecipeNutrition(row.nutrition),
     source: row.source as SavedRecipe["source"],
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

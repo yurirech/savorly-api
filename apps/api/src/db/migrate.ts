@@ -3,7 +3,12 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const MIGRATIONS = ["0000_init.sql", "0001_cookbooks.sql", "0002_ingredient_dictionary.sql"];
+const MIGRATIONS = [
+  "0000_init.sql",
+  "0001_cookbooks.sql",
+  "0002_ingredient_dictionary.sql",
+  "0003_recipe_nutrition.sql",
+];
 
 async function main() {
   const url = process.env.DATABASE_URL;

@@ -6,7 +6,6 @@ const creami: CreamiGenerateRequest = {
   agent: "creami",
   size: "small",
   macros: "lean",
-  base: "mixed",
   texture: "gelato",
   sweetener: "stevia",
 };
@@ -18,42 +17,78 @@ const previousRecipe: GeneratedRecipe = {
   steps: [{ order: 1, text: "Mix.", durationMinutes: null, temperatureC: null }],
   tags: ["creami"],
   uncertainties: [],
+  nutrition: {
+    servingG: 150,
+    perServing: { kcal: 150, proteinG: 22, carbsG: 12, fatG: 2 },
+    perPint: { kcal: 450, proteinG: 66, carbsG: 36, fatG: 6 },
+  },
   source: { type: "manual", sourceName: "Creami" },
 };
 
 describe("composeGeneratePrompt", () => {
-  it("includes staples and selected Creami slices, not unused ones", () => {
+  it("includes science, staples, and selected Creami slices, not unused ones", () => {
     expect(promptSlicesFor(creami)).toEqual([
       "creami/core.md",
+      "creami/science.md",
       "creami/staples.md",
       "creami/size-small.md",
       "creami/macros-lean.md",
-      "creami/base-mixed.md",
       "creami/texture-gelato.md",
     ]);
 
     const system = composeSystemInstruction(creami);
+    expect(system).toContain("ice-cream-shop title");
+    expect(system).toContain("invent exactly one dessert-y flavor");
+    expect(system).toContain("steps to []");
+    expect(system).toContain("[creami.science]");
     expect(system).toContain("[creami.staples]");
     expect(system).toContain("[creami.size.small]");
     expect(system).toContain("[creami.macros.lean]");
-    expect(system).toContain("[creami.base.mixed]");
     expect(system).toContain("[creami.texture.gelato]");
+    expect(system).not.toContain("[creami.adapt]");
     expect(system).not.toContain("[creami.size.big]");
     expect(system).not.toContain("[creami.macros.balanced]");
+    expect(system).not.toContain("[creami.base.mixed]");
     expect(system).not.toContain("[creami.base.lean]");
     expect(system).not.toContain("[creami.texture.standard]");
+    expect(system).not.toContain("canonicalKey");
+    expect(system.length).toBeLessThan(4000);
   });
 
-  it("puts flavor suggest and previous recipe JSON into the adapt user message", () => {
+  it("adds the adapt slice only when adapting", () => {
+    expect(promptSlicesFor({ ...creami, adaptNote: "I don't have cocoa", previousRecipe })).toContain("creami/adapt.md");
+    expect(composeSystemInstruction({ ...creami, adaptNote: "I don't have cocoa", previousRecipe })).toContain(
+      "[creami.adapt]",
+    );
+  });
+
+  it("asks Gemini to invent one dessert combo when flavor is blank", () => {
     const user = composeUserMessage({
       ...creami,
       previousRecipe,
       adaptNote: "I don't have cocoa",
     });
-    expect(user).toContain("flavor: suggest");
+    expect(user).toContain("flavor: invent one dessert combo");
+    expect(user).toContain("pintFillG: 450");
+    expect(user).toContain("servings: 3");
     expect(user).toContain("adapt: I don't have cocoa");
     expect(user).toContain("Vanilla Creami");
-    expect(user).toContain('"sourceName":"Creami"');
+    expect(user).toContain("fat-free quark");
+    expect(user).not.toContain('"sourceName":"Creami"');
+    expect(user).not.toContain("perServing");
+    expect(user).not.toContain("base:");
+  });
+
+  it("sends 600 g fill for a big pint", () => {
+    const user = composeUserMessage({ ...creami, size: "big" });
+    expect(user).toContain("pintFillG: 600");
+    expect(user).toContain("servings: 4");
+    expect(composeSystemInstruction({ ...creami, size: "big" })).toContain("pintFillG = 600");
+    expect(composeSystemInstruction({ ...creami, size: "big" })).not.toContain("1.33");
+  });
+
+  it("keeps an explicit flavor", () => {
+    expect(composeUserMessage({ ...creami, flavor: "pistachio baklava" })).toContain("flavor: pistachio baklava");
   });
 
   it("loads only the bread core slice", () => {

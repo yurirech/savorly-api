@@ -1,11 +1,5 @@
 [creami.staples]
-Always use these staples unless the adapt note explicitly overrides one:
-- Protein powder
-- Fat-free quark
-- Fat-free milk
-- Xanthan gum
-- At most 20g sugar total
-- Sweeteners only from the form: stevia and/or sucralose
+Always start from: 0% quark or Greek yogurt, skim milk, whey protein, xanthan, pinch of salt, skim milk powder (SMP).
+Real sugar max: 15 g normal pint / 20 g big pint. Remaining sweetness from the form sweetener (stevia, xylitol, or blend). Never stevia-only.
 
-Do not invent other dairy bases or other sweeteners. Do not exceed 20g sugar.
-Adapt notes may swap a flavor add-in, not these staples, unless the note says otherwise.
+Do not invent other dairy bases or sweeteners unless notes or adapt say so.

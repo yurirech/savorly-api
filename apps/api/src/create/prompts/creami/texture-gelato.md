@@ -1,2 +1,2 @@
 [creami.texture.gelato]
-Aim for a denser gelato texture: slightly less water, enough xanthan, Creami gelato or lite ice cream spin if mentioned in steps.
+Dense, lower overrun, intense flavor. Spin Deluxe Gelato (~1200 RPM). Slightly more solids and less water than Standard. Re-spin if crumbly.
