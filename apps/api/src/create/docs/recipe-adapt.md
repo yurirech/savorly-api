@@ -102,7 +102,7 @@ Show **(≈ X g sugar equivalent)** for all non-sugar.
 | Allulose | ~0.7:1 sweetness vs sugar | Good bulk, softer set |
 | Monk fruit blend | Follow blend label | Usually paired with erythritol |
 | Stevia drops / powder | Label conversion | Always add bulk (erythritol/allulose) |
-| Sucrose | Baseline | Indulgent default; **Lean OK up to 15 g** (normal pint) or **20 g** (big pint) |
+| Sucrose | Baseline | **Exactly 15 g** (normal pint) or **20 g** (big pint) |
 
 ### Other_pantry
 

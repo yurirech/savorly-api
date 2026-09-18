@@ -7,7 +7,7 @@ const creami: CreamiGenerateRequest = {
   size: "small",
   macros: "lean",
   texture: "gelato",
-  sweetener: "stevia",
+  sweetenerKind: "lightweight",
 };
 
 const previousRecipe: GeneratedRecipe = {
@@ -52,6 +52,8 @@ describe("composeGeneratePrompt", () => {
     expect(system).not.toContain("[creami.base.lean]");
     expect(system).not.toContain("[creami.texture.standard]");
     expect(system).not.toContain("canonicalKey");
+    expect(system).not.toContain("Copy the column");
+    expect(system).not.toContain("271");
     expect(system.length).toBeLessThan(4000);
   });
 
@@ -70,6 +72,7 @@ describe("composeGeneratePrompt", () => {
     });
     expect(user).toContain("flavor: invent one dessert combo");
     expect(user).toContain("pintFillG: 450");
+    expect(user).toContain("sugarG: 15");
     expect(user).toContain("servings: 3");
     expect(user).toContain("adapt: I don't have cocoa");
     expect(user).toContain("Vanilla Creami");
@@ -82,6 +85,7 @@ describe("composeGeneratePrompt", () => {
   it("sends 600 g fill for a big pint", () => {
     const user = composeUserMessage({ ...creami, size: "big" });
     expect(user).toContain("pintFillG: 600");
+    expect(user).toContain("sugarG: 20");
     expect(user).toContain("servings: 4");
     expect(composeSystemInstruction({ ...creami, size: "big" })).toContain("pintFillG = 600");
     expect(composeSystemInstruction({ ...creami, size: "big" })).not.toContain("1.33");
@@ -89,6 +93,15 @@ describe("composeGeneratePrompt", () => {
 
   it("keeps an explicit flavor", () => {
     expect(composeUserMessage({ ...creami, flavor: "pistachio baklava" })).toContain("flavor: pistachio baklava");
+  });
+
+  it("resolves sweetener defaults and named sweeteners", () => {
+    expect(composeUserMessage(creami)).toContain("sweetenerKind: lightweight");
+    expect(composeUserMessage(creami)).toContain("sweetener: stevia");
+    expect(composeUserMessage({ ...creami, sweetenerKind: "bulky" })).toContain("sweetener: xylitol");
+    expect(composeUserMessage({ ...creami, sweetenerKind: "bulky", sweetenerName: "erythritol" })).toContain(
+      "sweetener: erythritol",
+    );
   });
 
   it("loads only the bread core slice", () => {

@@ -19,7 +19,7 @@ describe("mocked create generations", () => {
         size: "small",
         macros: "lean",
         texture: "gelato",
-        sweetener: "stevia",
+        sweetenerKind: "lightweight",
         flavor: "strawberry",
       },
       env,
@@ -30,6 +30,8 @@ describe("mocked create generations", () => {
     expect(first.nutrition?.perServing.kcal).toBeGreaterThan(0);
     expect(first.steps).toEqual([]);
     expect(first.ingredients.some((ingredient) => ingredient.notes === "mix-in")).toBe(true);
+    expect(first.ingredients.some((ingredient) => ingredient.name === "stevia")).toBe(true);
+    expect(first.ingredients.some((ingredient) => ingredient.name === "refined sugar" && ingredient.quantity === 15)).toBe(true);
 
     const adapted = await generateRecipe(
       {
@@ -37,7 +39,7 @@ describe("mocked create generations", () => {
         size: "small",
         macros: "lean",
         texture: "gelato",
-        sweetener: "stevia",
+        sweetenerKind: "lightweight",
         flavor: "strawberry",
         previousRecipe: first,
         adaptNote: "I don't have strawberry powder",

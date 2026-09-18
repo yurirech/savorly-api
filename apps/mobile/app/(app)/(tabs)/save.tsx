@@ -7,7 +7,7 @@ import { tokens } from "../../../src/theme/tokens";
 
 export default function ImportHubScreen() {
   return (
-    <Screen>
+    <Screen safeBottom={false}>
       <AppText variant="label" color="accent">
         Import
       </AppText>

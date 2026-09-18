@@ -17,6 +17,12 @@ import { tokens } from "../../src/theme/tokens";
 export default function ReviewScreen() {
   const initial = useMemo(() => getReviewDraft(), []);
   const [recipe, setRecipe] = useState<GeneratedRecipe | null>(initial?.recipe ?? null);
+  const [ingredientsDraft, setIngredientsDraft] = useState(() =>
+    (initial?.recipe?.ingredients ?? []).map(formatIngredientLine).join("\n"),
+  );
+  const [stepsDraft, setStepsDraft] = useState(() =>
+    (initial?.recipe?.steps ?? []).map((step) => step.text).join("\n"),
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cookbooks, setCookbooks] = useState<CookbookSummary[]>([]);
@@ -48,14 +54,30 @@ export default function ReviewScreen() {
     );
   }
 
+  const currentRecipe = recipe;
+
+  function commitIngredients() {
+    const ingredients = parseIngredientLines(ingredientsDraft, currentRecipe.ingredients);
+    setRecipe((current) => (current ? { ...current, ingredients } : current));
+    setIngredientsDraft(ingredients.map(formatIngredientLine).join("\n"));
+  }
+
+  function recipeForSave(): GeneratedRecipe {
+    return {
+      ...currentRecipe,
+      ingredients: parseIngredientLines(ingredientsDraft, currentRecipe.ingredients),
+      steps: parseStepsDraft(stepsDraft, currentRecipe.steps),
+    };
+  }
+
   async function onSave() {
-    if (!recipe) return;
+    const nextRecipe = recipeForSave();
     setSaving(true);
     setError(null);
     try {
       const saved = initial?.editingId
-        ? await updateRecipe(initial.editingId, recipe)
-        : await createRecipe(recipe);
+        ? await updateRecipe(initial.editingId, nextRecipe)
+        : await createRecipe(nextRecipe);
       void upsertCachedRecipe(saved.recipe);
       if (selectedCookbookIds.length > 0 || initial?.editingId) {
         await setRecipeCookbooks(saved.recipe.id, selectedCookbookIds);
@@ -93,72 +115,69 @@ export default function ReviewScreen() {
     <Screen>
       <Image source={imageForCategory(recipe.category)} style={styles.hero} />
       <Text style={styles.kicker}>Review before saving</Text>
-      <Field label="Title" value={recipe.title} onChangeText={(title) => setRecipe({ ...recipe, title })} />
+      <Field
+        label="Title"
+        value={recipe.title}
+        onChangeText={(title) => setRecipe((current) => (current ? { ...current, title } : current))}
+      />
       <Text style={styles.label}>Category</Text>
       <CategoryPicker
         value={recipe.category}
-        onChange={(category: FoodCategory) => setRecipe({ ...recipe, category })}
+        onChange={(category: FoodCategory) =>
+          setRecipe((current) => (current ? { ...current, category } : current))
+        }
       />
       <Field
         label="Servings"
         value={recipe.servings != null ? String(recipe.servings) : ""}
         onChangeText={(value) => {
           const trimmed = value.trim();
-          if (!trimmed) {
-            setRecipe({ ...recipe, servings: null });
-            return;
-          }
-          const servings = Number(trimmed);
-          setRecipe({ ...recipe, servings: Number.isFinite(servings) && servings > 0 ? servings : recipe.servings });
+          setRecipe((current) => {
+            if (!current) return current;
+            if (!trimmed) return { ...current, servings: null };
+            const servings = Number(trimmed);
+            return {
+              ...current,
+              servings: Number.isFinite(servings) && servings > 0 ? servings : current.servings,
+            };
+          });
         }}
         keyboardType="numeric"
         placeholder="Original serving count"
       />
       <Field
         label="Ingredients"
-        value={recipe.ingredients.map(formatIngredientLine).join("\n")}
-        onChangeText={(value) =>
-          setRecipe({
-            ...recipe,
-            ingredients: parseIngredientLines(value, recipe.ingredients),
-          })
-        }
+        value={ingredientsDraft}
+        onChangeText={setIngredientsDraft}
+        onEndEditing={commitIngredients}
         multiline
       />
       {isCreamiRecipe(recipe) ? null : (
-        <Field
-          label="Steps"
-          value={recipe.steps.map((step) => step.text).join("\n")}
-          onChangeText={(value) =>
-            setRecipe({
-              ...recipe,
-              steps: value
-                .split("\n")
-                .map((line) => line.trim())
-                .filter(Boolean)
-                .map((text, index) => ({ order: index + 1, text, durationMinutes: null, temperatureC: null })),
-            })
-          }
-          multiline
-        />
+        <Field label="Steps" value={stepsDraft} onChangeText={setStepsDraft} multiline />
       )}
       <Field
         label="Tags"
         value={recipe.tags.join(", ")}
         onChangeText={(value) =>
-          setRecipe({
-            ...recipe,
-            tags: value
-              .split(",")
-              .map((tag) => tag.trim())
-              .filter(Boolean),
-          })
+          setRecipe((current) =>
+            current
+              ? {
+                  ...current,
+                  tags: value
+                    .split(",")
+                    .map((tag) => tag.trim())
+                    .filter(Boolean),
+                }
+              : current,
+          )
         }
       />
       <Field
         label="Notes"
         value={recipeNotesText(recipe)}
-        onChangeText={(value) => setRecipe({ ...recipe, notes: value, uncertainties: [] })}
+        onChangeText={(value) =>
+          setRecipe((current) => (current ? { ...current, notes: value, uncertainties: [] } : current))
+        }
         multiline
         placeholder="Anything you want to remember"
       />
@@ -209,6 +228,19 @@ export default function ReviewScreen() {
       <Button label="Save recipe" onPress={() => void onSave()} loading={saving} />
     </Screen>
   );
+}
+
+function parseStepsDraft(text: string, previous: GeneratedRecipe["steps"]): GeneratedRecipe["steps"] {
+  return text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((stepText, index) => ({
+      order: index + 1,
+      text: stepText,
+      durationMinutes: previous[index]?.durationMinutes ?? null,
+      temperatureC: previous[index]?.temperatureC ?? null,
+    }));
 }
 
 const styles = StyleSheet.create({

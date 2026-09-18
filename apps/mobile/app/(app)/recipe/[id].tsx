@@ -2,6 +2,7 @@ import { router, type Href, useFocusEffect, useLocalSearchParams } from "expo-ro
 import { Minus, Plus } from "phosphor-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Image, Pressable, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { CookbookSummary, DisplayUnit, SavedRecipe } from "@savorly/shared";
 import { displayIngredient, formatIngredientLine, isCreamiRecipe, recipeNotesText } from "@savorly/shared";
 import { deleteRecipe, getRecipe, listCookbooks, listRecipeCookbooks, setRecipeCookbooks, updateRecipe } from "../../../src/api/client";
@@ -34,6 +35,7 @@ export default function RecipeDetailScreen() {
   const [notesDraft, setNotesDraft] = useState("");
   const [displayServings, setDisplayServings] = useState<number | null>(null);
   const [displayUnit, setDisplayUnit] = useState<DisplayUnit>("original");
+  const insets = useSafeAreaInsets();
 
   const recipeId = Array.isArray(id) ? id[0] : id;
 
@@ -157,7 +159,7 @@ export default function RecipeDetailScreen() {
 
   return (
     <>
-    <Screen padded={false} edges={[]}>
+    <Screen padded={false} edges={[]} safeBottom={false}>
       <View style={styles.heroWrap}>
         <Image source={imageForCategory(recipe.category)} style={styles.hero} />
         <View style={styles.heroScrim} />
@@ -171,7 +173,7 @@ export default function RecipeDetailScreen() {
           </AppText>
         </View>
       </View>
-      <View style={styles.body}>
+      <View style={[styles.body, { paddingBottom: tokens.space.lg + insets.bottom }]}>
         <View style={styles.scaleRow}>
           <AppText variant="label" color="muted">
             Servings

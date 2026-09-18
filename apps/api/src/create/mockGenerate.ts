@@ -1,4 +1,4 @@
-import type { CreamiGenerateRequest, GeneratedRecipe, RecipeGenerateRequest, RecipeNutrition } from "@savorly/shared";
+import { creamiSugarG, resolveCreamiSweetenerName, type CreamiGenerateRequest, type GeneratedRecipe, type RecipeGenerateRequest, type RecipeNutrition } from "@savorly/shared";
 import { CREATE_AGENT_LABEL } from "./composeGeneratePrompt";
 
 export function mockGeneratedCreate(request: RecipeGenerateRequest): GeneratedRecipe {
@@ -21,7 +21,8 @@ export function mockGeneratedCreate(request: RecipeGenerateRequest): GeneratedRe
             { name: "fat-free quark", quantity: 250, unit: "g", notes: null },
             { name: "fat-free milk", quantity: 150, unit: "ml", notes: null },
             { name: "xanthan gum", quantity: 1, unit: "g", notes: null },
-            { name: sweetenerLabel(request.sweetener), quantity: null, unit: null, notes: null },
+            { name: "refined sugar", quantity: creamiSugarG(request.size), unit: "g", notes: null },
+            { name: resolveCreamiSweetenerName(request.sweetenerKind, request.sweetenerName), quantity: null, unit: null, notes: null },
             { name: "cookie dough", quantity: 40, unit: "g", notes: "mix-in" },
           ]
         : [{ name: "flour", quantity: null, unit: null, notes: null }],
@@ -46,12 +47,6 @@ export function mockGeneratedCreate(request: RecipeGenerateRequest): GeneratedRe
       sourceName: CREATE_AGENT_LABEL[request.agent],
     },
   };
-}
-
-function sweetenerLabel(sweetener: CreamiGenerateRequest["sweetener"]): string {
-  if (sweetener === "xylitol") return "xylitol";
-  if (sweetener === "blend") return "stevia and xylitol";
-  return "stevia";
 }
 
 function mockCreamiNutrition(size: CreamiGenerateRequest["size"], macros: CreamiGenerateRequest["macros"]): RecipeNutrition {

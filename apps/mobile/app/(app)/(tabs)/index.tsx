@@ -37,7 +37,7 @@ export default function HomeScreen() {
   );
 
   return (
-    <Screen>
+    <Screen safeBottom={false}>
       <View style={styles.header}>
         <View style={styles.headerCopy}>
           <AppText variant="label" color="accent">

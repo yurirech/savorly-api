@@ -98,12 +98,15 @@ export type RecipeSearchQuery = {
 
 export type CreateAgent = "creami" | "bread" | "bake" | "chef";
 
+export type CreamiSweetenerKind = "bulky" | "lightweight";
+
 export type CreamiGenerateRequest = {
   agent: "creami";
   size: "big" | "small";
   macros: "lean" | "balanced";
   texture: "gelato" | "standard";
-  sweetener: "stevia" | "xylitol" | "blend";
+  sweetenerKind: CreamiSweetenerKind;
+  sweetenerName?: string;
   flavor?: string;
   notes?: string;
   previousRecipe?: GeneratedRecipe;

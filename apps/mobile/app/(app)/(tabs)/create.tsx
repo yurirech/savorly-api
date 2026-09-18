@@ -2,7 +2,7 @@ import { router, type Href } from "expo-router";
 import { Bread, Cake, ChefHat, IceCream } from "phosphor-react-native";
 import { useState, type ReactNode } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import type { CreateAgent, GeneratedRecipe, RecipeGenerateRequest } from "@savorly/shared";
+import type { CreateAgent, CreamiSweetenerKind, GeneratedRecipe, RecipeGenerateRequest } from "@savorly/shared";
 import { isCreamiRecipe } from "@savorly/shared";
 import { ApiRequestError, generateRecipe } from "../../../src/api/client";
 import { AppText } from "../../../src/components/AppText";
@@ -27,7 +27,8 @@ export default function CreateScreen() {
   const [size, setSize] = useState<"big" | "small">("big");
   const [macros, setMacros] = useState<"lean" | "balanced">("balanced");
   const [texture, setTexture] = useState<"gelato" | "standard">("standard");
-  const [sweetener, setSweetener] = useState<"stevia" | "xylitol" | "blend">("stevia");
+  const [sweetenerKind, setSweetenerKind] = useState<CreamiSweetenerKind>("lightweight");
+  const [sweetenerName, setSweetenerName] = useState("");
   const [flavor, setFlavor] = useState("");
   const [notes, setNotes] = useState("");
   const [adaptNote, setAdaptNote] = useState("");
@@ -43,7 +44,8 @@ export default function CreateScreen() {
         size,
         macros,
         texture,
-        sweetener,
+        sweetenerKind,
+        sweetenerName: sweetenerName.trim() || undefined,
         flavor: flavor.trim() || undefined,
         notes: notes.trim() || undefined,
         previousRecipe: nextAdapt && recipe ? recipe : undefined,
@@ -85,7 +87,7 @@ export default function CreateScreen() {
   }
 
   return (
-    <Screen>
+    <Screen safeBottom={false}>
       <AppText variant="label" color="accent">
         Create
       </AppText>
@@ -150,14 +152,27 @@ export default function CreateScreen() {
           />
           <OptionLabel label="Sweetener" />
           <SegmentedControl
-            value={sweetener}
-            onChange={setSweetener}
+            value={sweetenerKind}
+            onChange={(value) => {
+              setSweetenerKind(value);
+              setSweetenerName("");
+            }}
             disabled={locked}
             options={[
-              { value: "stevia", label: "Stevia" },
-              { value: "xylitol", label: "Xylitol" },
-              { value: "blend", label: "Blend" },
+              { value: "bulky", label: "Bulky" },
+              { value: "lightweight", label: "Lightweight" },
             ]}
+          />
+          <Field
+            label="Which sweetener?"
+            value={sweetenerName}
+            onChangeText={setSweetenerName}
+            placeholder={
+              sweetenerKind === "bulky"
+                ? "xylitol, erythritol, allulose…"
+                : "stevia, liquid stevia, monk fruit…"
+            }
+            editable={!locked}
           />
           <Field
             label="Flavor"

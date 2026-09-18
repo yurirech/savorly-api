@@ -131,7 +131,7 @@ Dispersion: always premix xanthan with dry ingredients before liquids. Hydrate 5
 
 | Tier | Solids / fat / sweetener strategy |
 |------|-----------------------------------|
-| **Lean** | High protein (quark, whey), erythritol/allulose + **up to 15 g real sugar** (normal pint) or **20 g** (big pint), minimal fat, xanthan light, **Lite Ice Cream**, re-spin likely |
+| **Lean** | High protein (quark, whey), erythritol/allulose + **exactly 15 g real sugar** (normal pint) or **20 g** (big pint), minimal fat, xanthan light, **Lite Ice Cream**, re-spin likely |
 | **Balanced** | Moderate quark/milk, some fat, mixed sweeteners, moderate solids |
 | **Indulgent** | Cream, condensed milk, sugar, chocolate, **Ice Cream** or **Gelato** |
 

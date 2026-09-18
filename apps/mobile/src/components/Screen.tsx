@@ -1,17 +1,24 @@
 import type { PropsWithChildren } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { tokens } from "../theme/tokens";
 
 type ScreenProps = PropsWithChildren<{
   scroll?: boolean;
   padded?: boolean;
+  safeBottom?: boolean;
   edges?: ("top" | "right" | "bottom" | "left")[];
 }>;
 
 export function Screen(props: ScreenProps) {
-  const { children, scroll = true, padded = true, edges } = props;
-  const bodyStyle = [styles.body, padded ? styles.padded : styles.flush];
+  const { children, scroll = true, padded = true, safeBottom = true, edges } = props;
+  const insets = useSafeAreaInsets();
+  const bottomInset = safeBottom ? insets.bottom : 0;
+  const bodyStyle = [
+    styles.body,
+    padded ? styles.padded : styles.flush,
+    { paddingBottom: (padded ? tokens.space.lg : 0) + bottomInset },
+  ];
   if (!scroll) {
     return (
       <SafeAreaView style={styles.safe} edges={edges ?? ["top", "left", "right"]}>

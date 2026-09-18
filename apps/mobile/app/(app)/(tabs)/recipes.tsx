@@ -72,7 +72,7 @@ export default function RecipesScreen() {
     : cookbooks;
 
   return (
-    <Screen>
+    <Screen safeBottom={false}>
       <View style={styles.header}>
         <AppText variant="display">Recipes</AppText>
         {segment === "cookbooks" ? (

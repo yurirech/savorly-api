@@ -1,7 +1,13 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { GeneratedRecipe, RecipeGenerateRequest } from "@savorly/shared";
+import {
+  creamiPintFillG,
+  creamiSugarG,
+  resolveCreamiSweetenerName,
+  type GeneratedRecipe,
+  type RecipeGenerateRequest,
+} from "@savorly/shared";
 
 const promptsDir = join(dirname(fileURLToPath(import.meta.url)), "prompts");
 
@@ -42,11 +48,13 @@ export function composeUserMessage(request: RecipeGenerateRequest): string {
       ? [
           "agent: creami",
           `size: ${request.size}`,
-          `pintFillG: ${request.size === "big" ? 600 : 450}`,
+          `pintFillG: ${creamiPintFillG(request.size)}`,
+          `sugarG: ${creamiSugarG(request.size)}`,
           `servings: ${request.size === "big" ? 4 : 3}`,
           `macros: ${request.macros}`,
           `texture: ${request.texture}`,
-          `sweetener: ${request.sweetener}`,
+          `sweetenerKind: ${request.sweetenerKind}`,
+          `sweetener: ${resolveCreamiSweetenerName(request.sweetenerKind, request.sweetenerName)}`,
           `flavor: ${request.flavor?.trim() || "invent one dessert combo"}`,
           `notes: ${request.notes?.trim() || ""}`,
         ]

@@ -7,6 +7,7 @@ export {
 export type {
   CreateAgent,
   CreamiGenerateRequest,
+  CreamiSweetenerKind,
   GeneratedRecipe,
   Ingredient,
   NotesGenerateRequest,
@@ -21,6 +22,17 @@ export type {
   SavedRecipe,
 } from "./recipe";
 export { isCreamiRecipe, isMixInIngredient, recipeNotesText } from "./recipe";
+export { resolveCreamiSweetenerName } from "./creamiSweetener";
+export {
+  CREAMI_FILL_TOLERANCE_G,
+  CREAMI_PINT_FILL_G,
+  CREAMI_SUGAR_G,
+  CREAMI_XANTHAN_G_PER_450,
+  creamiPintFillG,
+  creamiSugarG,
+  creamiXanthanRangeG,
+  type CreamiPintSize,
+} from "./creamiConstraints";
 export { CONVERT_UNITS, foldAlias, isConvertUnit, normalizeUnit, type ConvertUnit } from "./ingredients/units";
 export {
   PANTRY_INGREDIENTS,

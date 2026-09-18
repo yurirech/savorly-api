@@ -32,8 +32,8 @@ You'll also be asked to suggest flavors. The user prefers more dessert-ish ice c
 
 | Tier | Goal | Formulation |
 | --- | --- | --- |
-| Lean | Max volume/protein, min calories/fat | Quark, whey, skim milk, xylitol, stevia, minimal fat, light xanthan. Up to 15 g real sugar (normal pint) or 20 g (big pint) — improves texture and flavor. Lite Ice Cream program. Re-spin often. |
-| Balanced | Moderate macros, better texture | Mix of quark + milk, some fat, mixed sweeteners, moderate solids. Up to 15 g real sugar (normal pint) or 20 g (big pint) — improves texture and flavor. Other ingredients can be used too. |
+| Lean | Max volume/protein, min calories/fat | Quark, whey, skim milk, xylitol, stevia, minimal fat, light xanthan. Exactly 15 g real sugar (normal pint) or 20 g (big pint) — improves texture and flavor. Lite Ice Cream program. Re-spin often. |
+| Balanced | Moderate macros, better texture | Mix of quark + milk, some fat, mixed sweeteners, moderate solids. Exactly 15 g real sugar (normal pint) or 20 g (big pint) — improves texture and flavor. Other ingredients can be used too. |
 
 Prioritize satiety and volume per calorie.
 
@@ -132,7 +132,7 @@ When suggesting non-sugar sweeteners, always show (≈ X g sugar equivalent). Us
 
 Lean and Balanced tier may include real sugar — it helps FPD, body, and flavor without breaking macro goals:
 
-| Pint size | Max real sugar |
+| Pint size | Real sugar (exact) |
 | --- | --- |
 | Normal (~450 g) | 15 g |
 | Big (~600 g) | 20 g |

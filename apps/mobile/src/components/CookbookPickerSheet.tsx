@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Check } from "phosphor-react-native";
 import { Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { CookbookSummary } from "@savorly/shared";
 import { createCookbook } from "../api/client";
 import { tokens } from "../theme/tokens";
@@ -21,6 +22,7 @@ type CookbookPickerSheetProps = {
 
 export function CookbookPickerSheet(props: CookbookPickerSheetProps) {
   const { visible, cookbooks, selectedIds, saving, onToggle, onCreated, onSave, onClose } = props;
+  const insets = useSafeAreaInsets();
   const [name, setName] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +50,7 @@ export function CookbookPickerSheet(props: CookbookPickerSheetProps) {
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.frame}>
         <Pressable style={styles.backdrop} onPress={onClose} />
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { paddingBottom: tokens.space.lg + insets.bottom }]}>
           <AppText variant="title">Add to cookbooks</AppText>
           <Field
             label="New cookbook"

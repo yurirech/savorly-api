@@ -6,6 +6,7 @@ import { resolveIngredients } from "../ingredients/resolveIngredients";
 import { generateGeminiJson, parseGeminiRecipe } from "../normalize/geminiRecipeSchema";
 import { CREATE_AGENT_LABEL, composeSystemInstruction, composeUserMessage } from "./composeGeneratePrompt";
 import { mockGeneratedCreate } from "./mockGenerate";
+import { normalizeCreamiRecipe } from "./validateCreamiRecipe";
 
 export async function generateRecipe(
   request: RecipeGenerateRequest,
@@ -16,11 +17,12 @@ export async function generateRecipe(
     throw new AppError("validation_error", "Adapt needs the current recipe.", 400);
   }
 
-  const recipe = env.useMockImports
+  let recipe = env.useMockImports
     ? mockGeneratedCreate(request)
     : await generateFromGemini(request, env);
 
   if (request.agent === "creami") {
+    recipe = normalizeCreamiRecipe(recipe, request);
     recipe.steps = [];
   }
 
