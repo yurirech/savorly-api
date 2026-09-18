@@ -2,7 +2,19 @@ import { router, type Href } from "expo-router";
 import { Bread, Cake, ChefHat, IceCream } from "phosphor-react-native";
 import { useState, type ReactNode } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import type { CreateAgent, CreamiSweetenerKind, GeneratedRecipe, RecipeGenerateRequest } from "@savorly/shared";
+import type {
+  BakeKind,
+  BakeStyle,
+  BreadLoafSize,
+  BreadStyle,
+  ChefMealType,
+  ChefServings,
+  ChefStyle,
+  CreateAgent,
+  CreamiSweetenerKind,
+  GeneratedRecipe,
+  RecipeGenerateRequest,
+} from "@savorly/shared";
 import { isCreamiRecipe } from "@savorly/shared";
 import { ApiRequestError, generateRecipe } from "../../../src/api/client";
 import { AppText } from "../../../src/components/AppText";
@@ -17,8 +29,8 @@ import { tokens } from "../../../src/theme/tokens";
 
 const AGENTS: { value: CreateAgent; label: string; subtitle: string; icon: ReactNode }[] = [
   { value: "creami", label: "Creami", subtitle: "Ninja Creami ice cream", icon: <IceCream size={22} color={tokens.accent} weight="fill" /> },
-  { value: "bread", label: "Bread", subtitle: "Bread machine loaves", icon: <Bread size={22} color={tokens.accent} weight="fill" /> },
-  { value: "bake", label: "Bake", subtitle: "Cakes and bakes", icon: <Cake size={22} color={tokens.accent} weight="fill" /> },
+  { value: "bread", label: "Bread", subtitle: "Machine loaves and doughs", icon: <Bread size={22} color={tokens.accent} weight="fill" /> },
+  { value: "bake", label: "Bake", subtitle: "Cakes, muffins, cupcakes", icon: <Cake size={22} color={tokens.accent} weight="fill" /> },
   { value: "chef", label: "Chef", subtitle: "Savory or dessert", icon: <ChefHat size={22} color={tokens.accent} weight="fill" /> },
 ];
 
@@ -30,6 +42,13 @@ export default function CreateScreen() {
   const [sweetenerKind, setSweetenerKind] = useState<CreamiSweetenerKind>("lightweight");
   const [sweetenerName, setSweetenerName] = useState("");
   const [flavor, setFlavor] = useState("");
+  const [mealType, setMealType] = useState<ChefMealType>("main");
+  const [servings, setServings] = useState<"1" | "2" | "4">("2");
+  const [style, setStyle] = useState<ChefStyle>("regular");
+  const [loafSize, setLoafSize] = useState<BreadLoafSize>("large");
+  const [breadStyle, setBreadStyle] = useState<BreadStyle>("regular");
+  const [bakeKind, setBakeKind] = useState<BakeKind>("cake");
+  const [bakeStyle, setBakeStyle] = useState<BakeStyle>("regular");
   const [notes, setNotes] = useState("");
   const [adaptNote, setAdaptNote] = useState("");
   const [recipe, setRecipe] = useState<GeneratedRecipe | null>(null);
@@ -52,9 +71,32 @@ export default function CreateScreen() {
         adaptNote: nextAdapt || undefined,
       };
     }
+    if (agent === "chef") {
+      return {
+        agent: "chef",
+        mealType,
+        servings: Number(servings) as ChefServings,
+        style,
+        notes: notes.trim() || undefined,
+        previousRecipe: nextAdapt && recipe ? recipe : undefined,
+        adaptNote: nextAdapt || undefined,
+      };
+    }
+    if (agent === "bread") {
+      return {
+        agent: "bread",
+        size: loafSize,
+        style: breadStyle,
+        notes: notes.trim() || undefined,
+        previousRecipe: nextAdapt && recipe ? recipe : undefined,
+        adaptNote: nextAdapt || undefined,
+      };
+    }
     return {
-      agent,
-      notes,
+      agent: "bake",
+      kind: bakeKind,
+      style: bakeStyle,
+      notes: notes.trim() || undefined,
       previousRecipe: nextAdapt && recipe ? recipe : undefined,
       adaptNote: nextAdapt || undefined,
     };
@@ -190,16 +232,121 @@ export default function CreateScreen() {
             editable={!locked}
           />
         </View>
-      ) : (
-        <Field
-          label="What should we cook?"
-          value={notes}
-          onChangeText={setNotes}
-          placeholder="Leave blank for a suggestion"
-          multiline
-          editable={!locked}
-        />
-      )}
+      ) : null}
+
+      {agent === "chef" ? (
+        <View style={styles.form}>
+          <OptionLabel label="Meal type" />
+          <SegmentedControl
+            value={mealType}
+            onChange={setMealType}
+            disabled={locked}
+            options={[
+              { value: "main", label: "Main" },
+              { value: "side", label: "Side" },
+              { value: "snack", label: "Snack" },
+            ]}
+          />
+          <OptionLabel label="Servings" />
+          <SegmentedControl
+            value={servings}
+            onChange={setServings}
+            disabled={locked}
+            options={[
+              { value: "1", label: "1" },
+              { value: "2", label: "2" },
+              { value: "4", label: "4" },
+            ]}
+          />
+          <OptionLabel label="Style" />
+          <SegmentedControl
+            value={style}
+            onChange={setStyle}
+            disabled={locked}
+            options={[
+              { value: "regular", label: "Regular" },
+              { value: "lighter", label: "Lighter" },
+              { value: "nutritious", label: "More nutritious" },
+            ]}
+          />
+          <Field
+            label="What should we cook?"
+            value={notes}
+            onChangeText={setNotes}
+            placeholder="Creamy mushroom pasta, leftover chicken, or blank"
+            multiline
+            editable={!locked}
+          />
+        </View>
+      ) : null}
+
+      {agent === "bread" ? (
+        <View style={styles.form}>
+          <OptionLabel label="Size" />
+          <SegmentedControl
+            value={loafSize}
+            onChange={setLoafSize}
+            disabled={locked}
+            options={[
+              { value: "medium", label: "Medium" },
+              { value: "large", label: "Large" },
+            ]}
+          />
+          <OptionLabel label="Style" />
+          <SegmentedControl
+            value={breadStyle}
+            onChange={setBreadStyle}
+            disabled={locked}
+            options={[
+              { value: "regular", label: "Regular" },
+              { value: "lighter", label: "Lighter" },
+            ]}
+          />
+          <Field
+            label="What should we bake?"
+            value={notes}
+            onChangeText={setNotes}
+            placeholder="Honey oat, rye, pizza dough, or blank"
+            multiline
+            editable={!locked}
+          />
+        </View>
+      ) : null}
+
+      {agent === "bake" ? (
+        <View style={styles.form}>
+          <OptionLabel label="Kind" />
+          <SegmentedControl
+            value={bakeKind}
+            onChange={setBakeKind}
+            disabled={locked}
+            options={[
+              { value: "cake", label: "Cake" },
+              { value: "muffin", label: "Muffin" },
+              { value: "cupcake", label: "Cupcake" },
+              { value: "other", label: "Other" },
+            ]}
+          />
+          <OptionLabel label="Style" />
+          <SegmentedControl
+            value={bakeStyle}
+            onChange={setBakeStyle}
+            disabled={locked}
+            options={[
+              { value: "regular", label: "Regular" },
+              { value: "lighter", label: "Lighter" },
+            ]}
+          />
+          <Field
+            label="What should we bake?"
+            value={notes}
+            onChangeText={setNotes}
+            placeholder="Strawberries and lemon, or blank"
+            multiline
+            editable={!locked}
+          />
+        </View>
+      ) : null}
 
       {recipe ? (
         <View style={styles.result}>

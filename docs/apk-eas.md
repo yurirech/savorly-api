@@ -10,7 +10,7 @@ On a VPS (or any Docker host) in the Savorly folder:
 cp .env.production.example .env.production
 ```
 
-Put a real `POSTGRES_PASSWORD` and `JWT_SECRET` in `.env.production`. Then:
+Put a real `POSTGRES_PASSWORD`, `JWT_SECRET`, and `ADMIN_PASSWORD` in `.env.production`. Then:
 
 ```bash
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
@@ -24,7 +24,7 @@ curl https://YOUR-API-HOST/health
 
 should return `{"ok":true}`.
 
-Login: **admin** / **admin**.
+Login: **admin** and the `ADMIN_PASSWORD` you set on the server.
 
 Keep `GEMINI_API_KEY`, `APIFY_TOKEN`, `DATABASE_URL`, and `JWT_SECRET` on the server. Never put them in the APK.
 
@@ -46,4 +46,4 @@ EAS uploads the project (still no GitHub). When the build finishes, download the
 
 ## 4. Open the app
 
-Sign in with **admin** / **admin**. Imports work against the hosted API. With `USE_MOCK_IMPORTS=true` on the server, imports return fixtures until Gemini/Apify keys are set.
+Sign in with **admin** and the API `ADMIN_PASSWORD`. Imports work against the hosted API. With `USE_MOCK_IMPORTS=true` on the server, imports return fixtures until Gemini/Apify keys are set.

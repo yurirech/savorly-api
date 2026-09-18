@@ -16,8 +16,17 @@ export function RecipeNutritionSummary(props: RecipeNutritionSummaryProps) {
       </AppText>
       {nutrition ? (
         <View style={styles.grid}>
-          <MacroColumn title={`Per ${nutrition.servingG} g`} macros={nutrition.perServing} />
-          <MacroColumn title="Per pint" macros={nutrition.perPint} />
+          {nutrition.perPint ? (
+            <>
+              <MacroColumn title={`Per ${nutrition.servingG} g`} macros={nutrition.perServing} />
+              <MacroColumn title="Per pint" macros={nutrition.perPint} />
+            </>
+          ) : (
+            <>
+              <MacroColumn title={`Per serving (${nutrition.servingG} g)`} macros={nutrition.perServing} />
+              <MacroColumn title="Per 100 g" macros={macrosPer100g(nutrition)} />
+            </>
+          )}
         </View>
       ) : (
         <AppText variant="body" color="muted">
@@ -41,6 +50,21 @@ function MacroColumn(props: { title: string; macros: RecipeMacros }) {
       </AppText>
     </View>
   );
+}
+
+function macrosPer100g(nutrition: RecipeNutrition): RecipeMacros {
+  if (nutrition.servingG === 100) return nutrition.perServing;
+  const factor = 100 / nutrition.servingG;
+  return {
+    kcal: roundMacro(nutrition.perServing.kcal * factor),
+    proteinG: roundMacro(nutrition.perServing.proteinG * factor),
+    carbsG: roundMacro(nutrition.perServing.carbsG * factor),
+    fatG: roundMacro(nutrition.perServing.fatG * factor),
+  };
+}
+
+function roundMacro(value: number): number {
+  return Math.round(value * 10) / 10;
 }
 
 function formatKcal(value: number): string {

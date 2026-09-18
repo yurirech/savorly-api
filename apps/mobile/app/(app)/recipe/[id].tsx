@@ -1,10 +1,17 @@
 import { router, type Href, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { Minus, Plus } from "phosphor-react-native";
+import * as Clipboard from "expo-clipboard";
+import { Check, Copy, Minus, Plus } from "phosphor-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Image, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { CookbookSummary, DisplayUnit, SavedRecipe } from "@savorly/shared";
-import { displayIngredient, formatIngredientLine, isCreamiRecipe, recipeNotesText } from "@savorly/shared";
+import {
+  displayIngredient,
+  formatIngredientLine,
+  formatRecipeIngredientsCopy,
+  isCreamiRecipe,
+  recipeNotesText,
+} from "@savorly/shared";
 import { deleteRecipe, getRecipe, listCookbooks, listRecipeCookbooks, setRecipeCookbooks, updateRecipe } from "../../../src/api/client";
 import { imageForCategory } from "../../../src/assets/categoryImages";
 import { AppText } from "../../../src/components/AppText";
@@ -35,6 +42,8 @@ export default function RecipeDetailScreen() {
   const [notesDraft, setNotesDraft] = useState("");
   const [displayServings, setDisplayServings] = useState<number | null>(null);
   const [displayUnit, setDisplayUnit] = useState<DisplayUnit>("original");
+  const [copied, setCopied] = useState(false);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const insets = useSafeAreaInsets();
 
   const recipeId = Array.isArray(id) ? id[0] : id;
@@ -105,6 +114,14 @@ export default function RecipeDetailScreen() {
     setDisplayServings((current) => current ?? recipe.servings ?? null);
   }, [recipe]);
 
+  useEffect(() => {
+    return () => {
+      if (copiedTimer.current) {
+        clearTimeout(copiedTimer.current);
+      }
+    };
+  }, []);
+
   if (!recipe) {
     return (
       <Screen>
@@ -117,6 +134,13 @@ export default function RecipeDetailScreen() {
 
   const canScale = recipe.servings != null && recipe.servings > 0;
   const servingsForMath = canScale ? (displayServings ?? recipe.servings ?? 1) : 1;
+  const shownIngredients = recipe.ingredients.map((ingredient) =>
+    displayIngredient(ingredient, {
+      originalServings: recipe.servings,
+      displayServings: servingsForMath,
+      displayUnit,
+    }),
+  );
 
   async function saveNotes() {
     const nextNotes = notesDraft.trim() || null;
@@ -155,6 +179,15 @@ export default function RecipeDetailScreen() {
         })();
       },
     );
+  }
+
+  async function copyIngredients() {
+    await Clipboard.setStringAsync(formatRecipeIngredientsCopy(recipe.title, shownIngredients));
+    setCopied(true);
+    if (copiedTimer.current) {
+      clearTimeout(copiedTimer.current);
+    }
+    copiedTimer.current = setTimeout(() => setCopied(false), 1500);
   }
 
   return (
@@ -218,21 +251,26 @@ export default function RecipeDetailScreen() {
             { value: "volume", label: "cups" },
           ]}
         />
-        <AppText variant="title">Ingredients</AppText>
-        {recipe.ingredients.map((ingredient, index) => (
-          <View key={`${index}-${ingredient.name}`} style={styles.ingredient}>
-            <RecipeIngredientLine
-              ingredient={ingredient}
-              line={formatIngredientLine(
-                displayIngredient(ingredient, {
-                  originalServings: recipe.servings,
-                  displayServings: servingsForMath,
-                  displayUnit,
-                }),
-              )}
-            />
-          </View>
-        ))}
+        <View style={styles.ingredientsHeader}>
+          <AppText variant="title">Ingredients</AppText>
+          <Pressable
+            onPress={() => void copyIngredients()}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Copy ingredients"
+          >
+            {copied ? <Check size={18} color={tokens.accent} /> : <Copy size={18} color={tokens.textMuted} />}
+          </Pressable>
+        </View>
+        {recipe.ingredients.map((ingredient, index) => {
+          const shown = shownIngredients[index];
+          if (!shown) return null;
+          return (
+            <View key={`${index}-${ingredient.name}`} style={styles.ingredient}>
+              <RecipeIngredientLine ingredient={ingredient} line={formatIngredientLine(shown)} />
+            </View>
+          );
+        })}
         {!isCreamiRecipe(recipe) && recipe.steps.length > 0 ? (
           <>
             <AppText variant="title">Steps</AppText>
@@ -386,6 +424,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: tokens.border,
     paddingVertical: tokens.space.sm,
+  },
+  ingredientsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.space.sm,
   },
   step: {
     flexDirection: "row",

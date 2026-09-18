@@ -6,6 +6,9 @@ import { resolveIngredients } from "../ingredients/resolveIngredients";
 import { generateGeminiJson, parseGeminiRecipe } from "../normalize/geminiRecipeSchema";
 import { CREATE_AGENT_LABEL, composeSystemInstruction, composeUserMessage } from "./composeGeneratePrompt";
 import { mockGeneratedCreate } from "./mockGenerate";
+import { normalizeBakeRecipe } from "./validateBakeRecipe";
+import { normalizeBreadRecipe } from "./validateBreadRecipe";
+import { normalizeChefRecipe } from "./validateChefRecipe";
 import { normalizeCreamiRecipe } from "./validateCreamiRecipe";
 
 export async function generateRecipe(
@@ -24,6 +27,18 @@ export async function generateRecipe(
   if (request.agent === "creami") {
     recipe = normalizeCreamiRecipe(recipe, request);
     recipe.steps = [];
+  }
+
+  if (request.agent === "chef") {
+    recipe = normalizeChefRecipe(recipe, request);
+  }
+
+  if (request.agent === "bread") {
+    recipe = normalizeBreadRecipe(recipe, request);
+  }
+
+  if (request.agent === "bake") {
+    recipe = normalizeBakeRecipe(recipe, request);
   }
 
   return resolveIngredients(recipe, { env, db });

@@ -7,7 +7,7 @@ import { ensureAdminDemoKitchen } from "./db/seedDemoKitchen";
 
 const env = loadEnv();
 const db = createDb(env.databaseUrl);
-await ensureAdminUser(db);
+await ensureAdminUser(db, env.adminPassword);
 await ensureAdminDemoKitchen(db);
 const app = createApp(db, env);
 

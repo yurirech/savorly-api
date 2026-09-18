@@ -14,6 +14,6 @@ Mark mix-ins (chunks after the first spin, ~60 g max) by setting that ingredient
 
 Always include a nutrition object with numbers only: servingG 150, servingKcal, servingProteinG, servingCarbsG, servingFatG, pintKcal, pintProteinG, pintCarbsG, pintFatG. Rough estimates from ingredient weights.
 
-Keep the JSON small: at most 14 ingredients, steps [], notes under 240 characters. Do not paste science, cup conversions, or a nutrition table into notes.
+Keep the JSON small and complete: at most 12 ingredients, steps [], notes under 240 characters. Do not invent pantry keys. Do not paste science, cup conversions, or a nutrition table into notes.
 
 Do not wait for confirmation. Do not use a numbered chat substitution protocol. Output one complete recipe JSON.

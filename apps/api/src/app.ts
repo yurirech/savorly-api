@@ -64,12 +64,15 @@ const generatedRecipeSchema = z.object({
         carbsG: z.number(),
         fatG: z.number(),
       }),
-      perPint: z.object({
-        kcal: z.number(),
-        proteinG: z.number(),
-        carbsG: z.number(),
-        fatG: z.number(),
-      }),
+      perPint: z
+        .object({
+          kcal: z.number(),
+          proteinG: z.number(),
+          carbsG: z.number(),
+          fatG: z.number(),
+        })
+        .nullable()
+        .optional(),
     })
     .nullable()
     .optional(),
@@ -99,8 +102,27 @@ const generateSchema = z
       adaptNote: z.string().trim().min(1).optional(),
     }),
     z.object({
-      agent: z.enum(["bread", "bake", "chef"]),
-      notes: z.string(),
+      agent: z.literal("bread"),
+      size: z.enum(["medium", "large"]),
+      style: z.enum(["regular", "lighter"]),
+      notes: z.string().trim().optional(),
+      previousRecipe: generatedRecipeSchema.optional(),
+      adaptNote: z.string().trim().min(1).optional(),
+    }),
+    z.object({
+      agent: z.literal("bake"),
+      kind: z.enum(["cake", "muffin", "cupcake", "other"]),
+      style: z.enum(["regular", "lighter"]),
+      notes: z.string().trim().optional(),
+      previousRecipe: generatedRecipeSchema.optional(),
+      adaptNote: z.string().trim().min(1).optional(),
+    }),
+    z.object({
+      agent: z.literal("chef"),
+      mealType: z.enum(["main", "side", "snack"]),
+      servings: z.union([z.literal(1), z.literal(2), z.literal(4)]),
+      style: z.enum(["regular", "lighter", "nutritious"]),
+      notes: z.string().trim().optional(),
       previousRecipe: generatedRecipeSchema.optional(),
       adaptNote: z.string().trim().min(1).optional(),
     }),

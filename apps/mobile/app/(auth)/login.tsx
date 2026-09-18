@@ -11,7 +11,7 @@ import { tokens } from "../../src/theme/tokens";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("admin");
-  const [password, setPassword] = useState("admin");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 

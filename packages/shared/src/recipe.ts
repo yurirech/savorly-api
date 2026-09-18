@@ -51,7 +51,7 @@ export type RecipeMacros = {
 export type RecipeNutrition = {
   servingG: number;
   perServing: RecipeMacros;
-  perPint: RecipeMacros;
+  perPint?: RecipeMacros | null;
 };
 
 export type GeneratedRecipe = {
@@ -113,11 +113,46 @@ export type CreamiGenerateRequest = {
   adaptNote?: string;
 };
 
-export type NotesGenerateRequest = {
-  agent: "bread" | "bake" | "chef";
-  notes: string;
+export type ChefMealType = "main" | "side" | "snack";
+export type ChefStyle = "regular" | "lighter" | "nutritious";
+export type ChefServings = 1 | 2 | 4;
+
+export type ChefGenerateRequest = {
+  agent: "chef";
+  mealType: ChefMealType;
+  servings: ChefServings;
+  style: ChefStyle;
+  notes?: string;
   previousRecipe?: GeneratedRecipe;
   adaptNote?: string;
 };
 
-export type RecipeGenerateRequest = CreamiGenerateRequest | NotesGenerateRequest;
+export type BreadLoafSize = "medium" | "large";
+export type BreadStyle = "regular" | "lighter";
+
+export type BreadGenerateRequest = {
+  agent: "bread";
+  size: BreadLoafSize;
+  style: BreadStyle;
+  notes?: string;
+  previousRecipe?: GeneratedRecipe;
+  adaptNote?: string;
+};
+
+export type BakeKind = "cake" | "muffin" | "cupcake" | "other";
+export type BakeStyle = "regular" | "lighter";
+
+export type BakeGenerateRequest = {
+  agent: "bake";
+  kind: BakeKind;
+  style: BakeStyle;
+  notes?: string;
+  previousRecipe?: GeneratedRecipe;
+  adaptNote?: string;
+};
+
+export type RecipeGenerateRequest =
+  | CreamiGenerateRequest
+  | BreadGenerateRequest
+  | BakeGenerateRequest
+  | ChefGenerateRequest;

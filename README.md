@@ -52,7 +52,7 @@ Point `EXPO_PUBLIC_API_URL` at the API. Android emulator: `http://10.0.2.2:4000`
 
 To use it on the phone **without this laptop**, host the API and install an APK. See `docs/apk-eas.md`.
 
-Sign in with **admin** / **admin** (seeded on API start). You can still create another account. Imports and the recipe library require a signed-in session.
+Sign in with **admin** and the `ADMIN_PASSWORD` from `apps/api/.env` (seeded/rotated on API start). You can still create another account. Imports and the recipe library require a signed-in session.
 
 ## What is stored
 

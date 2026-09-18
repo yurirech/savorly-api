@@ -22,6 +22,7 @@ services:
       PORT: 4000
       DATABASE_URL: postgres://savorly:${POSTGRES_PASSWORD}@postgres:5432/savorly
       JWT_SECRET: ${JWT_SECRET}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       USE_MOCK_IMPORTS: ${USE_MOCK_IMPORTS:-true}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       APIFY_TOKEN: ${APIFY_TOKEN:-}

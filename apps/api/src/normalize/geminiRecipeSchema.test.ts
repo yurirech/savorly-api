@@ -58,6 +58,21 @@ describe("parseGeminiRecipe nutrition", () => {
       }),
     ).toEqual(nutrition);
   });
+
+  it("keeps per-100 g nutrition without a pint", () => {
+    expect(
+      parseRecipeNutrition({
+        servingG: 100,
+        servingKcal: 180,
+        servingProteinG: 8,
+        servingCarbsG: 22,
+        servingFatG: 6,
+      }),
+    ).toEqual({
+      servingG: 100,
+      perServing: { kcal: 180, proteinG: 8, carbsG: 22, fatG: 6 },
+    });
+  });
 });
 
 describe("repairGeminiJson", () => {
@@ -71,6 +86,22 @@ describe("repairGeminiJson", () => {
     expect(JSON.parse(repaired)).toMatchObject({
       title: "Pint",
       ingredients: [{ name: "quark", notes: "mix-in" }],
+    });
+  });
+
+  it("closes a truncated ingredients payload", () => {
+    const repaired = repairGeminiJson(`{
+      "title": "Pint",
+      "category": "dessert",
+      "ingredients": [
+        {"name": "quark", "quantity": 100, "unit": "g"},
+        {"name": "Brownie chunks", "notes": "mix-in", "quantity": 40`);
+    expect(JSON.parse(repaired)).toMatchObject({
+      title: "Pint",
+      ingredients: [
+        { name: "quark", quantity: 100 },
+        { name: "Brownie chunks", notes: "mix-in", quantity: 40 },
+      ],
     });
   });
 });

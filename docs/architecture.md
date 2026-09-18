@@ -22,7 +22,7 @@ Do not persist social or webpage media. Saved recipes always render the bundled 
 
 ## Identity
 
-Email/password JWT. Register and login live in the Expo app. The API issues a 30-day HS256 token (`JWT_SECRET`). Recipe routes require `Authorization: Bearer`. Tokens are stored in SecureStore on native and `localStorage` on web. On first boot the API seeds `admin@savorly.local` with password `admin` if that row is missing; login also accepts the shorthand `admin`. Gemini and Apify keys stay on the API, not in the app.
+Email/password JWT. Register and login live in the Expo app. The API issues a 30-day HS256 token (`JWT_SECRET`). Recipe routes require `Authorization: Bearer`. Tokens are stored in SecureStore on native and `localStorage` on web. On first boot the API seeds `admin@savorly.local` from `ADMIN_PASSWORD` if that row is missing, and updates the hash when the env password changes; login also accepts the shorthand `admin`. Gemini and Apify keys stay on the API, not in the app.
 
 ## UI
 

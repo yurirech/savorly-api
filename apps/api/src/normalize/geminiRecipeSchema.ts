@@ -12,7 +12,7 @@ import {
 import { AppError } from "../errors";
 
 const GEMINI_TIMEOUT_MS = 60_000;
-const GEMINI_MAX_OUTPUT_TOKENS = 4096;
+const GEMINI_MAX_OUTPUT_TOKENS = 8192;
 const GEMINI_ATTEMPTS = 2;
 
 export const GEMINI_RECIPE_SCHEMA: Schema = {
@@ -32,7 +32,6 @@ export const GEMINI_RECIPE_SCHEMA: Schema = {
           quantity: { type: SchemaType.NUMBER, nullable: true },
           unit: { type: SchemaType.STRING, nullable: true },
           notes: { type: SchemaType.STRING, nullable: true },
-          canonicalKey: { type: SchemaType.STRING, nullable: true },
         },
         required: ["name"],
       },
@@ -66,20 +65,10 @@ export const GEMINI_RECIPE_SCHEMA: Schema = {
         pintCarbsG: { type: SchemaType.NUMBER },
         pintFatG: { type: SchemaType.NUMBER },
       },
-      required: [
-        "servingG",
-        "servingKcal",
-        "servingProteinG",
-        "servingCarbsG",
-        "servingFatG",
-        "pintKcal",
-        "pintProteinG",
-        "pintCarbsG",
-        "pintFatG",
-      ],
+      required: ["servingG", "servingKcal", "servingProteinG", "servingCarbsG", "servingFatG"],
     },
   },
-  required: ["title", "category", "ingredients", "steps", "tags", "uncertainties"],
+  required: ["title", "category", "ingredients", "steps", "tags", "uncertainties", "nutrition"],
 };
 
 export async function generateGeminiJson(options: {
@@ -174,9 +163,9 @@ export function parseRecipeNutrition(value: unknown): RecipeNutrition | null {
   const item = value as Record<string, unknown>;
   const servingG = nullableNumber(item.servingG);
   const nestedServing = parseMacros(item.perServing);
-  const nestedPint = parseMacros(item.perPint);
-  if (servingG != null && nestedServing && nestedPint) {
-    return { servingG, perServing: nestedServing, perPint: nestedPint };
+  if (servingG != null && nestedServing) {
+    const nestedPint = parseMacros(item.perPint);
+    return nestedPint ? { servingG, perServing: nestedServing, perPint: nestedPint } : { servingG, perServing: nestedServing };
   }
 
   const perServing = parseMacros({
@@ -185,14 +174,14 @@ export function parseRecipeNutrition(value: unknown): RecipeNutrition | null {
     carbsG: item.servingCarbsG,
     fatG: item.servingFatG,
   });
+  if (servingG == null || !perServing) return null;
   const perPint = parseMacros({
     kcal: item.pintKcal,
     proteinG: item.pintProteinG,
     carbsG: item.pintCarbsG,
     fatG: item.pintFatG,
   });
-  if (servingG == null || !perServing || !perPint) return null;
-  return { servingG, perServing, perPint };
+  return perPint ? { servingG, perServing, perPint } : { servingG, perServing };
 }
 
 function parseMacros(value: unknown): RecipeMacros | null {
@@ -262,26 +251,62 @@ function modelText(result: { response: { text: () => string; candidates?: Array<
 
 function parseJsonPayload(text: string): unknown {
   const candidates = [text, repairGeminiJson(text)];
+  let lastParseError = "";
   for (const candidate of candidates) {
     try {
       return JSON.parse(candidate) as unknown;
-    } catch {
-      continue;
+    } catch (error) {
+      lastParseError = error instanceof Error ? error.message : String(error);
     }
   }
-  const preview = text.slice(Math.max(0, 1400), 1600).replaceAll("\n", "\\n");
-  throw new Error(`Gemini returned invalid JSON (${text.length} chars) near: ${preview}`);
+  const preview = text.slice(Math.max(0, text.length - 220)).replaceAll("\n", "\\n");
+  throw new Error(`Gemini returned invalid JSON (${text.length} chars): ${lastParseError} near: ${preview}`);
 }
 
 export function repairGeminiJson(text: string): string {
   let next = text.trim();
   const start = next.indexOf("{");
-  const end = next.lastIndexOf("}");
-  if (start >= 0 && end > start) {
-    next = next.slice(start, end + 1);
+  if (start >= 0) {
+    next = next.slice(start);
   }
   next = next.replace(/("notes"\s*:\s*)mix-in\b/gi, '$1"mix-in"');
+  next = closeTruncatedJson(next);
   next = next.replace(/,\s*([}\]])/g, "$1");
+  return next;
+}
+
+function closeTruncatedJson(text: string): string {
+  let inString = false;
+  let escaped = false;
+  const stack: Array<"}" | "]"> = [];
+  let next = "";
+  for (const ch of text) {
+    next += ch;
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === "\\") {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+    } else if (ch === "{") {
+      stack.push("}");
+    } else if (ch === "[") {
+      stack.push("]");
+    } else if (ch === "}" || ch === "]") {
+      stack.pop();
+    }
+  }
+  if (inString) next += '"';
+  next = next.replace(/,\s*$/, "");
+  while (stack.length > 0) {
+    next += stack.pop();
+  }
   return next;
 }
 

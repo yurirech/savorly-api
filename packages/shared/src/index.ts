@@ -5,12 +5,21 @@ export {
   type FoodCategory,
 } from "./foodCategory";
 export type {
+  BakeGenerateRequest,
+  BakeKind,
+  BakeStyle,
+  BreadGenerateRequest,
+  BreadLoafSize,
+  BreadStyle,
+  ChefGenerateRequest,
+  ChefMealType,
+  ChefServings,
+  ChefStyle,
   CreateAgent,
   CreamiGenerateRequest,
   CreamiSweetenerKind,
   GeneratedRecipe,
   Ingredient,
-  NotesGenerateRequest,
   RecipeGenerateRequest,
   RecipeImportRequest,
   RecipeMacros,
@@ -23,6 +32,19 @@ export type {
 } from "./recipe";
 export { isCreamiRecipe, isMixInIngredient, recipeNotesText } from "./recipe";
 export { resolveCreamiSweetenerName } from "./creamiSweetener";
+export { CHEF_SERVING_WEIGHT_G, chefServingWeightG, chefServingWeightHint } from "./chefConstraints";
+export {
+  BREAD_LOAF_WEIGHT_G,
+  BREAD_SLICE_G,
+  breadDefaultServings,
+  breadLoafWeightG,
+} from "./breadConstraints";
+export {
+  BAKE_DEFAULT_SERVINGS,
+  BAKE_SERVING_G,
+  bakeDefaultServings,
+  bakeServingG,
+} from "./bakeConstraints";
 export {
   CREAMI_FILL_TOLERANCE_G,
   CREAMI_PINT_FILL_G,
@@ -57,6 +79,7 @@ export {
   type DisplayUnit,
 } from "./ingredients/convert";
 export { formatIngredientLine, formatQuantity, formatVolume } from "./ingredients/formatQuantity";
+export { formatCopyIngredientLine, formatRecipeIngredientsCopy } from "./ingredients/formatIngredientCopy";
 export { parseIngredientLine, parseIngredientLines } from "./ingredients/parseIngredientLine";
 export type { CookbookDetail, CookbookSummary } from "./cookbook";
 export type {
