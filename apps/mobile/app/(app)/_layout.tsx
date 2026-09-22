@@ -22,6 +22,12 @@ export default function AppLayout() {
       <Stack.Screen name="new-cookbook" options={{ title: "New cookbook" }} />
       <Stack.Screen name="cookbook/[id]" options={{ title: "Cookbook" }} />
       <Stack.Screen name="suggest-meal" options={{ title: "Suggest meal" }} />
+      <Stack.Screen name="diary/index" options={{ title: "Diary" }} />
+      <Stack.Screen name="diary/foods" options={{ title: "My foods" }} />
+      <Stack.Screen name="diary/food-form" options={{ title: "Manual food" }} />
+      <Stack.Screen name="diary/usda-search" options={{ title: "USDA search" }} />
+      <Stack.Screen name="diary/log" options={{ title: "Log food" }} />
+      <Stack.Screen name="diary/profile" options={{ title: "Targets" }} />
     </Stack>
   );
 }

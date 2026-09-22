@@ -3,14 +3,20 @@ import type {
   AuthResponse,
   CookbookDetail,
   CookbookSummary,
+  DiaryDayResponse,
   GeneratedRecipe,
   MealSuggestionResponse,
+  NutrientVector,
+  NutritionProfileInput,
+  NutritionProfileResponse,
   PantryResponse,
   PantrySubstitutionResponse,
   FoodCategory,
   RecipeGenerateRequest,
   RecipeImportRequest,
   SavedRecipe,
+  UsdaFoodHit,
+  UserFood,
   UserPantryItem,
 } from "@savorly/shared";
 import { getToken, clearSession } from "../auth/session";
@@ -223,4 +229,57 @@ export function requestPantrySubstitutions(recipeId: string, options?: { display
     method: "POST",
     body: JSON.stringify(options ?? {}),
   });
+}
+
+export function fetchNutritionProfile() {
+  return request<NutritionProfileResponse>("/nutrition/profile");
+}
+
+export function saveNutritionProfile(body: NutritionProfileInput) {
+  return request<NutritionProfileResponse>("/nutrition/profile", {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
+export function listNutritionFoods(q?: string) {
+  const query = q ? `?q=${encodeURIComponent(q)}` : "";
+  return request<{ foods: UserFood[] }>(`/nutrition/foods${query}`);
+}
+
+export function createNutritionFood(name: string, per100g: NutrientVector) {
+  return request<{ food: UserFood }>("/nutrition/foods", {
+    method: "POST",
+    body: JSON.stringify({ name, per100g }),
+  });
+}
+
+export function searchUsdaFoods(q: string) {
+  return request<{ foods: UsdaFoodHit[] }>(`/nutrition/foods/usda?q=${encodeURIComponent(q)}`);
+}
+
+export function importUsdaFood(fdcId: number, name?: string) {
+  return request<{ food: UserFood }>("/nutrition/foods/import", {
+    method: "POST",
+    body: JSON.stringify({ fdcId, name }),
+  });
+}
+
+export function deleteNutritionFood(id: string) {
+  return request<void>(`/nutrition/foods/${id}`, { method: "DELETE" });
+}
+
+export function fetchDiaryDay(date: string) {
+  return request<DiaryDayResponse>(`/nutrition/diary?date=${encodeURIComponent(date)}`);
+}
+
+export function addDiaryEntry(foodId: string, grams: number, date: string) {
+  return request<DiaryDayResponse>("/nutrition/diary", {
+    method: "POST",
+    body: JSON.stringify({ foodId, grams, date }),
+  });
+}
+
+export function deleteDiaryEntry(id: string) {
+  return request<DiaryDayResponse>(`/nutrition/diary/${id}`, { method: "DELETE" });
 }

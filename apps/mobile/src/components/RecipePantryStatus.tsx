@@ -1,8 +1,45 @@
-import { Check, X } from "phosphor-react-native";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Jar } from "phosphor-react-native";
+import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
 import type { RecipePantryMatchResult } from "@savorly/shared";
 import { tokens } from "../theme/tokens";
 import { AppText } from "./AppText";
+
+type RecipePantryBadgeProps = {
+  isComplete: boolean;
+  size?: number;
+  interactive?: boolean;
+  onPressMissing?: () => void;
+};
+
+export function RecipePantryBadge(props: RecipePantryBadgeProps) {
+  const { isComplete, size = 22, interactive = false, onPressMissing } = props;
+  const jarColor = tokens.text;
+
+  if (isComplete) {
+    return (
+      <View accessibilityLabel="All ingredients in pantry" accessible>
+        <Jar size={size} color={jarColor} weight="fill" />
+      </View>
+    );
+  }
+
+  const icon = <Jar size={size} color={jarColor} weight="regular" />;
+
+  if (interactive && onPressMissing) {
+    return (
+      <Pressable
+        onPress={onPressMissing}
+        accessibilityRole="button"
+        accessibilityLabel="Some ingredients missing from pantry"
+        hitSlop={8}
+      >
+        {icon}
+      </Pressable>
+    );
+  }
+
+  return icon;
+}
 
 type RecipePantryStatusProps = {
   match: RecipePantryMatchResult | null;
@@ -11,8 +48,8 @@ type RecipePantryStatusProps = {
   onPressMissing: () => void;
 };
 
-export function RecipePantryStatus(props: RecipePantryStatusProps) {
-  const { match, loading, hasStaples, onPressMissing } = props;
+export function RecipePantryStatusHint(props: Pick<RecipePantryStatusProps, "loading" | "hasStaples">) {
+  const { loading, hasStaples } = props;
 
   if (loading) {
     return (
@@ -30,41 +67,39 @@ export function RecipePantryStatus(props: RecipePantryStatusProps) {
     );
   }
 
-  if (!match) {
-    return null;
-  }
+  return null;
+}
 
-  if (match.isComplete) {
+export function RecipePantryStatus(props: RecipePantryStatusProps) {
+  const { match, loading, hasStaples, onPressMissing } = props;
+
+  if (loading) {
     return (
-      <View style={styles.row}>
-        <Check size={18} color={tokens.success} weight="bold" />
-        <AppText variant="caption" style={{ color: tokens.success }}>
-          All ingredients in your pantry
-        </AppText>
+      <View style={styles.iconSlotInline}>
+        <ActivityIndicator size="small" color={tokens.textMuted} />
       </View>
     );
   }
 
+  if (!hasStaples || !match) {
+    return null;
+  }
+
   return (
-    <Pressable
-      onPress={onPressMissing}
-      style={styles.row}
-      accessibilityRole="button"
-      accessibilityLabel="Show missing pantry ingredients"
-    >
-      <X size={18} color={tokens.danger} weight="bold" />
-      <AppText variant="caption" style={{ color: tokens.danger }}>
-        Missing {match.missingIngredients.length} of {match.totalCount}
-      </AppText>
-    </Pressable>
+    <View style={styles.iconSlotInline}>
+      <RecipePantryBadge
+        isComplete={match.isComplete}
+        interactive={!match.isComplete}
+        onPressMissing={onPressMissing}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: {
-    flexDirection: "row",
+  iconSlotInline: {
     alignItems: "center",
-    gap: tokens.space.sm,
-    flexShrink: 1,
+    justifyContent: "center",
+    flexShrink: 0,
   },
 });

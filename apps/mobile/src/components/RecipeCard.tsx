@@ -3,19 +3,29 @@ import type { SavedRecipe } from "@savorly/shared";
 import { imageForCategory } from "../assets/categoryImages";
 import { tokens } from "../theme/tokens";
 import { AppText } from "./AppText";
+import { RecipePantryBadge } from "./RecipePantryStatus";
 
 type RecipeCardProps = {
   recipe: SavedRecipe;
   onPress: () => void;
   layout?: "grid" | "row";
+  pantryComplete?: boolean | null;
 };
 
 export function RecipeCard(props: RecipeCardProps) {
-  const { recipe, onPress, layout = "grid" } = props;
+  const { recipe, onPress, layout = "grid", pantryComplete = null } = props;
   const source = recipe.source.author || recipe.source.sourceName || recipe.source.type;
+  const pantryBadge =
+    pantryComplete != null ? (
+      <View style={styles.pantryBadge} pointerEvents="none">
+        <RecipePantryBadge isComplete={pantryComplete} size={20} interactive={false} />
+      </View>
+    ) : null;
+
   if (layout === "row") {
     return (
       <Pressable onPress={onPress} style={({ pressed }) => [styles.rowCard, pressed && styles.pressed]}>
+        {pantryBadge}
         <Image source={imageForCategory(recipe.category)} style={styles.rowImage} />
         <View style={styles.rowMeta}>
           <AppText variant="label" color="accent">
@@ -34,6 +44,7 @@ export function RecipeCard(props: RecipeCardProps) {
 
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.gridCard, tokens.shadow.card, pressed && styles.pressed]}>
+      {pantryBadge}
       <Image source={imageForCategory(recipe.category)} style={styles.gridImage} />
       <View style={styles.scrim} pointerEvents="none" />
       <View style={styles.gridMeta}>
@@ -52,12 +63,23 @@ export function RecipeCard(props: RecipeCardProps) {
 }
 
 const styles = StyleSheet.create({
+  pantryBadge: {
+    position: "absolute",
+    top: tokens.space.sm,
+    right: tokens.space.sm,
+    zIndex: 2,
+    padding: tokens.space.xs,
+    borderRadius: tokens.radius.sm,
+    backgroundColor: tokens.bg,
+    opacity: 0.92,
+  },
   gridCard: {
     flex: 1,
     minHeight: 200,
     borderRadius: tokens.radius.lg,
     overflow: "hidden",
     backgroundColor: tokens.surface,
+    position: "relative",
   },
   gridImage: {
     position: "absolute",
@@ -90,6 +112,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: 1,
     borderColor: tokens.border,
+    position: "relative",
   },
   rowImage: {
     width: 96,

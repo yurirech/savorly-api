@@ -30,6 +30,18 @@ import {
 } from "./pantry/pantryStore";
 import { parseMealSuggestionExcludeIds, suggestMeal } from "./pantry/suggestMeals";
 import { suggestPantrySubstitutions } from "./pantry/suggestPantrySubstitutions";
+import {
+  addDiaryEntry,
+  createManualFood,
+  deleteDiaryEntry,
+  deleteUserFood,
+  getDiaryDay,
+  getNutritionProfile,
+  importUsdaFood,
+  listUserFoods,
+  upsertNutritionProfile,
+} from "./nutrition/nutritionStore";
+import { fetchUsdaFood, searchUsdaFoods } from "./nutrition/usdaClient";
 
 const importSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("instagram"), url: z.string().url() }),
@@ -188,6 +200,45 @@ const mealSuggestionQuerySchema = z.object({
 
 const pantrySubstitutionsBodySchema = z.object({
   displayServings: z.number().int().positive().optional(),
+});
+
+const nutrientVectorSchema = z.object({
+  kcal: z.number().finite().nonnegative(),
+  proteinG: z.number().finite().nonnegative(),
+  carbsG: z.number().finite().nonnegative(),
+  fatG: z.number().finite().nonnegative(),
+  fiberG: z.number().finite().nonnegative().nullable().optional(),
+  sodiumMg: z.number().finite().nonnegative().nullable().optional(),
+  saturatedFatG: z.number().finite().nonnegative().nullable().optional(),
+  ironMg: z.number().finite().nonnegative().nullable().optional(),
+  calciumMg: z.number().finite().nonnegative().nullable().optional(),
+  vitaminDMcg: z.number().finite().nonnegative().nullable().optional(),
+});
+
+const nutritionProfileSchema = z.object({
+  sex: z.enum(["male", "female"]),
+  age: z.number().int().min(14).max(100),
+  heightCm: z.number().min(100).max(250),
+  weightKg: z.number().min(30).max(400),
+  activity: z.enum(["sedentary", "light", "moderate", "active"]),
+  goal: z.enum(["lose", "maintain", "gain"]),
+  weeklyKgChange: z.number().min(0).max(2),
+});
+
+const manualFoodSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  per100g: nutrientVectorSchema,
+});
+
+const importFoodSchema = z.object({
+  fdcId: z.number().int().positive(),
+  name: z.string().trim().min(1).max(80).optional(),
+});
+
+const diaryEntrySchema = z.object({
+  foodId: z.string().uuid(),
+  grams: z.number().positive().max(5000),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 
 export function createApp(db: Database, env: Env) {
@@ -381,6 +432,71 @@ export function createApp(db: Database, env: Env) {
       excludeRecipeIds: parseMealSuggestionExcludeIds(query.exclude),
     });
     return c.json(result);
+  });
+
+  app.get("/nutrition/profile", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    return c.json(await getNutritionProfile(db, user.id));
+  });
+
+  app.put("/nutrition/profile", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = nutritionProfileSchema.parse(await c.req.json());
+    return c.json(await upsertNutritionProfile(db, user.id, body));
+  });
+
+  app.get("/nutrition/foods", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const foods = await listUserFoods(db, user.id, c.req.query("q"));
+    return c.json({ foods });
+  });
+
+  app.get("/nutrition/foods/usda", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    void user;
+    const hits = await searchUsdaFoods(c.req.query("q") ?? "", env);
+    return c.json({ foods: hits });
+  });
+
+  app.post("/nutrition/foods", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = manualFoodSchema.parse(await c.req.json());
+    const food = await createManualFood(db, user.id, body.name, body.per100g);
+    return c.json({ food }, 201);
+  });
+
+  app.post("/nutrition/foods/import", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = importFoodSchema.parse(await c.req.json());
+    const imported = await fetchUsdaFood(body.fdcId, env, body.name);
+    const food = await importUsdaFood(db, user.id, imported);
+    return c.json({ food }, 201);
+  });
+
+  app.delete("/nutrition/foods/:id", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    await deleteUserFood(db, user.id, c.req.param("id"));
+    return c.body(null, 204);
+  });
+
+  app.get("/nutrition/diary", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const date = c.req.query("date");
+    if (!date) {
+      return c.json({ error: { code: "validation_error", message: "Date is required." } }, 400);
+    }
+    return c.json(await getDiaryDay(db, user.id, date));
+  });
+
+  app.post("/nutrition/diary", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = diaryEntrySchema.parse(await c.req.json());
+    return c.json(await addDiaryEntry(db, user.id, body), 201);
+  });
+
+  app.delete("/nutrition/diary/:id", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    return c.json(await deleteDiaryEntry(db, user.id, c.req.param("id")));
   });
 
   return app;

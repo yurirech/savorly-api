@@ -125,3 +125,28 @@ export type {
   AuthResponse,
   AuthUser,
 } from "./api";
+export type { NutrientVector } from "./nutrition/nutrients";
+export { remainingMacros, roundNutrition, scaleNutrition, sumNutrients } from "./nutrition/nutrients";
+export type {
+  NutritionActivity,
+  NutritionGoal,
+  NutritionProfileInput,
+  NutritionSex,
+  NutritionTargets,
+} from "./nutrition/targets";
+export {
+  computeNutritionTargets,
+  dailyKcalDelta,
+  KCAL_PER_KG,
+  MIN_CALORIE_TARGET,
+  mifflinStJeorBmr,
+} from "./nutrition/targets";
+export type {
+  DiaryDayResponse,
+  DiaryEntry,
+  NutritionProfile,
+  NutritionProfileResponse,
+  UsdaFoodHit,
+  UserFood,
+  UserFoodSource,
+} from "./nutrition/types";

@@ -1,4 +1,6 @@
+import { sql } from "drizzle-orm";
 import {
+  date,
   index,
   integer,
   jsonb,
@@ -7,6 +9,7 @@ import {
   real,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -102,4 +105,59 @@ export const userPantryItems = pgTable(
     index("user_pantry_items_user_idx").on(table.userId),
     index("user_pantry_items_user_starter_idx").on(table.userId, table.starterKey),
   ],
+);
+
+export const nutritionProfiles = pgTable("nutrition_profiles", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  sex: text("sex").notNull(),
+  age: integer("age").notNull(),
+  heightCm: real("height_cm").notNull(),
+  weightKg: real("weight_kg").notNull(),
+  activity: text("activity").notNull(),
+  goal: text("goal").notNull(),
+  weeklyKgChange: real("weekly_kg_change").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const userFoods = pgTable(
+  "user_foods",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    source: text("source").notNull(),
+    fdcId: integer("fdc_id"),
+    per100g: jsonb("per_100g").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("user_foods_user_idx").on(table.userId),
+    uniqueIndex("user_foods_user_fdc_unique")
+      .on(table.userId, table.fdcId)
+      .where(sql`${table.fdcId} is not null`),
+  ],
+);
+
+export const diaryEntries = pgTable(
+  "diary_entries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    foodId: uuid("food_id")
+      .notNull()
+      .references(() => userFoods.id, { onDelete: "restrict" }),
+    date: date("date").notNull(),
+    grams: real("grams").notNull(),
+    nutrients: jsonb("nutrients").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("diary_entries_user_date_idx").on(table.userId, table.date)],
 );

@@ -1,4 +1,4 @@
-import { Check, Plus, X } from "phosphor-react-native";
+import { Plus, X } from "phosphor-react-native";
 import { ActivityIndicator, StyleSheet, View, Pressable } from "react-native";
 import type { Ingredient } from "@savorly/shared";
 import { formatIngredientLine, isMixInIngredient } from "@savorly/shared";
@@ -27,9 +27,6 @@ export function RecipeIngredientLine(props: RecipeIngredientLineProps) {
           <AppText variant="caption" color="accent">
             Mix-in
           </AppText>
-        ) : null}
-        {showPantryActions && pantryMatched === true ? (
-          <Check size={16} color={tokens.success} weight="bold" />
         ) : null}
         {showPantryActions && pantryMatched === false ? (
           <View style={styles.missingActions}>

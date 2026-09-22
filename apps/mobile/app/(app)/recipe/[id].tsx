@@ -20,7 +20,7 @@ import { CookbookPickerSheet } from "../../../src/components/CookbookPickerSheet
 import { Field } from "../../../src/components/Field";
 import { RecipeIngredientLine } from "../../../src/components/RecipeIngredientLine";
 import { RecipePantryMissingSheet } from "../../../src/components/RecipePantryMissingSheet";
-import { RecipePantryStatus } from "../../../src/components/RecipePantryStatus";
+import { RecipePantryStatus, RecipePantryStatusHint } from "../../../src/components/RecipePantryStatus";
 import { RecipePantrySubstitutionsSheet } from "../../../src/components/RecipePantrySubstitutionsSheet";
 import { RecipeNutritionSummary } from "../../../src/components/RecipeNutritionSummary";
 import { Screen } from "../../../src/components/Screen";
@@ -275,7 +275,17 @@ export default function RecipeDetailScreen() {
           <AppText variant="label" color="accent">
             {recipe.category}
           </AppText>
-          <AppText variant="display">{recipe.title}</AppText>
+          <View style={styles.heroTitleRow}>
+            <AppText variant="display" style={styles.heroTitle}>
+              {recipe.title}
+            </AppText>
+            <RecipePantryStatus
+              match={pantryMatch}
+              loading={pantryLoading}
+              hasStaples={activeStapleCount > 0}
+              onPressMissing={() => setMissingSheetOpen(true)}
+            />
+          </View>
           <AppText variant="caption" color="muted">
             {recipe.source.author || recipe.source.sourceName || recipe.source.type}
           </AppText>
@@ -338,12 +348,7 @@ export default function RecipeDetailScreen() {
               {copied ? <Check size={18} color={tokens.accent} /> : <Copy size={18} color={tokens.textMuted} />}
             </Pressable>
           </View>
-          <RecipePantryStatus
-            match={pantryMatch}
-            loading={pantryLoading}
-            hasStaples={activeStapleCount > 0}
-            onPressMissing={() => setMissingSheetOpen(true)}
-          />
+          <RecipePantryStatusHint loading={pantryLoading} hasStaples={activeStapleCount > 0} />
         </View>
         {pantryLoadError ? (
           <AppText variant="caption" color="danger">
@@ -517,6 +522,15 @@ const styles = StyleSheet.create({
     padding: tokens.space.lg,
     paddingBottom: tokens.space.xl,
     gap: tokens.space.sm,
+  },
+  heroTitleRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: tokens.space.xs,
+  },
+  heroTitle: {
+    flexShrink: 1,
   },
   body: {
     padding: tokens.space.lg,

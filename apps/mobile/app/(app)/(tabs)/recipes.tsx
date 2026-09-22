@@ -24,6 +24,8 @@ import { SegmentedControl } from "../../../src/components/SegmentedControl";
 
 import { replaceCache, searchCachedRecipes } from "../../../src/db/cache";
 
+import { usePantryMatchForRecipes } from "../../../src/hooks/useRecipePantry";
+
 import { tokens } from "../../../src/theme/tokens";
 
 
@@ -49,6 +51,8 @@ export default function RecipesScreen() {
   const [cookbooksError, setCookbooksError] = useState<string | null>(null);
 
   const [refreshing, setRefreshing] = useState(false);
+
+  const { reloadPantry, pantryCompleteForRecipe } = usePantryMatchForRecipes(recipes);
 
 
 
@@ -130,13 +134,15 @@ export default function RecipesScreen() {
 
       void loadCookbooks(() => active);
 
+      void reloadPantry();
+
       return () => {
 
         active = false;
 
       };
 
-    }, [query, runSearch, loadCookbooks]),
+    }, [query, runSearch, loadCookbooks, reloadPantry]),
 
   );
 
@@ -356,7 +362,7 @@ export default function RecipesScreen() {
 
       ) : (
 
-        <RecipeGrid recipes={recipes} />
+        <RecipeGrid recipes={recipes} pantryCompleteForRecipe={pantryCompleteForRecipe} />
 
       )}
 

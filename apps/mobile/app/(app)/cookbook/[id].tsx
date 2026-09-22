@@ -18,6 +18,7 @@ import { Field } from "../../../src/components/Field";
 import { RecipeGrid } from "../../../src/components/RecipeGrid";
 import { Screen } from "../../../src/components/Screen";
 import { replaceCache, searchCachedRecipes } from "../../../src/db/cache";
+import { usePantryMatchForRecipes } from "../../../src/hooks/useRecipePantry";
 import { tokens } from "../../../src/theme/tokens";
 import { confirmDestructive } from "../../../src/utils/confirmDestructive";
 
@@ -34,6 +35,9 @@ export default function CookbookDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
+  const cookbookRecipes = cookbook?.recipes ?? [];
+  const { reloadPantry, pantryCompleteForRecipe } = usePantryMatchForRecipes(cookbookRecipes);
+
   const load = useCallback(async () => {
     if (!cookbookId) return;
     try {
@@ -48,7 +52,8 @@ export default function CookbookDetailScreen() {
   useFocusEffect(
     useCallback(() => {
       void load();
-    }, [load]),
+      void reloadPantry();
+    }, [load, reloadPantry]),
   );
 
   async function onRefresh() {
@@ -221,7 +226,7 @@ export default function CookbookDetailScreen() {
           This cookbook is empty. Add a few recipes to fill the cover.
         </AppText>
       ) : (
-        <RecipeGrid recipes={cookbook.recipes} />
+        <RecipeGrid recipes={cookbook.recipes} pantryCompleteForRecipe={pantryCompleteForRecipe} />
       )}
       <Button label="Add recipes" onPress={() => void startPicking()} />
       {renaming ? (

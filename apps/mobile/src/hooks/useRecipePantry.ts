@@ -79,3 +79,48 @@ export function useRecipePantry(recipe: SavedRecipe | null) {
     quickAddIngredient,
   };
 }
+
+export function usePantryMatchForRecipes(recipes: SavedRecipe[]) {
+  const [pantry, setPantry] = useState<PantryResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const reloadPantry = useCallback(async () => {
+    setLoading(true);
+    try {
+      setPantry(await fetchPantry());
+    } catch {
+      setPantry(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const activeStapleCount = pantry ? activePantryStapleCount(pantry) : 0;
+
+  const matchByRecipeId = useMemo(() => {
+    const map = new Map<string, boolean>();
+    if (!pantry || activeStapleCount === 0) {
+      return map;
+    }
+    const index = buildPantryMatchIndex(pantry);
+    for (const recipe of recipes) {
+      map.set(recipe.id, evaluateRecipePantryMatch(recipe, index).isComplete);
+    }
+    return map;
+  }, [recipes, pantry, activeStapleCount]);
+
+  function pantryCompleteForRecipe(recipeId: string): boolean | null {
+    if (loading || activeStapleCount === 0) {
+      return null;
+    }
+    const value = matchByRecipeId.get(recipeId);
+    return value === undefined ? null : value;
+  }
+
+  return {
+    loading,
+    hasStaples: activeStapleCount > 0,
+    reloadPantry,
+    pantryCompleteForRecipe,
+  };
+}

@@ -8,6 +8,7 @@ export type Env = {
   apifyInstagramActor: string;
   useMockImports: boolean;
   adminPassword?: string;
+  usdaFdcApiKey?: string;
 };
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
@@ -30,5 +31,6 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     apifyInstagramActor: source.APIFY_INSTAGRAM_ACTOR ?? "apify/instagram-reel-scraper",
     useMockImports: source.USE_MOCK_IMPORTS === "true",
     adminPassword: source.ADMIN_PASSWORD || undefined,
+    usdaFdcApiKey: source.USDA_FDC_API_KEY || undefined,
   };
 }

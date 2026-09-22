@@ -6,15 +6,20 @@ import { RecipeCard } from "./RecipeCard";
 
 type RecipeGridProps = {
   recipes: SavedRecipe[];
+  pantryCompleteForRecipe?: (recipeId: string) => boolean | null;
 };
 
 export function RecipeGrid(props: RecipeGridProps) {
-  const { recipes } = props;
+  const { recipes, pantryCompleteForRecipe } = props;
   return (
     <View style={styles.grid}>
       {recipes.map((recipe) => (
         <View key={recipe.id} style={styles.cell}>
-          <RecipeCard recipe={recipe} onPress={() => router.push(`/(app)/recipe/${recipe.id}`)} />
+          <RecipeCard
+            recipe={recipe}
+            onPress={() => router.push(`/(app)/recipe/${recipe.id}`)}
+            pantryComplete={pantryCompleteForRecipe?.(recipe.id) ?? null}
+          />
         </View>
       ))}
     </View>

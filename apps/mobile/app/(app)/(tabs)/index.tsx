@@ -68,6 +68,7 @@ export default function HomeScreen() {
       </View>
 
       <Button label="Suggest meal" onPress={() => router.push("/(app)/suggest-meal" as Href)} />
+      <Button label="Diary" variant="secondary" onPress={() => router.push("/(app)/diary" as Href)} />
 
       <SectionHeader title="Recently saved" actionLabel="See all" onAction={() => router.push("/(app)/(tabs)/recipes" as Href)} />
       {recipes.length === 0 ? (

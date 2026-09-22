@@ -40,7 +40,7 @@ npm run db:migrate
 npm run dev:api
 ```
 
-`USE_MOCK_IMPORTS=true` (default in `.env.example`) returns fixture recipes so the app works without Gemini or Apify. Set it to `false` and add `GEMINI_API_KEY` / `APIFY_TOKEN` for live imports.
+`USE_MOCK_IMPORTS=true` (default in `.env.example`) returns fixture recipes so the app works without Gemini or Apify. Set it to `false` and add `GEMINI_API_KEY` / `APIFY_TOKEN` for live imports. Diary USDA search uses a local staple list unless `USDA_FDC_API_KEY` is set.
 
 5. Mobile (from `apps/mobile`, or `npm run dev:mobile`):
 
