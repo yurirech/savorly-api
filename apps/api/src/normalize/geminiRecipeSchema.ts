@@ -80,6 +80,38 @@ export const GEMINI_ADAPT_RECIPE_SCHEMA: Schema = {
   required: [...(GEMINI_RECIPE_SCHEMA.required as string[]), "adaptSummary"],
 };
 
+const GEMINI_SUBSTITUTION_REPLACEMENT_SCHEMA: Schema = {
+  type: SchemaType.OBJECT,
+  properties: {
+    name: { type: SchemaType.STRING },
+    quantity: { type: SchemaType.NUMBER, nullable: true },
+    unit: { type: SchemaType.STRING, nullable: true },
+    notes: { type: SchemaType.STRING, nullable: true },
+  },
+  required: ["name"],
+};
+
+export const GEMINI_PANTRY_SUBSTITUTION_SCHEMA: Schema = {
+  type: SchemaType.OBJECT,
+  properties: {
+    adaptSummary: { type: SchemaType.STRING },
+    substitutions: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          originalIngredientIndex: { type: SchemaType.NUMBER },
+          pantryStapleLabel: { type: SchemaType.STRING },
+          replacement: GEMINI_SUBSTITUTION_REPLACEMENT_SCHEMA,
+          rationale: { type: SchemaType.STRING },
+        },
+        required: ["originalIngredientIndex", "pantryStapleLabel", "replacement", "rationale"],
+      },
+    },
+  },
+  required: ["adaptSummary", "substitutions"],
+};
+
 export function extractAdaptSummary(raw: unknown): string | undefined {
   if (!raw || typeof raw !== "object" || !("adaptSummary" in raw)) {
     return undefined;

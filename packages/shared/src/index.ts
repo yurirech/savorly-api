@@ -94,16 +94,30 @@ export {
   starterPantryStapleByKey,
   type StarterPantryStaple,
 } from "./pantry/starterStaples";
-export type { PantryResponse, PantryStarterView, UserPantryItem, MealSuggestion, MealSuggestionResponse } from "./pantry/types";
+export type {
+  PantryResponse,
+  PantryStarterView,
+  UserPantryItem,
+  MealSuggestion,
+  MealSuggestionResponse,
+  PantrySubstitutionLine,
+  PantrySubstitutionResponse,
+  RecipePantryIngredientStatus,
+  RecipePantryMatchReason,
+  RecipePantryMatchResult,
+} from "./pantry/types";
 export {
   activePantryStapleCount,
   buildPantryMatchIndex,
+  evaluateRecipePantryMatch,
   rankRecipesForPantry,
   scoreRecipePantryMatch,
   type PantryMatchIndex,
   type RankRecipesForPantryOptions,
   type RecipePantryScore,
 } from "./pantry/mealSuggestions";
+export { resolveQuickAddPantryAction, type QuickAddPantryAction } from "./pantry/quickAddPantry";
+export { applyPantrySubstitutions } from "./pantry/pantrySubstitutions";
 export type { CookbookDetail, CookbookSummary } from "./cookbook";
 export type {
   ApiErrorBody,

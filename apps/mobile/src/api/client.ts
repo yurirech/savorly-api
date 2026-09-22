@@ -6,6 +6,7 @@ import type {
   GeneratedRecipe,
   MealSuggestionResponse,
   PantryResponse,
+  PantrySubstitutionResponse,
   FoodCategory,
   RecipeGenerateRequest,
   RecipeImportRequest,
@@ -215,4 +216,11 @@ export function fetchMealSuggestion(options: { category?: FoodCategory; excludeI
   }
   const query = params.toString();
   return request<MealSuggestionResponse>(`/pantry/meal-suggestions${query ? `?${query}` : ""}`);
+}
+
+export function requestPantrySubstitutions(recipeId: string, options?: { displayServings?: number }) {
+  return request<PantrySubstitutionResponse>(`/recipes/${encodeURIComponent(recipeId)}/pantry-substitutions`, {
+    method: "POST",
+    body: JSON.stringify(options ?? {}),
+  });
 }

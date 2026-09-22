@@ -5,6 +5,7 @@ import { STARTER_PANTRY_STAPLES } from "./starterStaples";
 import {
   activePantryStapleCount,
   buildPantryMatchIndex,
+  evaluateRecipePantryMatch,
   rankRecipesForPantry,
   scoreRecipePantryMatch,
 } from "./mealSuggestions";
@@ -89,6 +90,32 @@ describe("scoreRecipePantryMatch", () => {
       ingredients: [{ name: "tahini paste", quantity: 1, unit: "tbsp" }],
     });
     expect(scoreRecipePantryMatch(recipe, index).matchedCount).toBe(1);
+  });
+});
+
+describe("evaluateRecipePantryMatch", () => {
+  it("marks complete when all ingredients match and attaches quickAdd for missing", () => {
+    const index = buildPantryMatchIndex(pantryWithFlourAndChickpeas());
+    const partial = minimalRecipe({
+      id: "p",
+      title: "Partial",
+      ingredients: [
+        { name: "chickpeas", quantity: 1, unit: "g" },
+        { name: "tahini", quantity: 1, unit: "tbsp" },
+      ],
+    });
+    const result = evaluateRecipePantryMatch(partial, index);
+    expect(result.isComplete).toBe(false);
+    expect(result.missingIngredients).toEqual(["tahini"]);
+    const missingRow = result.ingredients.find((row) => !row.matched);
+    expect(missingRow?.quickAdd?.kind).toBe("custom");
+
+    const full = minimalRecipe({
+      id: "f",
+      title: "Full",
+      ingredients: [{ name: "chickpeas", quantity: 1, unit: "g" }],
+    });
+    expect(evaluateRecipePantryMatch(full, index).isComplete).toBe(true);
   });
 });
 

@@ -4,7 +4,7 @@ import { Check, Copy, Minus, Plus } from "phosphor-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Image, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { CookbookSummary, DisplayUnit, SavedRecipe } from "@savorly/shared";
+import type { CookbookSummary, DisplayUnit, PantrySubstitutionResponse, SavedRecipe } from "@savorly/shared";
 import {
   displayIngredient,
   formatIngredientLine,
@@ -12,18 +12,22 @@ import {
   isCreamiRecipe,
   recipeNotesText,
 } from "@savorly/shared";
-import { deleteRecipe, getRecipe, listCookbooks, listRecipeCookbooks, setRecipeCookbooks, updateRecipe } from "../../../src/api/client";
+import { deleteRecipe, getRecipe, listCookbooks, listRecipeCookbooks, requestPantrySubstitutions, setRecipeCookbooks, updateRecipe, ApiRequestError } from "../../../src/api/client";
 import { imageForCategory } from "../../../src/assets/categoryImages";
 import { AppText } from "../../../src/components/AppText";
 import { Button } from "../../../src/components/Button";
 import { CookbookPickerSheet } from "../../../src/components/CookbookPickerSheet";
 import { Field } from "../../../src/components/Field";
 import { RecipeIngredientLine } from "../../../src/components/RecipeIngredientLine";
+import { RecipePantryMissingSheet } from "../../../src/components/RecipePantryMissingSheet";
+import { RecipePantryStatus } from "../../../src/components/RecipePantryStatus";
+import { RecipePantrySubstitutionsSheet } from "../../../src/components/RecipePantrySubstitutionsSheet";
 import { RecipeNutritionSummary } from "../../../src/components/RecipeNutritionSummary";
 import { Screen } from "../../../src/components/Screen";
 import { SegmentedControl } from "../../../src/components/SegmentedControl";
 import { softWrapText } from "../../../src/utils/textWrap";
 import { getCachedRecipe, removeCachedRecipe, upsertCachedRecipe } from "../../../src/db/cache";
+import { useRecipePantry } from "../../../src/hooks/useRecipePantry";
 import { setReviewDraft } from "../../../src/store/reviewDraft";
 import { tokens } from "../../../src/theme/tokens";
 import { confirmDestructive } from "../../../src/utils/confirmDestructive";
@@ -45,8 +49,23 @@ export default function RecipeDetailScreen() {
   const [displayUnit, setDisplayUnit] = useState<DisplayUnit>("original");
   const [copied, setCopied] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [missingSheetOpen, setMissingSheetOpen] = useState(false);
+  const [substitutionsSheetOpen, setSubstitutionsSheetOpen] = useState(false);
+  const [substitutionResult, setSubstitutionResult] = useState<PantrySubstitutionResponse | null>(null);
+  const [substitutionError, setSubstitutionError] = useState<string | null>(null);
+  const [suggestingSwaps, setSuggestingSwaps] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const insets = useSafeAreaInsets();
+
+  const {
+    match: pantryMatch,
+    loading: pantryLoading,
+    activeStapleCount,
+    addingIndex,
+    reloadPantry,
+    quickAddIngredient,
+    pantryError: pantryLoadError,
+  } = useRecipePantry(recipe);
 
   const recipeId = Array.isArray(id) ? id[0] : id;
 
@@ -87,13 +106,14 @@ export default function RecipeDetailScreen() {
       if (!recipeId) return;
       void reloadRecipe();
       void reloadCookbooks();
-    }, [recipeId, reloadRecipe, reloadCookbooks]),
+      void reloadPantry();
+    }, [recipeId, reloadRecipe, reloadCookbooks, reloadPantry]),
   );
 
   async function onRefresh() {
     setRefreshing(true);
     try {
-      await Promise.all([reloadRecipe(), reloadCookbooks()]);
+      await Promise.all([reloadRecipe(), reloadCookbooks(), reloadPantry()]);
     } finally {
       setRefreshing(false);
     }
@@ -214,6 +234,37 @@ export default function RecipeDetailScreen() {
     copiedTimer.current = setTimeout(() => setCopied(false), 1500);
   }
 
+  async function suggestPantrySwaps() {
+    setSuggestingSwaps(true);
+    setSubstitutionError(null);
+    setSubstitutionResult(null);
+    try {
+      const result = await requestPantrySubstitutions(recipe.id, {
+        displayServings: canScale ? servingsForMath : undefined,
+      });
+      setSubstitutionResult(result);
+      setMissingSheetOpen(false);
+      setSubstitutionsSheetOpen(true);
+    } catch (err) {
+      setSubstitutionError(err instanceof ApiRequestError ? err.message : "Could not suggest swaps.");
+      setSubstitutionsSheetOpen(true);
+    } finally {
+      setSuggestingSwaps(false);
+    }
+  }
+
+  function applyPantrySwaps() {
+    if (!substitutionResult) {
+      return;
+    }
+    setReviewDraft(substitutionResult.adaptedRecipe, recipe.id);
+    setSubstitutionsSheetOpen(false);
+    router.push("/(app)/review");
+  }
+
+  const showPantryOnIngredients = activeStapleCount > 0 && !pantryLoading;
+  const pantryRowByIndex = new Map(pantryMatch?.ingredients.map((row) => [row.index, row]) ?? []);
+
   return (
     <>
     <Screen padded={false} edges={[]} safeBottom={false} onRefresh={() => void onRefresh()} refreshing={refreshing}>
@@ -275,23 +326,48 @@ export default function RecipeDetailScreen() {
             { value: "volume", label: "cups" },
           ]}
         />
-        <View style={styles.ingredientsHeader}>
-          <AppText variant="title">Ingredients</AppText>
-          <Pressable
-            onPress={() => void copyIngredients()}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Copy ingredients"
-          >
-            {copied ? <Check size={18} color={tokens.accent} /> : <Copy size={18} color={tokens.textMuted} />}
-          </Pressable>
+        <View style={styles.ingredientsBlock}>
+          <View style={styles.ingredientsHeader}>
+            <AppText variant="title">Ingredients</AppText>
+            <Pressable
+              onPress={() => void copyIngredients()}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Copy ingredients"
+            >
+              {copied ? <Check size={18} color={tokens.accent} /> : <Copy size={18} color={tokens.textMuted} />}
+            </Pressable>
+          </View>
+          <RecipePantryStatus
+            match={pantryMatch}
+            loading={pantryLoading}
+            hasStaples={activeStapleCount > 0}
+            onPressMissing={() => setMissingSheetOpen(true)}
+          />
         </View>
+        {pantryLoadError ? (
+          <AppText variant="caption" color="danger">
+            {pantryLoadError}
+          </AppText>
+        ) : null}
         {recipe.ingredients.map((ingredient, index) => {
           const shown = shownIngredients[index];
           if (!shown) return null;
+          const pantryRow = pantryRowByIndex.get(index);
           return (
             <View key={`${index}-${ingredient.name}`} style={styles.ingredient}>
-              <RecipeIngredientLine ingredient={ingredient} line={formatIngredientLine(shown)} />
+              <RecipeIngredientLine
+                ingredient={ingredient}
+                line={formatIngredientLine(shown)}
+                showPantryActions={showPantryOnIngredients}
+                pantryMatched={pantryRow?.matched}
+                quickAddLoading={addingIndex === index}
+                onQuickAdd={
+                  pantryRow && !pantryRow.matched
+                    ? () => void quickAddIngredient(pantryRow)
+                    : undefined
+                }
+              />
             </View>
           );
         })}
@@ -390,6 +466,26 @@ export default function RecipeDetailScreen() {
         }}
         onSave={() => setPickerOpen(false)}
       />
+      <RecipePantryMissingSheet
+        visible={missingSheetOpen}
+        match={pantryMatch}
+        addingIndex={addingIndex}
+        suggesting={suggestingSwaps}
+        onClose={() => setMissingSheetOpen(false)}
+        onQuickAdd={(row) => void quickAddIngredient(row)}
+        onSuggestSwaps={() => void suggestPantrySwaps()}
+      />
+      <RecipePantrySubstitutionsSheet
+        visible={substitutionsSheetOpen}
+        result={substitutionResult}
+        error={substitutionError}
+        applying={false}
+        onClose={() => {
+          setSubstitutionsSheetOpen(false);
+          setSubstitutionError(null);
+        }}
+        onApply={applyPantrySwaps}
+      />
     </>
   );
 }
@@ -449,9 +545,13 @@ const styles = StyleSheet.create({
     borderBottomColor: tokens.border,
     paddingVertical: tokens.space.sm,
   },
+  ingredientsBlock: {
+    gap: tokens.space.sm,
+  },
   ingredientsHeader: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     gap: tokens.space.sm,
   },
   step: {

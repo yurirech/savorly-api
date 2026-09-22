@@ -29,6 +29,7 @@ import {
   updatePantryItem,
 } from "./pantry/pantryStore";
 import { parseMealSuggestionExcludeIds, suggestMeal } from "./pantry/suggestMeals";
+import { suggestPantrySubstitutions } from "./pantry/suggestPantrySubstitutions";
 
 const importSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("instagram"), url: z.string().url() }),
@@ -185,6 +186,10 @@ const mealSuggestionQuerySchema = z.object({
   exclude: z.string().optional(),
 });
 
+const pantrySubstitutionsBodySchema = z.object({
+  displayServings: z.number().int().positive().optional(),
+});
+
 export function createApp(db: Database, env: Env) {
   const app = new Hono();
 
@@ -265,6 +270,13 @@ export function createApp(db: Database, env: Env) {
     const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
     const recipe = await getRecipe(db, user.id, c.req.param("id"));
     return c.json({ recipe });
+  });
+
+  app.post("/recipes/:id/pantry-substitutions", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = pantrySubstitutionsBodySchema.parse(await c.req.json().catch(() => ({})));
+    const result = await suggestPantrySubstitutions(db, user.id, c.req.param("id"), body, env);
+    return c.json(result);
   });
 
   app.put("/recipes/:id", async (c) => {
