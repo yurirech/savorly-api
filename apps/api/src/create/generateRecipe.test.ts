@@ -24,14 +24,17 @@ describe("mocked create generations", () => {
       },
       env,
     );
-    expect(first.source.type).toBe("manual");
-    expect(first.source.sourceName).toBe("Creami");
-    expect(first.title.toLowerCase()).toContain("strawberry");
-    expect(first.nutrition?.perServing.kcal).toBeGreaterThan(0);
-    expect(first.steps).toEqual([]);
-    expect(first.ingredients.some((ingredient) => ingredient.notes === "mix-in")).toBe(true);
-    expect(first.ingredients.some((ingredient) => ingredient.name === "stevia")).toBe(true);
-    expect(first.ingredients.some((ingredient) => ingredient.name === "refined sugar" && ingredient.quantity === 15)).toBe(true);
+    expect(first.adaptSummary).toBeUndefined();
+    expect(first.recipe.source.type).toBe("manual");
+    expect(first.recipe.source.sourceName).toBe("Creami");
+    expect(first.recipe.title.toLowerCase()).toContain("strawberry");
+    expect(first.recipe.nutrition?.perServing.kcal).toBeGreaterThan(0);
+    expect(first.recipe.steps).toEqual([]);
+    expect(first.recipe.ingredients.some((ingredient) => ingredient.notes === "mix-in")).toBe(true);
+    expect(first.recipe.ingredients.some((ingredient) => ingredient.name === "stevia")).toBe(true);
+    expect(first.recipe.ingredients.some((ingredient) => ingredient.name === "refined sugar" && ingredient.quantity === 15)).toBe(
+      true,
+    );
 
     const adapted = await generateRecipe(
       {
@@ -41,17 +44,18 @@ describe("mocked create generations", () => {
         texture: "gelato",
         sweetenerKind: "lightweight",
         flavor: "strawberry",
-        previousRecipe: first,
-        adaptNote: "I don't have strawberry powder",
+        previousRecipe: first.recipe,
+        adaptGoal: "Keep fat under 2g per serving",
       },
       env,
     );
-    expect(adapted.title).toContain("adapted");
-    expect(adapted.notes).toContain("strawberry powder");
+    expect(adapted.recipe.title).toContain("adapted");
+    expect(adapted.recipe.notes).toContain("Keep fat under 2g per serving");
+    expect(adapted.adaptSummary).toContain("Keep fat under 2g per serving");
   });
 
   it("returns a Chef fixture with servings, steps, and per-serving macros", async () => {
-    const recipe = await generateRecipe(
+    const { recipe } = await generateRecipe(
       {
         agent: "chef",
         mealType: "main",
@@ -72,7 +76,7 @@ describe("mocked create generations", () => {
   });
 
   it("returns a Bread fixture with a chosen program in step 1 and keeps steps", async () => {
-    const recipe = await generateRecipe(
+    const { recipe } = await generateRecipe(
       {
         agent: "bread",
         size: "large",
@@ -90,7 +94,7 @@ describe("mocked create generations", () => {
   });
 
   it("returns a Bake fixture with oven steps and per-serving macros", async () => {
-    const recipe = await generateRecipe(
+    const { recipe } = await generateRecipe(
       {
         agent: "bake",
         kind: "muffin",

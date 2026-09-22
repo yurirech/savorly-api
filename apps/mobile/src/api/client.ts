@@ -4,9 +4,13 @@ import type {
   CookbookDetail,
   CookbookSummary,
   GeneratedRecipe,
+  MealSuggestionResponse,
+  PantryResponse,
+  FoodCategory,
   RecipeGenerateRequest,
   RecipeImportRequest,
   SavedRecipe,
+  UserPantryItem,
 } from "@savorly/shared";
 import { getToken, clearSession } from "../auth/session";
 
@@ -91,7 +95,7 @@ export function importRecipe(body: RecipeImportRequest) {
 }
 
 export function generateRecipe(body: RecipeGenerateRequest) {
-  return request<{ recipe: GeneratedRecipe }>("/generations", {
+  return request<{ recipe: GeneratedRecipe; adaptSummary?: string }>("/generations", {
     method: "POST",
     body: JSON.stringify(body),
   });
@@ -170,4 +174,45 @@ export function setRecipeCookbooks(recipeId: string, cookbookIds: string[]) {
     method: "PUT",
     body: JSON.stringify({ cookbookIds }),
   });
+}
+
+export function fetchPantry() {
+  return request<PantryResponse>("/pantry");
+}
+
+export function setStarterInPantry(starterKey: string, inPantry: boolean) {
+  return request<PantryResponse>(`/pantry/starters/${encodeURIComponent(starterKey)}`, {
+    method: "PUT",
+    body: JSON.stringify({ inPantry }),
+  });
+}
+
+export function createPantryItem(displayName: string, aliases?: string[]) {
+  return request<{ item: UserPantryItem }>("/pantry/items", {
+    method: "POST",
+    body: JSON.stringify({ displayName, aliases }),
+  });
+}
+
+export function updatePantryItem(id: string, displayName: string, aliases?: string[]) {
+  return request<{ item: UserPantryItem }>(`/pantry/items/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ displayName, aliases }),
+  });
+}
+
+export function deletePantryItem(id: string) {
+  return request<void>(`/pantry/items/${id}`, { method: "DELETE" });
+}
+
+export function fetchMealSuggestion(options: { category?: FoodCategory; excludeIds?: string[] }) {
+  const params = new URLSearchParams();
+  if (options.category) {
+    params.set("category", options.category);
+  }
+  if (options.excludeIds?.length) {
+    params.set("exclude", options.excludeIds.join(","));
+  }
+  const query = params.toString();
+  return request<MealSuggestionResponse>(`/pantry/meal-suggestions${query ? `?${query}` : ""}`);
 }

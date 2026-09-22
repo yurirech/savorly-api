@@ -29,6 +29,13 @@
       "when": 1774000000000,
       "tag": "0003_recipe_nutrition",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1774100000000,
+      "tag": "0004_user_pantry",
+      "breakpoints": true
     }
   ]
 }

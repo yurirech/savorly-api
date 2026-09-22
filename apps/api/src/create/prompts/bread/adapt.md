@@ -1,5 +1,7 @@
 [bread.adapt]
-Change only what the adapt note asks. Keep loaf size unless the note changes it. Re-choose the program if the dough type changes.
+Read `goal` for the intent behind the edit and `change` for what to do. Apply both against the system rules and the `constraints` line. Return one full updated recipe JSON with recalculated ingredients, steps, and nutrition.
+
+Change only what the change line asks while honoring the goal. Keep loaf size unless the change line changes it. Re-choose the program if the dough type changes.
 
 Dense / no rise → +15–25 g water; fresh yeast; Basic not Fast for wholegrain.
 Collapsed → less yeast or water.

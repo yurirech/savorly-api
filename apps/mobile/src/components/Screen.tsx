@@ -1,5 +1,5 @@
 import type { PropsWithChildren } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { tokens } from "../theme/tokens";
 
@@ -8,10 +8,12 @@ type ScreenProps = PropsWithChildren<{
   padded?: boolean;
   safeBottom?: boolean;
   edges?: ("top" | "right" | "bottom" | "left")[];
+  onRefresh?: () => void | Promise<void>;
+  refreshing?: boolean;
 }>;
 
 export function Screen(props: ScreenProps) {
-  const { children, scroll = true, padded = true, safeBottom = true, edges } = props;
+  const { children, scroll = true, padded = true, safeBottom = true, edges, onRefresh, refreshing = false } = props;
   const insets = useSafeAreaInsets();
   const bottomInset = safeBottom ? insets.bottom : 0;
   const bodyStyle = [
@@ -29,7 +31,15 @@ export function Screen(props: ScreenProps) {
 
   return (
     <SafeAreaView style={styles.safe} edges={edges ?? ["top", "left", "right"]}>
-      <ScrollView contentContainerStyle={bodyStyle} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={bodyStyle}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          onRefresh ? (
+            <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={tokens.accent} />
+          ) : undefined
+        }
+      >
         {children}
       </ScrollView>
     </SafeAreaView>

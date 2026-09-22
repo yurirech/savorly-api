@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, View } from "react-native";
 import { tokens } from "../theme/tokens";
+import { softWrapSegmentLabel } from "../utils/textWrap";
 import { AppText } from "./AppText";
 
 type SegmentedOption<T extends string> = {
@@ -28,9 +29,10 @@ export function SegmentedControl<T extends string>(props: SegmentedControlProps<
             style={[styles.pill, selected && styles.selected]}
             accessibilityRole="tab"
             accessibilityState={{ selected, disabled }}
+            accessibilityLabel={option.label}
           >
-            <AppText variant="label" style={selected ? styles.selectedLabel : styles.label}>
-              {option.label}
+            <AppText variant="caption" style={[styles.segmentLabel, selected ? styles.selectedLabel : styles.label]}>
+              {softWrapSegmentLabel(option.label)}
             </AppText>
           </Pressable>
         );
@@ -49,14 +51,24 @@ const styles = StyleSheet.create({
   },
   pill: {
     flex: 1,
+    flexBasis: 0,
+    minWidth: 0,
     minHeight: 40,
     borderRadius: tokens.radius.full,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: tokens.space.md,
+    paddingHorizontal: tokens.space.sm,
+    paddingVertical: tokens.space.xs,
   },
   selected: {
     backgroundColor: tokens.accent,
+  },
+  segmentLabel: {
+    width: "100%",
+    textAlign: "center",
+    fontFamily: tokens.font.bodyBold,
+    fontSize: 12,
+    lineHeight: 16,
   },
   label: {
     color: tokens.textMuted,

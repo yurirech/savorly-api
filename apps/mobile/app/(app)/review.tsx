@@ -1,5 +1,5 @@
 import { router, type Href } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import type { CookbookSummary, FoodCategory, GeneratedRecipe } from "@savorly/shared";
 import { formatIngredientLine, isCreamiRecipe, parseIngredientLines, recipeNotesText } from "@savorly/shared";
@@ -29,21 +29,33 @@ export default function ReviewScreen() {
   const [selectedCookbookIds, setSelectedCookbookIds] = useState<string[]>([]);
   const [newCookbookName, setNewCookbookName] = useState("");
   const [creatingCookbook, setCreatingCookbook] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadCookbookData = useCallback(async () => {
+    try {
+      const live = await listCookbooks();
+      setCookbooks(Array.isArray(live.cookbooks) ? live.cookbooks : []);
+      if (initial?.editingId) {
+        const membership = await listRecipeCookbooks(initial.editingId);
+        setSelectedCookbookIds(membership.cookbookIds);
+      }
+    } catch {
+      // Saving still works without cookbook chips.
+    }
+  }, [initial?.editingId]);
 
   useEffect(() => {
-    void (async () => {
-      try {
-        const live = await listCookbooks();
-        setCookbooks(live.cookbooks);
-        if (initial?.editingId) {
-          const membership = await listRecipeCookbooks(initial.editingId);
-          setSelectedCookbookIds(membership.cookbookIds);
-        }
-      } catch {
-        // Saving still works without cookbook chips.
-      }
-    })();
-  }, [initial?.editingId]);
+    void loadCookbookData();
+  }, [loadCookbookData]);
+
+  async function onRefresh() {
+    setRefreshing(true);
+    try {
+      await loadCookbookData();
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   if (!recipe) {
     return (
@@ -112,7 +124,7 @@ export default function ReviewScreen() {
   }
 
   return (
-    <Screen>
+    <Screen onRefresh={() => void onRefresh()} refreshing={refreshing}>
       <Image source={imageForCategory(recipe.category)} style={styles.hero} />
       <Text style={styles.kicker}>Review before saving</Text>
       <Field

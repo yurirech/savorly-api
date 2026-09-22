@@ -1,5 +1,7 @@
 [bake.adapt]
-Change only what the adapt note asks. Keep kind unless the note changes it.
+Read `goal` for the intent behind the edit and `change` for what to do. Apply both against the system rules and the `constraints` line. Return one full updated recipe JSON with recalculated ingredients, steps, and nutrition.
+
+Change only what the change line asks while honoring the goal. Keep kind unless the change line changes it.
 
 Dense / low rise → fresh powder; don't overmix; oven hot enough.
 Collapsed center → less leavening/sugar; don't open the oven early.

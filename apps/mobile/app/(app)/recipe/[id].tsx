@@ -22,6 +22,7 @@ import { RecipeIngredientLine } from "../../../src/components/RecipeIngredientLi
 import { RecipeNutritionSummary } from "../../../src/components/RecipeNutritionSummary";
 import { Screen } from "../../../src/components/Screen";
 import { SegmentedControl } from "../../../src/components/SegmentedControl";
+import { softWrapText } from "../../../src/utils/textWrap";
 import { getCachedRecipe, removeCachedRecipe, upsertCachedRecipe } from "../../../src/db/cache";
 import { setReviewDraft } from "../../../src/store/reviewDraft";
 import { tokens } from "../../../src/theme/tokens";
@@ -43,37 +44,60 @@ export default function RecipeDetailScreen() {
   const [displayServings, setDisplayServings] = useState<number | null>(null);
   const [displayUnit, setDisplayUnit] = useState<DisplayUnit>("original");
   const [copied, setCopied] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const insets = useSafeAreaInsets();
 
   const recipeId = Array.isArray(id) ? id[0] : id;
 
+  const reloadRecipe = useCallback(async () => {
+    if (!recipeId) return;
+    void getCachedRecipe(recipeId).then((cached) => {
+      if (cached) setRecipe(cached);
+    });
+    try {
+      const live = await getRecipe(recipeId);
+      setRecipe(live.recipe);
+    } catch {
+      // Cached recipe is enough offline.
+    }
+  }, [recipeId]);
+
+  const reloadCookbooks = useCallback(async () => {
+    if (!recipeId) return;
+    try {
+      const books = await listCookbooks();
+      setCookbooks(Array.isArray(books.cookbooks) ? books.cookbooks : []);
+    } catch {
+      // Picker can still use local list.
+    }
+    try {
+      const membership = await listRecipeCookbooks(recipeId);
+      setSavedCookbookIds(membership.cookbookIds);
+      if (!pickerOpenRef.current) {
+        setSelectedCookbookIds(membership.cookbookIds);
+      }
+    } catch {
+      // Membership is live-only.
+    }
+  }, [recipeId]);
+
   useFocusEffect(
     useCallback(() => {
       if (!recipeId) return;
-      void (async () => {
-        void getCachedRecipe(recipeId).then((cached) => {
-          if (cached) setRecipe(cached);
-        });
-        try {
-          const live = await getRecipe(recipeId);
-          setRecipe(live.recipe);
-        } catch {
-          // Cached recipe is enough offline.
-        }
-        try {
-          const [books, membership] = await Promise.all([listCookbooks(), listRecipeCookbooks(recipeId)]);
-          setCookbooks(books.cookbooks);
-          setSavedCookbookIds(membership.cookbookIds);
-          if (!pickerOpenRef.current) {
-            setSelectedCookbookIds(membership.cookbookIds);
-          }
-        } catch {
-          // Membership is live-only.
-        }
-      })();
-    }, [recipeId]),
+      void reloadRecipe();
+      void reloadCookbooks();
+    }, [recipeId, reloadRecipe, reloadCookbooks]),
   );
+
+  async function onRefresh() {
+    setRefreshing(true);
+    try {
+      await Promise.all([reloadRecipe(), reloadCookbooks()]);
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   useEffect(() => {
     setDisplayServings(null);
@@ -192,7 +216,7 @@ export default function RecipeDetailScreen() {
 
   return (
     <>
-    <Screen padded={false} edges={[]} safeBottom={false}>
+    <Screen padded={false} edges={[]} safeBottom={false} onRefresh={() => void onRefresh()} refreshing={refreshing}>
       <View style={styles.heroWrap}>
         <Image source={imageForCategory(recipe.category)} style={styles.hero} />
         <View style={styles.heroScrim} />
@@ -246,7 +270,7 @@ export default function RecipeDetailScreen() {
           value={displayUnit}
           onChange={setDisplayUnit}
           options={[
-            { value: "original", label: "As written" },
+            { value: "original", label: "Original" },
             { value: "g", label: "g" },
             { value: "volume", label: "cups" },
           ]}
@@ -282,7 +306,7 @@ export default function RecipeDetailScreen() {
                   </AppText>
                 </View>
                 <AppText variant="body" style={styles.stepText}>
-                  {step.text}
+                  {softWrapText(step.text)}
                 </AppText>
               </View>
             ))}
@@ -444,6 +468,7 @@ const styles = StyleSheet.create({
   },
   stepText: {
     flex: 1,
+    minWidth: 0,
   },
   cookbookBlock: {
     gap: tokens.space.sm,

@@ -81,6 +81,29 @@ export {
 export { formatIngredientLine, formatQuantity, formatVolume } from "./ingredients/formatQuantity";
 export { formatCopyIngredientLine, formatRecipeIngredientsCopy } from "./ingredients/formatIngredientCopy";
 export { parseIngredientLine, parseIngredientLines } from "./ingredients/parseIngredientLine";
+export {
+  MAX_PANTRY_ALIAS_LENGTH,
+  MAX_PANTRY_ALIASES,
+  MAX_PANTRY_DISPLAY_NAME_LENGTH,
+  normalizePantryAlias,
+  sanitizePantryAliases,
+} from "./pantry/pantryAliases";
+export {
+  STARTER_PANTRY_STAPLES,
+  isStarterPantryKey,
+  starterPantryStapleByKey,
+  type StarterPantryStaple,
+} from "./pantry/starterStaples";
+export type { PantryResponse, PantryStarterView, UserPantryItem, MealSuggestion, MealSuggestionResponse } from "./pantry/types";
+export {
+  activePantryStapleCount,
+  buildPantryMatchIndex,
+  rankRecipesForPantry,
+  scoreRecipePantryMatch,
+  type PantryMatchIndex,
+  type RankRecipesForPantryOptions,
+  type RecipePantryScore,
+} from "./pantry/mealSuggestions";
 export type { CookbookDetail, CookbookSummary } from "./cookbook";
 export type {
   ApiErrorBody,

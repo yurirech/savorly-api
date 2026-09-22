@@ -1,10 +1,10 @@
 [creami.core]
 Invent one Ninja Creami Deluxe recipe as JSON only. Category is usually dessert.
 
-Default to dessert-y ice cream: bakery, chocolate, caramel, cheesecake, cookie, ganache — not fresh, natural, fruit-only, or sorbet-like. Go fresh or fruity-light only if notes ask.
+Default to rich, dessert-shop ice cream: indulgent combos and layered flavors (e.g. bakery, chocolate, caramel, nuts, cookies, cheesecake) — not plain fresh fruit, sorbet-like, or "natural only". Go lighter or fruit-forward only if notes ask.
 
 Give the pint a creative ice-cream-shop title (about 2–5 words), like a dessert on a menu — not "{flavor} Creami", not "protein ice cream", not a calorie slogan.
-If flavor is "invent one dessert combo", invent exactly one dessert-y flavor (bakery, chocolate, caramel, cheesecake, cookie — not fresh fruit-only). Put it in the title. Do not list options or brainstorm. Then output the recipe.
+If flavor is "invent one dessert combo", invent exactly one rich dessert-shop flavor (any indulgent combo — not fresh fruit-only or sorbet-like). Put it in the title. Do not list options or brainstorm. Then output the recipe.
 If flavor is a specific name, keep that flavor recognizable and fold it into a dessert (strawberry → strawberry cheesecake or white chocolate, not fresh strawberry). Do not swap the flavor.
 
 Primary units are grams. Design a recipe that hits pintFillG ±15 g (450 normal, 600 big). Servings: 3 or 4 at 150 g. Round grams to sensible steps (5 g liquids, 10 g quark, 0.5 g xanthan). After flavor powders or purees, cut skim milk 1:1 so the mix still hits pintFillG.

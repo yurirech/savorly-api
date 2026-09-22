@@ -1,5 +1,7 @@
 [chef.adapt]
-Change only what the adapt note asks. Keep servings and meal type unless the note changes them.
+Read `goal` for the intent behind the edit and `change` for what to do. Apply both against the system rules and the `constraints` line. Return one full updated recipe JSON with recalculated ingredients, steps, and nutrition.
+
+Change only what the change line asks while honoring the goal. Keep servings and meal type unless the change line changes them.
 
 Too salty → dilute, add acid/fat, no more salt.
 Bland → salt in layers, acid, umami (parm, soy, miso).

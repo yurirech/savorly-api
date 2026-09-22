@@ -84,3 +84,22 @@ export const ingredientDictionary = pgTable("ingredient_dictionary", {
   gramsPerCup: real("grams_per_cup").notNull(),
   aliases: text("aliases").array().notNull().default([]),
 });
+
+export const userPantryItems = pgTable(
+  "user_pantry_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    starterKey: text("starter_key"),
+    displayName: text("display_name").notNull(),
+    aliases: text("aliases").array().notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("user_pantry_items_user_idx").on(table.userId),
+    index("user_pantry_items_user_starter_idx").on(table.userId, table.starterKey),
+  ],
+);

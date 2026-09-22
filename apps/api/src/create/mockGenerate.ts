@@ -16,6 +16,19 @@ import {
 } from "@savorly/shared";
 import { CREATE_AGENT_LABEL } from "./composeGeneratePrompt";
 
+export function mockAdaptSummary(request: RecipeGenerateRequest): string {
+  const change = request.adaptNote?.trim();
+  const goal = request.adaptGoal?.trim();
+  const parts: string[] = [];
+  if (change) {
+    parts.push(`Applied your change: ${change}.`);
+  }
+  if (goal) {
+    parts.push(`Adjusted ingredients to work toward: ${goal}.`);
+  }
+  return parts.join(" ") || "Updated the recipe to match your request.";
+}
+
 export function mockGeneratedCreate(request: RecipeGenerateRequest): GeneratedRecipe {
   if (request.agent === "chef") {
     return mockChefRecipe(request);
@@ -29,9 +42,21 @@ export function mockGeneratedCreate(request: RecipeGenerateRequest): GeneratedRe
   return mockCreamiRecipe(request);
 }
 
+function mockAdaptNotes(request: { adaptNote?: string; adaptGoal?: string; notes?: string }): string | null {
+  const parts = [request.adaptNote?.trim(), request.adaptGoal?.trim()].filter(Boolean);
+  if (parts.length > 0) {
+    return parts.join(" — ");
+  }
+  return request.notes?.trim() || null;
+}
+
+function isMockAdapt(request: { adaptNote?: string; adaptGoal?: string }): boolean {
+  return Boolean(request.adaptNote?.trim() || request.adaptGoal?.trim());
+}
+
 function mockCreamiRecipe(request: CreamiGenerateRequest): GeneratedRecipe {
   const flavor = request.flavor?.trim() || "vanilla";
-  const adapted = Boolean(request.adaptNote?.trim());
+  const adapted = isMockAdapt(request);
   const title = adapted ? `${capitalize(flavor)} creami (adapted)` : `${capitalize(flavor)} creami`;
 
   return {
@@ -51,7 +76,7 @@ function mockCreamiRecipe(request: CreamiGenerateRequest): GeneratedRecipe {
     ],
     steps: [],
     tags: ["creami", flavor],
-    notes: request.adaptNote?.trim() || request.notes?.trim() || null,
+    notes: mockAdaptNotes(request),
     uncertainties: [],
     nutrition: mockCreamiNutrition(request.size, request.macros),
     source: {
@@ -63,7 +88,7 @@ function mockCreamiRecipe(request: CreamiGenerateRequest): GeneratedRecipe {
 
 function mockBreadRecipe(request: BreadGenerateRequest): GeneratedRecipe {
   const dish = request.notes?.trim() || "suggested";
-  const adapted = Boolean(request.adaptNote?.trim());
+  const adapted = isMockAdapt(request);
   const title = adapted ? `${capitalize(dish)} (adapted)` : capitalize(dish);
   const program = kneadFromNotes(request.notes) ? "Knead" : "Basic";
   const sizeLabel = request.size === "large" ? "Large (1000 g)" : "Medium (750 g)";
@@ -99,7 +124,7 @@ function mockBreadRecipe(request: BreadGenerateRequest): GeneratedRecipe {
       },
     ],
     tags: ["bread", program.toLowerCase(), request.size, request.style],
-    notes: request.adaptNote?.trim() || request.notes?.trim() || null,
+    notes: mockAdaptNotes(request),
     uncertainties: [],
     nutrition: mockSimpleNutrition(BREAD_SLICE_G, {
       kcal: request.style === "lighter" ? 95 : 110,
@@ -116,7 +141,7 @@ function mockBreadRecipe(request: BreadGenerateRequest): GeneratedRecipe {
 
 function mockBakeRecipe(request: BakeGenerateRequest): GeneratedRecipe {
   const dish = request.notes?.trim() || "suggested";
-  const adapted = Boolean(request.adaptNote?.trim());
+  const adapted = isMockAdapt(request);
   const title = adapted ? `${capitalize(dish)} (adapted)` : capitalize(dish);
 
   return {
@@ -140,7 +165,7 @@ function mockBakeRecipe(request: BakeGenerateRequest): GeneratedRecipe {
       },
     ],
     tags: ["bake", request.kind, request.style],
-    notes: request.adaptNote?.trim() || request.notes?.trim() || null,
+    notes: mockAdaptNotes(request),
     uncertainties: [],
     nutrition: mockSimpleNutrition(bakeServingG(request.kind), {
       kcal: request.style === "lighter" ? 220 : 280,
@@ -169,7 +194,7 @@ function kneadFromNotes(notes?: string): boolean {
 
 function mockChefRecipe(request: ChefGenerateRequest): GeneratedRecipe {
   const dish = request.notes?.trim() || "suggested";
-  const adapted = Boolean(request.adaptNote?.trim());
+  const adapted = isMockAdapt(request);
   const title = adapted ? `${capitalize(dish)} (adapted)` : capitalize(dish);
 
   return {
@@ -192,7 +217,7 @@ function mockChefRecipe(request: ChefGenerateRequest): GeneratedRecipe {
       },
     ],
     tags: ["chef", request.mealType, request.style],
-    notes: request.adaptNote?.trim() || request.notes?.trim() || null,
+    notes: mockAdaptNotes(request),
     uncertainties: [],
     nutrition: mockChefNutrition(request.mealType, request.style),
     source: {

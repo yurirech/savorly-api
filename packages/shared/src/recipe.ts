@@ -111,6 +111,7 @@ export type CreamiGenerateRequest = {
   notes?: string;
   previousRecipe?: GeneratedRecipe;
   adaptNote?: string;
+  adaptGoal?: string;
 };
 
 export type ChefMealType = "main" | "side" | "snack";
@@ -125,6 +126,7 @@ export type ChefGenerateRequest = {
   notes?: string;
   previousRecipe?: GeneratedRecipe;
   adaptNote?: string;
+  adaptGoal?: string;
 };
 
 export type BreadLoafSize = "medium" | "large";
@@ -137,6 +139,7 @@ export type BreadGenerateRequest = {
   notes?: string;
   previousRecipe?: GeneratedRecipe;
   adaptNote?: string;
+  adaptGoal?: string;
 };
 
 export type BakeKind = "cake" | "muffin" | "cupcake" | "other";
@@ -149,6 +152,7 @@ export type BakeGenerateRequest = {
   notes?: string;
   previousRecipe?: GeneratedRecipe;
   adaptNote?: string;
+  adaptGoal?: string;
 };
 
 export type RecipeGenerateRequest =

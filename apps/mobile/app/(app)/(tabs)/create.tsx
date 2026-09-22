@@ -51,12 +51,19 @@ export default function CreateScreen() {
   const [bakeStyle, setBakeStyle] = useState<BakeStyle>("regular");
   const [notes, setNotes] = useState("");
   const [adaptNote, setAdaptNote] = useState("");
+  const [adaptGoal, setAdaptGoal] = useState("");
   const [recipe, setRecipe] = useState<GeneratedRecipe | null>(null);
+  const [adaptSummary, setAdaptSummary] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const locked = recipe !== null;
 
-  function buildRequest(nextAdapt?: string): RecipeGenerateRequest {
+  function buildRequest(forAdapt: boolean): RecipeGenerateRequest {
+    const note = forAdapt ? adaptNote.trim() || undefined : undefined;
+    const goal = forAdapt ? adaptGoal.trim() || undefined : undefined;
+    const adapting = forAdapt && recipe !== null && Boolean(note || goal);
+    const previousRecipe = adapting ? recipe : undefined;
+
     if (agent === "creami") {
       return {
         agent: "creami",
@@ -67,8 +74,9 @@ export default function CreateScreen() {
         sweetenerName: sweetenerName.trim() || undefined,
         flavor: flavor.trim() || undefined,
         notes: notes.trim() || undefined,
-        previousRecipe: nextAdapt && recipe ? recipe : undefined,
-        adaptNote: nextAdapt || undefined,
+        previousRecipe,
+        adaptNote: note,
+        adaptGoal: goal,
       };
     }
     if (agent === "chef") {
@@ -78,8 +86,9 @@ export default function CreateScreen() {
         servings: Number(servings) as ChefServings,
         style,
         notes: notes.trim() || undefined,
-        previousRecipe: nextAdapt && recipe ? recipe : undefined,
-        adaptNote: nextAdapt || undefined,
+        previousRecipe,
+        adaptNote: note,
+        adaptGoal: goal,
       };
     }
     if (agent === "bread") {
@@ -88,8 +97,9 @@ export default function CreateScreen() {
         size: loafSize,
         style: breadStyle,
         notes: notes.trim() || undefined,
-        previousRecipe: nextAdapt && recipe ? recipe : undefined,
-        adaptNote: nextAdapt || undefined,
+        previousRecipe,
+        adaptNote: note,
+        adaptGoal: goal,
       };
     }
     return {
@@ -97,18 +107,28 @@ export default function CreateScreen() {
       kind: bakeKind,
       style: bakeStyle,
       notes: notes.trim() || undefined,
-      previousRecipe: nextAdapt && recipe ? recipe : undefined,
-      adaptNote: nextAdapt || undefined,
+      previousRecipe,
+      adaptNote: note,
+      adaptGoal: goal,
     };
   }
 
-  async function runGenerate(nextAdapt?: string) {
+  async function runGenerate(forAdapt = false) {
     setLoading(true);
     setError(null);
+    if (!forAdapt) {
+      setAdaptSummary(null);
+    }
     try {
-      const result = await generateRecipe(buildRequest(nextAdapt));
+      const result = await generateRecipe(buildRequest(forAdapt));
       setRecipe(result.recipe);
+      if (forAdapt) {
+        setAdaptSummary(result.adaptSummary?.trim() || null);
+      } else {
+        setAdaptSummary(null);
+      }
       setAdaptNote("");
+      setAdaptGoal("");
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : "Could not generate this recipe.");
     } finally {
@@ -118,7 +138,9 @@ export default function CreateScreen() {
 
   function startOver() {
     setRecipe(null);
+    setAdaptSummary(null);
     setAdaptNote("");
+    setAdaptGoal("");
     setError(null);
   }
 
@@ -202,7 +224,7 @@ export default function CreateScreen() {
             disabled={locked}
             options={[
               { value: "bulky", label: "Bulky" },
-              { value: "lightweight", label: "Lightweight" },
+              { value: "lightweight", label: "Light" },
             ]}
           />
           <Field
@@ -266,7 +288,7 @@ export default function CreateScreen() {
             options={[
               { value: "regular", label: "Regular" },
               { value: "lighter", label: "Lighter" },
-              { value: "nutritious", label: "More nutritious" },
+              { value: "nutritious", label: "Nutritious" },
             ]}
           />
           <Field
@@ -350,6 +372,14 @@ export default function CreateScreen() {
 
       {recipe ? (
         <View style={styles.result}>
+          {adaptSummary ? (
+            <View style={styles.adaptSummaryBox}>
+              <AppText variant="label" color="muted">
+                What changed
+              </AppText>
+              <AppText variant="body">{adaptSummary}</AppText>
+            </View>
+          ) : null}
           <AppText variant="label" color="accent">
             Draft
           </AppText>
@@ -383,6 +413,13 @@ export default function CreateScreen() {
             placeholder="I don't have that powder, use cocoa"
             multiline
           />
+          <Field
+            label="Goal"
+            value={adaptGoal}
+            onChangeText={setAdaptGoal}
+            placeholder="Keep fat under 2g per serving"
+            multiline
+          />
         </View>
       ) : null}
 
@@ -397,9 +434,9 @@ export default function CreateScreen() {
           <Button
             label="Adapt"
             variant="secondary"
-            onPress={() => void runGenerate(adaptNote.trim())}
+            onPress={() => void runGenerate(true)}
             loading={loading}
-            disabled={!adaptNote.trim()}
+            disabled={!adaptNote.trim() && !adaptGoal.trim()}
           />
           <Button label="Looks good" onPress={looksGood} disabled={loading} />
           <Button label="Start over" variant="ghost" onPress={startOver} disabled={loading} />
@@ -462,5 +499,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: tokens.border,
     padding: tokens.space.md,
+  },
+  adaptSummaryBox: {
+    gap: tokens.space.xs,
+    backgroundColor: tokens.bgElevated,
+    borderRadius: tokens.radius.sm,
+    padding: tokens.space.sm,
+    marginBottom: tokens.space.xs,
   },
 });

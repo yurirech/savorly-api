@@ -4,14 +4,25 @@ import { tokens } from "../theme/tokens";
 import { AppText } from "./AppText";
 
 type CategoryPickerProps = {
-  value: FoodCategory;
-  onChange: (value: FoodCategory) => void;
+  value: FoodCategory | null;
+  onChange: (value: FoodCategory | null) => void;
+  includeAny?: boolean;
 };
 
 export function CategoryPicker(props: CategoryPickerProps) {
-  const { value, onChange } = props;
+  const { value, onChange, includeAny = false } = props;
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+      {includeAny ? (
+        <Pressable
+          onPress={() => onChange(null)}
+          style={[styles.chip, value === null && styles.selected]}
+        >
+          <AppText variant="caption" style={value === null ? styles.selectedLabel : styles.chipLabel}>
+            Any
+          </AppText>
+        </Pressable>
+      ) : null}
       {FOOD_CATEGORIES.map((category) => {
         const selected = category === value;
         return (

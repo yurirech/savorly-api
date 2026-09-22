@@ -21,6 +21,7 @@ export default function AppLayout() {
       <Stack.Screen name="recipe/[id]" options={{ title: "Recipe", headerTransparent: true, headerTintColor: tokens.text }} />
       <Stack.Screen name="new-cookbook" options={{ title: "New cookbook" }} />
       <Stack.Screen name="cookbook/[id]" options={{ title: "Cookbook" }} />
+      <Stack.Screen name="suggest-meal" options={{ title: "Suggest meal" }} />
     </Stack>
   );
 }

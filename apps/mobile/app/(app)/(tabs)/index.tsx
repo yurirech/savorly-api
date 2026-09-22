@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, View } from "react-native";
 import type { SavedRecipe } from "@savorly/shared";
 import { listRecipes } from "../../../src/api/client";
 import { AppText } from "../../../src/components/AppText";
+import { Button } from "../../../src/components/Button";
 import { RecipeCard } from "../../../src/components/RecipeCard";
 import { Screen } from "../../../src/components/Screen";
 import { SectionHeader } from "../../../src/components/SectionHeader";
@@ -14,30 +15,42 @@ import { tokens } from "../../../src/theme/tokens";
 
 export default function HomeScreen() {
   const [recipes, setRecipes] = useState<SavedRecipe[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadRecent = useCallback(async (isActive: () => boolean = () => true) => {
+    void searchCachedRecipes("").then((cached) => {
+      if (isActive()) setRecipes(cached.slice(0, 4));
+    });
+    try {
+      const live = await listRecipes();
+      void replaceCache(live.recipes);
+      if (isActive()) setRecipes(live.recipes.slice(0, 4));
+    } catch {
+      // Offline: cached recipes remain.
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      void (async () => {
-        void searchCachedRecipes("").then((cached) => {
-          if (active) setRecipes(cached.slice(0, 4));
-        });
-        try {
-          const live = await listRecipes();
-          void replaceCache(live.recipes);
-          if (active) setRecipes(live.recipes.slice(0, 4));
-        } catch {
-          // Offline: cached recipes remain.
-        }
-      })();
+      void loadRecent(() => active);
       return () => {
         active = false;
       };
-    }, []),
+    }, [loadRecent]),
   );
 
+  async function onRefresh() {
+    setRefreshing(true);
+    try {
+      await loadRecent();
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   return (
-    <Screen safeBottom={false}>
+    <Screen safeBottom={false} onRefresh={() => void onRefresh()} refreshing={refreshing}>
       <View style={styles.header}>
         <View style={styles.headerCopy}>
           <AppText variant="label" color="accent">
@@ -54,7 +67,9 @@ export default function HomeScreen() {
         </Pressable>
       </View>
 
-      <SectionHeader title="Recently saved" actionLabel="See all" onAction={() => router.push("/(app)/recipes" as Href)} />
+      <Button label="Suggest meal" onPress={() => router.push("/(app)/suggest-meal" as Href)} />
+
+      <SectionHeader title="Recently saved" actionLabel="See all" onAction={() => router.push("/(app)/(tabs)/recipes" as Href)} />
       {recipes.length === 0 ? (
         <AppText variant="body" color="muted">
           Imported recipes will land here after you review them.

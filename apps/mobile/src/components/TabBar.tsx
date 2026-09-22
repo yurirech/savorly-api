@@ -2,7 +2,7 @@ import type { ComponentProps } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Tabs } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { BookOpen, House, Plus, Sparkle } from "phosphor-react-native";
+import { BookOpen, House, Jar, Plus, Sparkle } from "phosphor-react-native";
 import { tokens } from "../theme/tokens";
 import { AppText } from "./AppText";
 
@@ -11,9 +11,19 @@ type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>["tabBar"]>
 const ICONS = {
   index: House,
   recipes: BookOpen,
+  pantry: Jar,
   save: Plus,
   create: Sparkle,
 } as const;
+
+function tabLabel(routeName: string): string {
+  if (routeName === "index") return "Home";
+  if (routeName === "recipes") return "Recipes";
+  if (routeName === "pantry") return "Pantry";
+  if (routeName === "save") return "Import";
+  if (routeName === "create") return "Create";
+  return routeName;
+}
 
 export function TabBar(props: TabBarProps) {
   const { state, navigation } = props;
@@ -23,7 +33,7 @@ export function TabBar(props: TabBarProps) {
       {state.routes.map((route, index) => {
         const focused = state.index === index;
         const Icon = ICONS[route.name as keyof typeof ICONS] ?? House;
-        const label = route.name === "index" ? "Home" : route.name === "save" ? "Import" : route.name === "recipes" ? "Recipes" : "Create";
+        const label = tabLabel(route.name);
         const raised = route.name === "save";
         const color = focused || raised ? tokens.accent : tokens.textMuted;
         return (

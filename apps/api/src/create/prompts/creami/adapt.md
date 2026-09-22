@@ -1,4 +1,6 @@
 [creami.adapt]
+Read `goal` for the intent behind the edit and `change` for what to do. Apply both against the system rules and the `constraints` line. Return one full updated recipe JSON with recalculated grams and nutrition.
+
 After swaps, ingredient grams must still sum to pintFillG (450 or 600) ±15 g. Keep refined sugar exactly 15 g (normal) or 20 g (big). Swap with smart liquid, dry, and solids adjustments — not always 1:1. Cut or add skim to hit the fill.
 
 Icy → +10–20 g SMP or +30 g quark; do not jump to Lite unless notes ask.

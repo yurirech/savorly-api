@@ -71,6 +71,27 @@ export const GEMINI_RECIPE_SCHEMA: Schema = {
   required: ["title", "category", "ingredients", "steps", "tags", "uncertainties", "nutrition"],
 };
 
+export const GEMINI_ADAPT_RECIPE_SCHEMA: Schema = {
+  type: SchemaType.OBJECT,
+  properties: {
+    ...(GEMINI_RECIPE_SCHEMA.properties as Record<string, Schema>),
+    adaptSummary: { type: SchemaType.STRING },
+  },
+  required: [...(GEMINI_RECIPE_SCHEMA.required as string[]), "adaptSummary"],
+};
+
+export function extractAdaptSummary(raw: unknown): string | undefined {
+  if (!raw || typeof raw !== "object" || !("adaptSummary" in raw)) {
+    return undefined;
+  }
+  const value = (raw as { adaptSummary?: unknown }).adaptSummary;
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 export async function generateGeminiJson(options: {
   apiKey: string;
   model: string;

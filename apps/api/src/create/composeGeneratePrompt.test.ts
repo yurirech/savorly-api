@@ -63,15 +63,16 @@ describe("composeGeneratePrompt", () => {
 
     const system = composeSystemInstruction(creami);
     expect(system).toContain("ice-cream-shop title");
-    expect(system).toContain("invent exactly one dessert-y flavor");
-    expect(system).toContain("steps to []");
+    expect(system).toContain("invent exactly one rich dessert-shop flavor");
+    expect(system).toContain("Set steps to []");
     expect(system).toContain("[creami.science]");
     expect(system).toContain("[creami.staples]");
     expect(system).toContain("[creami.size.small]");
     expect(system).toContain("[creami.macros.lean]");
     expect(system).toContain("[creami.texture.gelato]");
+    expect(system).toContain("[create.output]");
+    expect(system).not.toContain("[create.adaptSummary]");
     expect(system).not.toContain("[creami.adapt]");
-    expect(system).not.toContain("[creami.size.big]");
     expect(system).not.toContain("[creami.macros.balanced]");
     expect(system).not.toContain("[creami.base.mixed]");
     expect(system).not.toContain("[creami.base.lean]");
@@ -79,32 +80,46 @@ describe("composeGeneratePrompt", () => {
     expect(system).not.toContain("canonicalKey");
     expect(system).not.toContain("Copy the column");
     expect(system).not.toContain("271");
-    expect(system.length).toBeLessThan(4000);
+    expect(system.length).toBeLessThan(4500);
   });
 
   it("adds the adapt slice only when adapting", () => {
     expect(promptSlicesFor({ ...creami, adaptNote: "I don't have cocoa", previousRecipe })).toContain("creami/adapt.md");
+    expect(promptSlicesFor({ ...creami, adaptGoal: "Keep protein high", previousRecipe })).toContain("creami/adapt.md");
     expect(composeSystemInstruction({ ...creami, adaptNote: "I don't have cocoa", previousRecipe })).toContain(
       "[creami.adapt]",
     );
+    expect(composeSystemInstruction({ ...creami, adaptNote: "I don't have cocoa", previousRecipe })).toContain(
+      "[create.adaptSummary]",
+    );
   });
 
-  it("asks Gemini to invent one dessert combo when flavor is blank", () => {
+  it("uses a slim adapt user message with constraints, current recipe, change, and goal", () => {
     const user = composeUserMessage({
       ...creami,
       previousRecipe,
       adaptNote: "I don't have cocoa",
+      adaptGoal: "Keep fat under 2g per serving",
     });
-    expect(user).toContain("flavor: invent one dessert combo");
-    expect(user).toContain("pintFillG: 450");
-    expect(user).toContain("sugarG: 15");
-    expect(user).toContain("servings: 3");
-    expect(user).toContain("adapt: I don't have cocoa");
+    expect(user).toContain("constraints:");
+    expect(user).toContain("creami size=small");
+    expect(user).toContain("currentRecipe:");
+    expect(user).toContain("change: I don't have cocoa");
+    expect(user).toContain("goal: Keep fat under 2g per serving");
     expect(user).toContain("Vanilla Creami");
     expect(user).toContain("fat-free quark");
-    expect(user).not.toContain('"sourceName":"Creami"');
-    expect(user).not.toContain("perServing");
-    expect(user).not.toContain("base:");
+    expect(user).toContain("perServing");
+    expect(user).not.toContain("flavor:");
+    expect(user).not.toContain("agent: creami");
+    expect(user).not.toContain("adapt:");
+    expect(user).not.toContain("previous recipe");
+  });
+
+  it("initial generation does not include previous recipe", () => {
+    const user = composeUserMessage(creami);
+    expect(user).toContain("flavor: invent one dessert combo");
+    expect(user).not.toContain("currentRecipe:");
+    expect(user).not.toContain("change:");
   });
 
   it("sends 600 g fill for a big pint", () => {

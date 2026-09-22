@@ -21,6 +21,14 @@ import {
   renameCookbook,
   setRecipeCookbooks,
 } from "./cookbooks/cookbookStore";
+import {
+  createPantryItem,
+  deletePantryItem,
+  getPantry,
+  setStarterInPantry,
+  updatePantryItem,
+} from "./pantry/pantryStore";
+import { parseMealSuggestionExcludeIds, suggestMeal } from "./pantry/suggestMeals";
 
 const importSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("instagram"), url: z.string().url() }),
@@ -100,6 +108,7 @@ const generateSchema = z
       notes: z.string().trim().optional(),
       previousRecipe: generatedRecipeSchema.optional(),
       adaptNote: z.string().trim().min(1).optional(),
+      adaptGoal: z.string().trim().min(1).optional(),
     }),
     z.object({
       agent: z.literal("bread"),
@@ -108,6 +117,7 @@ const generateSchema = z
       notes: z.string().trim().optional(),
       previousRecipe: generatedRecipeSchema.optional(),
       adaptNote: z.string().trim().min(1).optional(),
+      adaptGoal: z.string().trim().min(1).optional(),
     }),
     z.object({
       agent: z.literal("bake"),
@@ -116,6 +126,7 @@ const generateSchema = z
       notes: z.string().trim().optional(),
       previousRecipe: generatedRecipeSchema.optional(),
       adaptNote: z.string().trim().min(1).optional(),
+      adaptGoal: z.string().trim().min(1).optional(),
     }),
     z.object({
       agent: z.literal("chef"),
@@ -125,14 +136,23 @@ const generateSchema = z
       notes: z.string().trim().optional(),
       previousRecipe: generatedRecipeSchema.optional(),
       adaptNote: z.string().trim().min(1).optional(),
+      adaptGoal: z.string().trim().min(1).optional(),
     }),
   ])
   .superRefine((value, ctx) => {
-    if (value.adaptNote && !value.previousRecipe) {
+    const hasAdaptText = Boolean(value.adaptNote?.trim() || value.adaptGoal?.trim());
+    if (hasAdaptText && !value.previousRecipe) {
       ctx.addIssue({
         code: "custom",
         message: "Adapt needs the current recipe.",
         path: ["previousRecipe"],
+      });
+    }
+    if (value.previousRecipe && !hasAdaptText) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Adapt needs a change or goal.",
+        path: ["adaptNote"],
       });
     }
   });
@@ -147,6 +167,22 @@ const recipeIdsSchema = z.object({
 
 const cookbookIdsSchema = z.object({
   cookbookIds: z.array(z.string().uuid()),
+});
+
+const pantryStarterSchema = z.object({
+  inPantry: z.boolean(),
+});
+
+const pantryItemCreateSchema = z.object({
+  displayName: z.string().trim().min(1).max(80),
+  aliases: z.array(z.string().trim().min(1).max(80)).max(32).optional(),
+});
+
+const pantryItemUpdateSchema = pantryItemCreateSchema;
+
+const mealSuggestionQuerySchema = z.object({
+  category: z.enum(FOOD_CATEGORIES).optional(),
+  exclude: z.string().optional(),
 });
 
 export function createApp(db: Database, env: Env) {
@@ -190,8 +226,8 @@ export function createApp(db: Database, env: Env) {
   app.post("/generations", async (c) => {
     await requireUser(c.req.header("authorization"), env.jwtSecret);
     const body = generateSchema.parse(await c.req.json());
-    const recipe = await generateRecipe(body as RecipeGenerateRequest, env, db);
-    return c.json({ recipe });
+    const result = await generateRecipe(body as RecipeGenerateRequest, env, db);
+    return c.json(result);
   });
 
   app.get("/recipes", async (c) => {
@@ -287,6 +323,52 @@ export function createApp(db: Database, env: Env) {
     const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
     await removeRecipeFromCookbook(db, user.id, c.req.param("id"), c.req.param("recipeId"));
     return c.body(null, 204);
+  });
+
+  app.get("/pantry", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const pantry = await getPantry(db, user.id);
+    return c.json(pantry);
+  });
+
+  app.put("/pantry/starters/:starterKey", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = pantryStarterSchema.parse(await c.req.json());
+    const pantry = await setStarterInPantry(db, user.id, c.req.param("starterKey"), body.inPantry);
+    return c.json(pantry);
+  });
+
+  app.post("/pantry/items", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = pantryItemCreateSchema.parse(await c.req.json());
+    const item = await createPantryItem(db, user.id, body.displayName, body.aliases ?? []);
+    return c.json({ item }, 201);
+  });
+
+  app.patch("/pantry/items/:id", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = pantryItemUpdateSchema.parse(await c.req.json());
+    const item = await updatePantryItem(db, user.id, c.req.param("id"), body.displayName, body.aliases ?? []);
+    return c.json({ item });
+  });
+
+  app.delete("/pantry/items/:id", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    await deletePantryItem(db, user.id, c.req.param("id"));
+    return c.body(null, 204);
+  });
+
+  app.get("/pantry/meal-suggestions", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const query = mealSuggestionQuerySchema.parse({
+      category: c.req.query("category") || undefined,
+      exclude: c.req.query("exclude") || undefined,
+    });
+    const result = await suggestMeal(db, user.id, {
+      category: query.category,
+      excludeRecipeIds: parseMealSuggestionExcludeIds(query.exclude),
+    });
+    return c.json(result);
   });
 
   return app;

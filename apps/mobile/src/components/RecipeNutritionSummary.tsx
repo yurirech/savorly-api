@@ -1,6 +1,7 @@
 import { StyleSheet, View } from "react-native";
 import type { RecipeMacros, RecipeNutrition } from "@savorly/shared";
 import { tokens } from "../theme/tokens";
+import { softWrapText } from "../utils/textWrap";
 import { AppText } from "./AppText";
 
 type RecipeNutritionSummaryProps = {
@@ -41,12 +42,14 @@ function MacroColumn(props: { title: string; macros: RecipeMacros }) {
   const { title, macros } = props;
   return (
     <View style={styles.column}>
-      <AppText variant="caption" color="muted">
-        {title}
+      <AppText variant="caption" color="muted" style={styles.columnTitle}>
+        {softWrapText(title)}
       </AppText>
       <AppText variant="body">{formatKcal(macros.kcal)}</AppText>
-      <AppText variant="caption" color="muted">
-        {formatGrams(macros.proteinG)} protein · {formatGrams(macros.carbsG)} carbs · {formatGrams(macros.fatG)} fat
+      <AppText variant="caption" color="muted" style={styles.macroLine}>
+        {softWrapText(
+          `${formatGrams(macros.proteinG)} protein · ${formatGrams(macros.carbsG)} carbs · ${formatGrams(macros.fatG)} fat`,
+        )}
       </AppText>
     </View>
   );
@@ -86,11 +89,19 @@ const styles = StyleSheet.create({
   },
   column: {
     flex: 1,
+    flexBasis: 0,
+    minWidth: 0,
     gap: tokens.space.xs,
     backgroundColor: tokens.bgElevated,
     borderRadius: tokens.radius.md,
     borderWidth: 1,
     borderColor: tokens.border,
     padding: tokens.space.md,
+  },
+  columnTitle: {
+    width: "100%",
+  },
+  macroLine: {
+    width: "100%",
   },
 });

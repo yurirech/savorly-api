@@ -32,6 +32,7 @@ export default function CookbookDetailScreen() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     if (!cookbookId) return;
@@ -49,6 +50,15 @@ export default function CookbookDetailScreen() {
       void load();
     }, [load]),
   );
+
+  async function onRefresh() {
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   async function startPicking() {
     if (!cookbook) return;
@@ -132,7 +142,7 @@ export default function CookbookDetailScreen() {
 
   if (!cookbook) {
     return (
-      <Screen>
+      <Screen onRefresh={() => void onRefresh()} refreshing={refreshing}>
         <AppText variant="body" color="muted">
           {error ?? "Loading cookbook…"}
         </AppText>
@@ -142,7 +152,7 @@ export default function CookbookDetailScreen() {
 
   if (picking) {
     return (
-      <Screen>
+      <Screen onRefresh={() => void onRefresh()} refreshing={refreshing}>
         <Stack.Screen options={{ title: "Add recipes" }} />
         <AppText variant="display">Add recipes</AppText>
         <AppText variant="body" color="muted">
@@ -191,7 +201,7 @@ export default function CookbookDetailScreen() {
   }
 
   return (
-    <Screen>
+    <Screen onRefresh={() => void onRefresh()} refreshing={refreshing}>
       <Stack.Screen options={{ title: cookbook.name }} />
       {renaming ? (
         <Field label="Name" value={name} onChangeText={setName} />
