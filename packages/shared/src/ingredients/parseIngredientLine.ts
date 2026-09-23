@@ -1,6 +1,6 @@
 import { lookupPantryKey } from "./dictionary";
 import { foldAlias, normalizeUnit, UNIT_PHRASES } from "./units";
-import type { Ingredient } from "../recipe";
+import { promoteIngredientSections, type Ingredient } from "../recipe";
 
 const MIXED = /^(\d+)\s+(\d+)\s*\/\s*(\d+)/;
 const FRACTION = /^(\d+)\s*\/\s*(\d+)/;
@@ -11,6 +11,21 @@ export function parseIngredientLine(line: string): Ingredient {
   const trimmed = line.trim();
   if (!trimmed) {
     return { name: "", quantity: null, unit: null, notes: null, canonicalKey: null, gramsPerCup: null };
+  }
+
+  if (trimmed.endsWith(":") && trimmed.length > 1) {
+    const name = trimmed.slice(0, -1).trim();
+    if (name) {
+      return {
+        name,
+        quantity: null,
+        unit: null,
+        notes: null,
+        canonicalKey: null,
+        gramsPerCup: null,
+        lineKind: "section",
+      };
+    }
   }
 
   const quantityMatch = leadingQuantity(trimmed);
@@ -43,23 +58,27 @@ export function parseIngredientLine(line: string): Ingredient {
 }
 
 export function parseIngredientLines(text: string, previous: Ingredient[] = []): Ingredient[] {
-  return text
+  const parsed = text
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line, index) => {
-      const parsed = parseIngredientLine(line);
-      const pantry = lookupPantryKey(parsed.name);
+      const next = parseIngredientLine(line);
+      if (next.lineKind === "section") {
+        return next;
+      }
+      const pantry = lookupPantryKey(next.name);
       if (pantry) {
-        return { ...parsed, canonicalKey: pantry.key, gramsPerCup: pantry.gramsPerCup };
+        return { ...next, canonicalKey: pantry.key, gramsPerCup: pantry.gramsPerCup };
       }
       const prev =
-        previous.find((item) => foldAlias(item.name) === foldAlias(parsed.name)) ?? previous[index];
-      if (prev && foldAlias(prev.name) === foldAlias(parsed.name)) {
-        return { ...parsed, canonicalKey: prev.canonicalKey ?? null, gramsPerCup: prev.gramsPerCup ?? null };
+        previous.find((item) => foldAlias(item.name) === foldAlias(next.name)) ?? previous[index];
+      if (prev && foldAlias(prev.name) === foldAlias(next.name)) {
+        return { ...next, canonicalKey: prev.canonicalKey ?? null, gramsPerCup: prev.gramsPerCup ?? null };
       }
-      return parsed;
+      return next;
     });
+  return promoteIngredientSections(parsed);
 }
 
 function leadingQuantity(line: string): { value: number; length: number } | null {

@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import {
   applyPantrySnapshot,
+  isIngredientSection,
   pantryByKey,
   type GeneratedRecipe,
   type PantryIngredient,
@@ -15,7 +16,9 @@ export async function resolveIngredients(
   options: { db?: Database; env: Env },
 ): Promise<GeneratedRecipe> {
   const learned = options.db ? await loadLearned(options.db) : [];
-  const firstPass = recipe.ingredients.map((ingredient) => applyPantrySnapshot(ingredient, learned));
+  const firstPass = recipe.ingredients.map((ingredient) =>
+    isIngredientSection(ingredient) ? ingredient : applyPantrySnapshot(ingredient, learned),
+  );
   const extras = [...learned];
 
   const shouldIdentify =
@@ -46,7 +49,9 @@ export async function resolveIngredients(
 export function snapshotRecipeIngredients(recipe: GeneratedRecipe, extras: PantryIngredient[] = []): GeneratedRecipe {
   return {
     ...recipe,
-    ingredients: recipe.ingredients.map((ingredient) => applyPantrySnapshot(ingredient, extras)),
+    ingredients: recipe.ingredients.map((ingredient) =>
+      isIngredientSection(ingredient) ? ingredient : applyPantrySnapshot(ingredient, extras),
+    ),
   };
 }
 

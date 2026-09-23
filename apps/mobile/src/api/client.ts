@@ -62,7 +62,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       throw new ApiRequestError(
         "internal_error",
         response.status === 404
-          ? "This API does not have cookbooks yet. Use the local API or deploy the latest backend."
+          ? "This API is missing that endpoint. Use the local API or deploy the latest backend."
           : "The server returned something that was not JSON.",
       );
     }
@@ -246,6 +246,10 @@ export function saveNutritionProfile(body: NutritionProfileInput) {
 export function listNutritionFoods(q?: string) {
   const query = q ? `?q=${encodeURIComponent(q)}` : "";
   return request<{ foods: UserFood[] }>(`/nutrition/foods${query}`);
+}
+
+export function fetchNutritionFood(id: string) {
+  return request<{ food: UserFood; attribution?: string }>(`/nutrition/foods/${id}`);
 }
 
 export function createNutritionFood(name: string, per100g: NutrientVector) {

@@ -1,5 +1,5 @@
 import { lookupPantryKey } from "../ingredients/dictionary";
-import type { Ingredient } from "../recipe";
+import { isIngredientSection, type Ingredient } from "../recipe";
 import { STARTER_PANTRY_STAPLES } from "./starterStaples";
 
 export type QuickAddPantryAction =
@@ -11,7 +11,10 @@ function starterForCanonicalOrKey(key: string): string | undefined {
   return starter?.key;
 }
 
-export function resolveQuickAddPantryAction(ingredient: Ingredient): QuickAddPantryAction {
+export function resolveQuickAddPantryAction(ingredient: Ingredient): QuickAddPantryAction | null {
+  if (isIngredientSection(ingredient)) {
+    return null;
+  }
   const displayName = ingredient.name.trim() || "Ingredient";
 
   const fromCanonical = ingredient.canonicalKey?.trim();

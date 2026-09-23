@@ -8,4 +8,6 @@ Always include approximate nutrition. servingG is one muffin, one cupcake, or on
 
 Keep the JSON small and complete: at most 16 ingredients, notes under 240 characters. Do not invent pantry keys. Do not paste science into notes. Never output a comma-separated gram dump.
 
+If the bake has layers (base, filling, topping, frosting), insert a heading row before each group: lineKind "section", name like "For the base:", quantity and unit null. Count those headings toward the ingredient cap.
+
 Do not wait for confirmation. Output one complete recipe JSON.

@@ -37,6 +37,15 @@ describe("formatRecipeIngredientsCopy", () => {
     ).toBe("Honey oat loaf\nAP flour 570g\nWater 342g\nInstant yeast 10g");
   });
 
+  it("copies section headings as titled lines", () => {
+    expect(
+      formatRecipeIngredientsCopy("Cheesecake", [
+        { name: "For the base", lineKind: "section" },
+        { name: "biscuits", quantity: 200, unit: "g" },
+      ]),
+    ).toBe("Cheesecake\nFor the base:\nbiscuits 200g");
+  });
+
   it("copies scaled grams when the displayed quantity is already scaled", () => {
     const shown = displayIngredient(
       { name: "AP flour", quantity: 200, unit: "g", notes: "sifted" },

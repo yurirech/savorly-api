@@ -52,6 +52,21 @@ describe("parseIngredientLine", () => {
     expect(parsed[0]?.canonicalKey).toBe("olive_oil");
     expect(parsed[1]?.canonicalKey).toBe("tipo_00_flour");
   });
+
+  it("treats a trailing colon as a section heading", () => {
+    expect(parseIngredientLine("For the base:")).toMatchObject({
+      name: "For the base",
+      quantity: null,
+      unit: null,
+      lineKind: "section",
+    });
+    const parsed = parseIngredientLines("For the filling:\n200 g cream cheese\nFor the base");
+    expect(parsed[0]?.lineKind).toBe("section");
+    expect(parsed[0]?.name).toBe("For the filling");
+    expect(parsed[1]?.name).toBe("cream cheese");
+    expect(parsed[2]?.lineKind).toBe("section");
+    expect(parsed[2]?.name).toBe("For the base");
+  });
 });
 
 describe("formatQuantity", () => {
@@ -62,5 +77,6 @@ describe("formatQuantity", () => {
     expect(formatQuantity(0.125, "cup")).not.toBe("1/8");
     expect(formatQuantity(1.5, "tbsp")).toBe("1 1/2");
     expect(formatIngredientLine({ quantity: 200, unit: "g", name: "spaghetti", notes: null })).toBe("200 g spaghetti");
+    expect(formatIngredientLine({ name: "For the base", lineKind: "section" })).toBe("For the base:");
   });
 });

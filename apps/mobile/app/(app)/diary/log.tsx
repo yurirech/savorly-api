@@ -11,8 +11,9 @@ import { tokens } from "../../../src/theme/tokens";
 import { todayIsoDate } from "../../../src/utils/isoDate";
 
 export default function DiaryLogScreen() {
-  const params = useLocalSearchParams<{ date?: string }>();
+  const params = useLocalSearchParams<{ date?: string; foodId?: string }>();
   const date = Array.isArray(params.date) ? params.date[0] : params.date ?? todayIsoDate();
+  const foodId = Array.isArray(params.foodId) ? params.foodId[0] : params.foodId;
   const [foods, setFoods] = useState<UserFood[]>([]);
   const [selected, setSelected] = useState<UserFood | null>(null);
   const [grams, setGrams] = useState("");
@@ -22,11 +23,16 @@ export default function DiaryLogScreen() {
   useFocusEffect(
     useCallback(() => {
       void listNutritionFoods()
-        .then((live) => setFoods(live.foods))
+        .then((live) => {
+          setFoods(live.foods);
+          if (foodId) {
+            setSelected(live.foods.find((food) => food.id === foodId) ?? null);
+          }
+        })
         .catch((err) => {
           setError(err instanceof ApiRequestError ? err.message : "Could not load foods.");
         });
-    }, []),
+    }, [foodId]),
   );
 
   async function onLog() {

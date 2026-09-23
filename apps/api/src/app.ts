@@ -39,6 +39,7 @@ import {
   getNutritionProfile,
   importUsdaFood,
   importNevoFood,
+  getOwnedUserFood,
   listUserFoods,
   upsertNutritionProfile,
 } from "./nutrition/nutritionStore";
@@ -479,6 +480,15 @@ export function createApp(db: Database, env: Env) {
     }
     const hits = await searchNevoFoods(db, c.req.query("q") ?? "");
     return c.json({ foods: hits, attribution: NEVO_ATTRIBUTION });
+  });
+
+  app.get("/nutrition/foods/:id", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const food = await getOwnedUserFood(db, user.id, c.req.param("id"));
+    return c.json({
+      food,
+      attribution: food.source === "nevo" ? NEVO_ATTRIBUTION : undefined,
+    });
   });
 
   app.post("/nutrition/foods", async (c) => {

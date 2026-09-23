@@ -10,6 +10,8 @@ import {
   formatIngredientLine,
   formatRecipeIngredientsCopy,
   isCreamiRecipe,
+  isIngredientSection,
+  isPantryIngredient,
   recipeNotesText,
 } from "@savorly/shared";
 import { deleteRecipe, getRecipe, listCookbooks, listRecipeCookbooks, requestPantrySubstitutions, setRecipeCookbooks, updateRecipe, ApiRequestError } from "../../../src/api/client";
@@ -19,6 +21,7 @@ import { Button } from "../../../src/components/Button";
 import { CookbookPickerSheet } from "../../../src/components/CookbookPickerSheet";
 import { Field } from "../../../src/components/Field";
 import { RecipeIngredientLine } from "../../../src/components/RecipeIngredientLine";
+import { RecipeIngredientSectionHeading } from "../../../src/components/RecipeIngredientSectionHeading";
 import { RecipePantryMissingSheet } from "../../../src/components/RecipePantryMissingSheet";
 import { RecipePantryStatus, RecipePantryStatusHint } from "../../../src/components/RecipePantryStatus";
 import { RecipePantrySubstitutionsSheet } from "../../../src/components/RecipePantrySubstitutionsSheet";
@@ -358,13 +361,20 @@ export default function RecipeDetailScreen() {
         {recipe.ingredients.map((ingredient, index) => {
           const shown = shownIngredients[index];
           if (!shown) return null;
+          if (isIngredientSection(ingredient)) {
+            return (
+              <View key={`${index}-${ingredient.name}`} style={styles.ingredient}>
+                <RecipeIngredientSectionHeading ingredient={ingredient} />
+              </View>
+            );
+          }
           const pantryRow = pantryRowByIndex.get(index);
           return (
             <View key={`${index}-${ingredient.name}`} style={styles.ingredient}>
               <RecipeIngredientLine
                 ingredient={ingredient}
                 line={formatIngredientLine(shown)}
-                showPantryActions={showPantryOnIngredients}
+                showPantryActions={showPantryOnIngredients && isPantryIngredient(ingredient)}
                 pantryMatched={pantryRow?.matched}
                 quickAddLoading={addingIndex === index}
                 onQuickAdd={

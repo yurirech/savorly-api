@@ -148,6 +148,7 @@ One-sentence description.
 
 - [ ] Architecture + mixing match flavor
 - [ ] All ingredients in grams
+- [ ] Layer headings use lineKind "section" (For the base:, For the filling:) — not fake ingredients
 - [ ] Nutrition per 100 g included
 - [ ] Joyful tone
 - [ ] Science rationale cites critical race or collapse risk

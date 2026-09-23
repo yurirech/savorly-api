@@ -1,3 +1,4 @@
+import { ingredientSectionTitle, isIngredientSection } from "../recipe";
 import { isConvertUnit, type ConvertUnit } from "./units";
 
 const CUP_FRACTIONS = [
@@ -75,7 +76,12 @@ export function formatIngredientLine(ingredient: {
   unit?: string | null;
   name: string;
   notes?: string | null;
+  lineKind?: "ingredient" | "section";
 }): string {
+  if (isIngredientSection(ingredient)) {
+    const title = ingredientSectionTitle(ingredient);
+    return title ? `${title}:` : ingredient.name;
+  }
   const unit = ingredient.unit ?? null;
   const qty =
     ingredient.quantity != null && Number.isFinite(ingredient.quantity)

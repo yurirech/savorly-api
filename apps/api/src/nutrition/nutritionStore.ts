@@ -247,7 +247,7 @@ export async function importNevoFood(
 }
 
 export async function deleteUserFood(db: Database, userId: string, foodId: string): Promise<void> {
-  const food = await requireOwnedFood(db, userId, foodId);
+  const food = await getOwnedUserFood(db, userId, foodId);
   const [used] = await db
     .select({ count: sql<number>`count(*)` })
     .from(diaryEntries)
@@ -291,7 +291,7 @@ export async function addDiaryEntry(
   if (!(input.grams > 0) || input.grams > 5000) {
     throw new AppError("validation_error", "Grams must be between 0 and 5000.", 400);
   }
-  const food = await requireOwnedFood(db, userId, input.foodId);
+  const food = await getOwnedUserFood(db, userId, input.foodId);
   const nutrients = scaleNutrition(food.per100g, input.grams);
   await db.insert(diaryEntries).values({
     userId,
@@ -314,7 +314,7 @@ export async function deleteDiaryEntry(db: Database, userId: string, entryId: st
   return getDiaryDay(db, userId, asIsoDate(row.date));
 }
 
-async function requireOwnedFood(db: Database, userId: string, foodId: string): Promise<UserFood> {
+export async function getOwnedUserFood(db: Database, userId: string, foodId: string): Promise<UserFood> {
   const [row] = await db
     .select()
     .from(userFoods)

@@ -163,7 +163,9 @@ export default function ReviewScreen() {
         onChangeText={setIngredientsDraft}
         onEndEditing={commitIngredients}
         multiline
+        placeholder={"For the base:\n200 g biscuits"}
       />
+      <Text style={styles.hint}>End a line with : for a layer heading (not an ingredient).</Text>
       {isCreamiRecipe(recipe) ? null : (
         <Field label="Steps" value={stepsDraft} onChangeText={setStepsDraft} multiline />
       )}
@@ -281,6 +283,12 @@ const styles = StyleSheet.create({
   source: {
     color: tokens.textMuted,
     lineHeight: 20,
+  },
+  hint: {
+    color: tokens.textMuted,
+    fontSize: tokens.type.caption.fontSize,
+    fontFamily: tokens.font.body,
+    lineHeight: 18,
   },
   error: {
     color: tokens.danger,

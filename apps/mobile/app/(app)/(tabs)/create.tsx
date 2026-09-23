@@ -15,12 +15,13 @@ import type {
   GeneratedRecipe,
   RecipeGenerateRequest,
 } from "@savorly/shared";
-import { isCreamiRecipe } from "@savorly/shared";
+import { isCreamiRecipe, isIngredientSection } from "@savorly/shared";
 import { ApiRequestError, generateRecipe } from "../../../src/api/client";
 import { AppText } from "../../../src/components/AppText";
 import { Button } from "../../../src/components/Button";
 import { Field } from "../../../src/components/Field";
 import { RecipeIngredientLine } from "../../../src/components/RecipeIngredientLine";
+import { RecipeIngredientSectionHeading } from "../../../src/components/RecipeIngredientSectionHeading";
 import { RecipeNutritionSummary } from "../../../src/components/RecipeNutritionSummary";
 import { Screen } from "../../../src/components/Screen";
 import { SegmentedControl } from "../../../src/components/SegmentedControl";
@@ -390,9 +391,13 @@ export default function CreateScreen() {
           <AppText variant="label" color="muted">
             Ingredients
           </AppText>
-          {recipe.ingredients.map((ingredient, index) => (
-            <RecipeIngredientLine key={`${index}-${ingredient.name}`} ingredient={ingredient} />
-          ))}
+          {recipe.ingredients.map((ingredient, index) =>
+            isIngredientSection(ingredient) ? (
+              <RecipeIngredientSectionHeading key={`${index}-${ingredient.name}`} ingredient={ingredient} />
+            ) : (
+              <RecipeIngredientLine key={`${index}-${ingredient.name}`} ingredient={ingredient} />
+            ),
+          )}
           {!isCreamiRecipe(recipe) && recipe.steps.length > 0 ? (
             <>
               <AppText variant="label" color="muted">

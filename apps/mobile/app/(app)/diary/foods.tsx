@@ -2,12 +2,13 @@ import { type Href, router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import type { UserFood } from "@savorly/shared";
-import { ApiRequestError, deleteNutritionFood, listNutritionFoods } from "../../../src/api/client";
+import { ApiRequestError, listNutritionFoods } from "../../../src/api/client";
 import { AppText } from "../../../src/components/AppText";
 import { Button } from "../../../src/components/Button";
 import { Field } from "../../../src/components/Field";
 import { Screen } from "../../../src/components/Screen";
 import { tokens } from "../../../src/theme/tokens";
+import { setCachedFood } from "../../../src/diary/foodDetailCache";
 
 export default function DiaryFoodsScreen() {
   const [query, setQuery] = useState("");
@@ -34,15 +35,6 @@ export default function DiaryFoodsScreen() {
     ? foods.filter((food) => food.name.toLowerCase().includes(query.trim().toLowerCase()))
     : foods;
 
-  async function onDelete(id: string) {
-    try {
-      await deleteNutritionFood(id);
-      await load("");
-    } catch (err) {
-      setError(err instanceof ApiRequestError ? err.message : "Could not delete that food.");
-    }
-  }
-
   return (
     <Screen>
       <AppText variant="display">My foods</AppText>
@@ -64,7 +56,16 @@ export default function DiaryFoodsScreen() {
         </AppText>
       ) : null}
       {visible.map((food) => (
-        <View key={food.id} style={styles.row}>
+        <Pressable
+          key={food.id}
+          style={styles.row}
+          onPress={() => {
+            setCachedFood(food);
+            router.push(`/(app)/diary/food/${food.id}` as Href);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={food.name}
+        >
           <View style={styles.copy}>
             <AppText variant="title">{food.name}</AppText>
             <AppText variant="caption" color="muted">
@@ -72,12 +73,7 @@ export default function DiaryFoodsScreen() {
               {food.source === "nevo" ? "NEVO" : food.source === "usda" ? "USDA" : "Manual"}
             </AppText>
           </View>
-          <Pressable onPress={() => void onDelete(food.id)} accessibilityLabel={`Delete ${food.name}`}>
-            <AppText variant="caption" color="danger">
-              Delete
-            </AppText>
-          </Pressable>
-        </View>
+        </Pressable>
       ))}
     </Screen>
   );

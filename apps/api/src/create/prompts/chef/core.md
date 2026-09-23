@@ -10,4 +10,6 @@ Always include approximate nutrition. servingG is cooked grams of one serving. s
 
 Keep the JSON small and complete: at most 16 ingredients, notes under 240 characters. Do not invent pantry keys. Do not paste science or a nutrition table into notes. Never output a comma-separated gram dump.
 
+If the dish has component groups (sauce, filling, garnish), insert a heading row before each group: lineKind "section", name like "For the sauce:", quantity and unit null.
+
 Do not wait for confirmation. Output one complete recipe JSON.

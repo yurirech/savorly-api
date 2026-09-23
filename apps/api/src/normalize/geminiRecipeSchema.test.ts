@@ -75,6 +75,31 @@ describe("parseGeminiRecipe nutrition", () => {
   });
 });
 
+describe("ingredient sections", () => {
+  it("maps lineKind and promotes inferred headings", () => {
+    const recipe = parseGeminiRecipe(
+      {
+        title: "Cheesecake",
+        category: "cake",
+        ingredients: [
+          { name: "For the base", lineKind: "section" },
+          { name: "biscuits", quantity: 200, unit: "g" },
+          { name: "For the filling:" },
+          { name: "cream cheese", quantity: 400, unit: "g" },
+        ],
+        steps: [{ order: 1, text: "Bake." }],
+        tags: [],
+        uncertainties: [],
+        nutrition,
+      },
+      source,
+    );
+    expect(recipe.ingredients[0]).toMatchObject({ name: "For the base", lineKind: "section" });
+    expect(recipe.ingredients[2]).toMatchObject({ name: "For the filling", lineKind: "section" });
+    expect(recipe.ingredients[1]?.lineKind).not.toBe("section");
+  });
+});
+
 describe("repairGeminiJson", () => {
   it("strips trailing commas and quotes bare mix-in notes", () => {
     const repaired = repairGeminiJson(`{

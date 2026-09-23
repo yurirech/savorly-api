@@ -4,7 +4,7 @@ import { foldAlias } from "../ingredients/units";
 
 import type { FoodCategory } from "../foodCategory";
 
-import type { Ingredient, SavedRecipe } from "../recipe";
+import { isIngredientSection, type Ingredient, type SavedRecipe } from "../recipe";
 
 import { normalizePantryAlias } from "./pantryAliases";
 
@@ -196,6 +196,12 @@ export function evaluateRecipePantryMatch(recipe: SavedRecipe, matchIndex: Pantr
 
   recipe.ingredients.forEach((ingredient, ingredientIndex) => {
 
+    if (isIngredientSection(ingredient)) {
+
+      return;
+
+    }
+
     const label = ingredient.name.trim() || "ingredient";
 
     const evaluation = evaluateIngredientPantryMatch(ingredient, matchIndex);
@@ -228,7 +234,7 @@ export function evaluateRecipePantryMatch(recipe: SavedRecipe, matchIndex: Pantr
 
         matched: false,
 
-        quickAdd: resolveQuickAddPantryAction(ingredient),
+        quickAdd: resolveQuickAddPantryAction(ingredient) ?? undefined,
 
       });
 
@@ -238,7 +244,7 @@ export function evaluateRecipePantryMatch(recipe: SavedRecipe, matchIndex: Pantr
 
 
 
-  const totalCount = recipe.ingredients.length;
+  const totalCount = recipe.ingredients.filter((ingredient) => !isIngredientSection(ingredient)).length;
 
   return {
 

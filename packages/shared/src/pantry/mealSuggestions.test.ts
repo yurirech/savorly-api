@@ -117,6 +117,25 @@ describe("evaluateRecipePantryMatch", () => {
     });
     expect(evaluateRecipePantryMatch(full, index).isComplete).toBe(true);
   });
+
+  it("skips section headings when scoring pantry completeness", () => {
+    const index = buildPantryMatchIndex(pantryWithFlourAndChickpeas());
+    const recipe = minimalRecipe({
+      id: "cake",
+      title: "Cheesecake",
+      ingredients: [
+        { name: "For the base" },
+        { name: "chickpeas", quantity: 1, unit: "g" },
+        { name: "For the filling:", lineKind: "section" },
+        { name: "tahini", quantity: 1, unit: "tbsp" },
+      ],
+    });
+    const result = evaluateRecipePantryMatch(recipe, index);
+    expect(result.totalCount).toBe(2);
+    expect(result.matchedCount).toBe(1);
+    expect(result.missingIngredients).toEqual(["tahini"]);
+    expect(result.ingredients.map((row) => row.name)).toEqual(["chickpeas", "tahini"]);
+  });
 });
 
 describe("rankRecipesForPantry", () => {

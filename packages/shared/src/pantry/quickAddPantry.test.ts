@@ -17,6 +17,10 @@ describe("resolveQuickAddPantryAction", () => {
     expect(action).toEqual({ kind: "starter", starterKey: "olive_oil" });
   });
 
+  it("does not quick-add section headings", () => {
+    expect(resolveQuickAddPantryAction({ name: "For the base", lineKind: "section" })).toBeNull();
+  });
+
   it("falls back to custom item for unknown ingredients", () => {
     const action = resolveQuickAddPantryAction({ name: "tahini", quantity: 2, unit: "tbsp" });
     expect(action.kind).toBe("custom");

@@ -24,6 +24,7 @@ export default function AppLayout() {
       <Stack.Screen name="suggest-meal" options={{ title: "Suggest meal" }} />
       <Stack.Screen name="diary/index" options={{ title: "Diary" }} />
       <Stack.Screen name="diary/foods" options={{ title: "My foods" }} />
+      <Stack.Screen name="diary/food/[id]" options={{ title: "Food" }} />
       <Stack.Screen name="diary/food-form" options={{ title: "Manual food" }} />
       <Stack.Screen name="diary/nevo-search" options={{ title: "NEVO search" }} />
       <Stack.Screen name="diary/usda-search" options={{ title: "USDA search" }} />

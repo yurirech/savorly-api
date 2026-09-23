@@ -10,6 +10,7 @@ Rules:
 - If a quantity, temperature, or duration is not explicitly stated, set that field to null and add a short note to uncertainties.
 - Pick exactly one category from the provided enum. If unsure, use "other".
 - Keep ingredient names concrete. Do not add pantry items that were not mentioned.
+- Layer or component headings ("For the base", "For the filling") are not ingredients. Emit them as separate ingredient objects with lineKind "section", no quantity or unit, and a name ending with a colon.
 - Preserve the cooking method described by the source.
 - ${pantryCanonicalKeyHint()}`;
 

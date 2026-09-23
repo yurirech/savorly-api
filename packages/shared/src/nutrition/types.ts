@@ -39,6 +39,10 @@ export type NevoFoodHit = {
 
 export const NEVO_ATTRIBUTION = "NEVO-online version 2025/9.0, RIVM, Bilthoven";
 
+export type UserFoodDetail = UserFood & {
+  attribution?: string;
+};
+
 export type DiaryEntry = {
   id: string;
   date: string;

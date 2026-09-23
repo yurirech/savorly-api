@@ -25,6 +25,8 @@ export type RecipeSource = {
   originalText?: string;
 };
 
+export type IngredientLineKind = "ingredient" | "section";
+
 export type Ingredient = {
   name: string;
   quantity?: number | null;
@@ -32,6 +34,7 @@ export type Ingredient = {
   notes?: string | null;
   canonicalKey?: string | null;
   gramsPerCup?: number | null;
+  lineKind?: IngredientLineKind;
 };
 
 export type RecipeStep = {
@@ -89,6 +92,52 @@ export function isCreamiRecipe(recipe: Pick<GeneratedRecipe, "source" | "tags">)
 
 export function isMixInIngredient(ingredient: Pick<Ingredient, "notes">): boolean {
   return /\bmix-?in\b/i.test(ingredient.notes ?? "");
+}
+
+function hasAmount(ingredient: Pick<Ingredient, "quantity" | "unit">): boolean {
+  return (
+    (ingredient.quantity != null && Number.isFinite(ingredient.quantity)) ||
+    Boolean(ingredient.unit?.trim())
+  );
+}
+
+export function ingredientSectionTitle(ingredient: Pick<Ingredient, "name">): string {
+  return ingredient.name.replace(/:\s*$/, "").trim();
+}
+
+export function isIngredientSection(
+  ingredient: Pick<Ingredient, "name" | "quantity" | "unit" | "lineKind">,
+): boolean {
+  if (ingredient.lineKind === "section") {
+    return true;
+  }
+  if (ingredient.lineKind === "ingredient" || hasAmount(ingredient)) {
+    return false;
+  }
+  const name = ingredient.name.trim();
+  return name.endsWith(":") || /^for the\b/i.test(name);
+}
+
+export function isPantryIngredient(ingredient: Ingredient): boolean {
+  return !isIngredientSection(ingredient) && !isMixInIngredient(ingredient);
+}
+
+export function promoteIngredientSections(ingredients: Ingredient[]): Ingredient[] {
+  return ingredients.map((ingredient) => {
+    if (ingredient.lineKind === "section") {
+      return ingredient;
+    }
+    if (isIngredientSection(ingredient)) {
+      return {
+        ...ingredient,
+        lineKind: "section",
+        quantity: null,
+        unit: null,
+        name: ingredientSectionTitle(ingredient),
+      };
+    }
+    return ingredient;
+  });
 }
 
 export type RecipeSearchQuery = {

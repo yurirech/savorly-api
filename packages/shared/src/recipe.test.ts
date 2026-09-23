@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { isCreamiRecipe, isMixInIngredient, recipeNotesText } from "./recipe";
+import {
+  ingredientSectionTitle,
+  isCreamiRecipe,
+  isIngredientSection,
+  isMixInIngredient,
+  isPantryIngredient,
+  promoteIngredientSections,
+  recipeNotesText,
+} from "./recipe";
 
 describe("recipeNotesText", () => {
   it("joins notes and leftover import remarks", () => {
@@ -26,5 +34,28 @@ describe("Creami helpers", () => {
     ).toBe(true);
     expect(isMixInIngredient({ notes: "mix-in" })).toBe(true);
     expect(isMixInIngredient({ notes: "toasted" })).toBe(false);
+  });
+});
+
+describe("ingredient sections", () => {
+  it("treats explicit lineKind and inferred For-the rows as sections", () => {
+    expect(isIngredientSection({ name: "For the filling", lineKind: "section" })).toBe(true);
+    expect(isIngredientSection({ name: "For the base" })).toBe(true);
+    expect(isIngredientSection({ name: "Crust:" })).toBe(true);
+    expect(isIngredientSection({ name: "salt" })).toBe(false);
+    expect(isIngredientSection({ name: "For the topping", quantity: 1, unit: "cup" })).toBe(false);
+    expect(ingredientSectionTitle({ name: "For the base:" })).toBe("For the base");
+    expect(isPantryIngredient({ name: "For the base" })).toBe(false);
+    expect(isPantryIngredient({ name: "cookie dough", notes: "mix-in" })).toBe(false);
+    expect(isPantryIngredient({ name: "butter", quantity: 80, unit: "g" })).toBe(true);
+  });
+
+  it("promotes inferred headings to section lineKind", () => {
+    const [section, flour] = promoteIngredientSections([
+      { name: "For the base" },
+      { name: "flour", quantity: 100, unit: "g" },
+    ]);
+    expect(section?.lineKind).toBe("section");
+    expect(flour?.lineKind).toBeUndefined();
   });
 });

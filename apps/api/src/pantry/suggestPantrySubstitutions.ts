@@ -5,6 +5,7 @@ import {
   displayIngredient,
   evaluateRecipePantryMatch,
   formatCopyIngredientLine,
+  isIngredientSection,
   type Ingredient,
   type PantrySubstitutionLine,
   type PantrySubstitutionResponse,
@@ -167,8 +168,8 @@ function buildPantrySubstitutionPrompt(
     .filter((row) => !row.matched)
     .map((row) => {
       const ingredient = recipe.ingredients[row.index];
-      if (!ingredient) {
-        return `${row.index}: ${row.name}`;
+      if (!ingredient || isIngredientSection(ingredient)) {
+        return null;
       }
       const scaled = displayIngredient(ingredient, {
         originalServings: recipe.servings,
@@ -176,7 +177,8 @@ function buildPantrySubstitutionPrompt(
         displayUnit: "original",
       });
       return `${row.index}: ${formatCopyIngredientLine(scaled)}`;
-    });
+    })
+    .filter((line): line is string => Boolean(line));
 
   const pantryLines: string[] = [];
   for (const starter of pantry.starters) {

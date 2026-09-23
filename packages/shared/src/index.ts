@@ -20,6 +20,7 @@ export type {
   CreamiSweetenerKind,
   GeneratedRecipe,
   Ingredient,
+  IngredientLineKind,
   RecipeGenerateRequest,
   RecipeImportRequest,
   RecipeMacros,
@@ -30,7 +31,15 @@ export type {
   RecipeStep,
   SavedRecipe,
 } from "./recipe";
-export { isCreamiRecipe, isMixInIngredient, recipeNotesText } from "./recipe";
+export {
+  ingredientSectionTitle,
+  isCreamiRecipe,
+  isIngredientSection,
+  isMixInIngredient,
+  isPantryIngredient,
+  promoteIngredientSections,
+  recipeNotesText,
+} from "./recipe";
 export { resolveCreamiSweetenerName } from "./creamiSweetener";
 export { CHEF_SERVING_WEIGHT_G, chefServingWeightG, chefServingWeightHint } from "./chefConstraints";
 export {
@@ -149,6 +158,7 @@ export type {
   NutritionProfileResponse,
   UsdaFoodHit,
   UserFood,
+  UserFoodDetail,
   UserFoodSource,
 } from "./nutrition/types";
 export { NEVO_ATTRIBUTION } from "./nutrition/types";

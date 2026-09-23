@@ -4,6 +4,7 @@ import type { Database } from "../db/client";
 import { nevoFoods } from "../db/schema";
 import { AppError } from "../errors";
 import { NEVO_DATA_VERSION } from "./nevoParser";
+import { rankNevoSearchHits } from "./nevoSearchRank";
 
 export type NevoReferenceRow = {
   nevoCode: number;
@@ -47,6 +48,7 @@ export async function searchNevoFoods(db: Database, query: string, limit = 20): 
   }
 
   const pattern = `%${trimmed.replaceAll("%", "").replaceAll("_", "")}%`;
+  const candidateLimit = Math.max(limit * 10, 200);
   const rows = await db
     .select({
       nevoCode: nevoFoods.nevoCode,
@@ -55,17 +57,13 @@ export async function searchNevoFoods(db: Database, query: string, limit = 20): 
       foodGroupNl: nevoFoods.foodGroupNl,
     })
     .from(nevoFoods)
-    .where(
-      or(
-        ilike(nevoFoods.nameNl, pattern),
-        ilike(nevoFoods.nameEn, pattern),
-        ilike(nevoFoods.searchText, pattern),
-      ),
-    )
+    .where(or(ilike(nevoFoods.nameNl, pattern), ilike(nevoFoods.nameEn, pattern)))
     .orderBy(nevoFoods.nameNl)
-    .limit(limit);
+    .limit(candidateLimit);
 
-  return rows.map((row) => ({
+  const ranked = rankNevoSearchHits(rows, trimmed, limit);
+
+  return ranked.map((row) => ({
     nevoCode: row.nevoCode,
     name: row.nameNl,
     nameEn: row.nameEn,

@@ -8,6 +8,7 @@ export type DisplayIngredient = {
   unit: string | null;
   name: string;
   notes: string | null;
+  lineKind?: Ingredient["lineKind"];
 };
 
 export type DisplayUnit = "original" | "g" | "volume";
@@ -78,6 +79,7 @@ export function displayIngredient(
       unit: from ?? ingredient.unit ?? null,
       name: ingredient.name,
       notes: ingredient.notes ?? null,
+      lineKind: ingredient.lineKind,
     };
   }
 
@@ -88,6 +90,7 @@ export function displayIngredient(
       unit: "g",
       name: ingredient.name,
       notes: ingredient.notes ?? null,
+      lineKind: ingredient.lineKind,
     };
   }
 
@@ -98,5 +101,6 @@ export function displayIngredient(
     unit,
     name: ingredient.name,
     notes: ingredient.notes ?? null,
+    lineKind: ingredient.lineKind,
   };
 }

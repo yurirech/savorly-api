@@ -2,6 +2,7 @@ import { GoogleGenerativeAI, SchemaType, type Schema } from "@google/generative-
 import {
   FOOD_CATEGORIES,
   parseFoodCategory,
+  promoteIngredientSections,
   type GeneratedRecipe,
   type Ingredient,
   type RecipeMacros,
@@ -32,6 +33,7 @@ export const GEMINI_RECIPE_SCHEMA: Schema = {
           quantity: { type: SchemaType.NUMBER, nullable: true },
           unit: { type: SchemaType.STRING, nullable: true },
           notes: { type: SchemaType.STRING, nullable: true },
+          lineKind: { type: SchemaType.STRING, format: "enum", enum: ["ingredient", "section"], nullable: true },
         },
         required: ["name"],
       },
@@ -186,9 +188,11 @@ export function parseGeminiRecipe(raw: unknown, source: RecipeSource): Generated
   }
   const value = raw as Record<string, unknown>;
   const title = typeof value.title === "string" && value.title.trim() ? value.title.trim() : "Untitled recipe";
-  const ingredients = Array.isArray(value.ingredients)
-    ? (value.ingredients.map(toIngredient).filter(Boolean) as Ingredient[])
-    : [];
+  const ingredients = promoteIngredientSections(
+    Array.isArray(value.ingredients)
+      ? (value.ingredients.map(toIngredient).filter(Boolean) as Ingredient[])
+      : [],
+  );
   const steps = Array.isArray(value.steps) ? (value.steps.map(toStep).filter(Boolean) as RecipeStep[]) : [];
 
   if (ingredients.length === 0 && steps.length === 0) {
@@ -262,6 +266,7 @@ function toIngredient(value: unknown): Ingredient | undefined {
   if (!value || typeof value !== "object") return undefined;
   const item = value as Record<string, unknown>;
   if (typeof item.name !== "string" || !item.name.trim()) return undefined;
+  const lineKind = item.lineKind === "section" || item.lineKind === "ingredient" ? item.lineKind : undefined;
   return {
     name: item.name.trim(),
     quantity: nullableNumber(item.quantity),
@@ -269,6 +274,7 @@ function toIngredient(value: unknown): Ingredient | undefined {
     notes: typeof item.notes === "string" ? item.notes : null,
     canonicalKey: typeof item.canonicalKey === "string" && item.canonicalKey.trim() ? item.canonicalKey.trim() : null,
     gramsPerCup: null,
+    lineKind,
   };
 }
 
