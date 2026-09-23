@@ -72,6 +72,7 @@ export function foodFromRow(row: FoodRow): UserFood {
     name: row.name,
     source: row.source as UserFoodSource,
     fdcId: row.fdcId,
+    nevoCode: row.nevoCode,
     per100g: requireNutrientVector(row.per100g, "Food nutrition"),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -173,6 +174,7 @@ export async function createManualFood(
       name: trimmed,
       source: "manual",
       fdcId: null,
+      nevoCode: null,
       per100g: requireNutrientVector(per100g, "Food nutrition"),
     })
     .returning();
@@ -203,6 +205,38 @@ export async function importUsdaFood(
       name: input.name.trim(),
       source: "usda",
       fdcId: input.fdcId,
+      nevoCode: null,
+      per100g: input.per100g,
+    })
+    .returning();
+  if (!row) {
+    throw new AppError("internal_error", "Could not import food.", 500);
+  }
+  return foodFromRow(row);
+}
+
+export async function importNevoFood(
+  db: Database,
+  userId: string,
+  input: { nevoCode: number; name: string; per100g: NutrientVector },
+): Promise<UserFood> {
+  const [existing] = await db
+    .select()
+    .from(userFoods)
+    .where(and(eq(userFoods.userId, userId), eq(userFoods.nevoCode, input.nevoCode)))
+    .limit(1);
+  if (existing) {
+    return foodFromRow(existing);
+  }
+
+  const [row] = await db
+    .insert(userFoods)
+    .values({
+      userId,
+      name: input.name.trim(),
+      source: "nevo",
+      fdcId: null,
+      nevoCode: input.nevoCode,
       per100g: input.per100g,
     })
     .returning();

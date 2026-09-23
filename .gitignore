@@ -9,7 +9,13 @@ dist
 *.log
 coverage
 .DS_Store
-apps/api/data
+# Local API data dumps; bundled NEVO reference JSON is committed for deploy seeding.
+apps/api/data/**
+!apps/api/data/nevo/
+apps/api/data/nevo/**
+!apps/api/data/nevo/nevo2025-v9.0.json
+!apps/api/data/nevo/README.md
+!apps/api/data/nevo/.gitignore
 apps/mobile/android
 apps/mobile/ios
 *.apk

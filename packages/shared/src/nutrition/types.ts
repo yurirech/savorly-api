@@ -1,7 +1,7 @@
 import type { NutrientVector } from "./nutrients";
 import type { NutritionProfileInput, NutritionTargets } from "./targets";
 
-export type UserFoodSource = "usda" | "manual";
+export type UserFoodSource = "usda" | "manual" | "nevo";
 
 export type NutritionProfile = NutritionProfileInput & {
   updatedAt: string;
@@ -17,6 +17,7 @@ export type UserFood = {
   name: string;
   source: UserFoodSource;
   fdcId: number | null;
+  nevoCode: number | null;
   per100g: NutrientVector;
   createdAt: string;
   updatedAt: string;
@@ -27,6 +28,16 @@ export type UsdaFoodHit = {
   name: string;
   dataType: string;
 };
+
+export type NevoFoodHit = {
+  nevoCode: number;
+  name: string;
+  nameEn: string;
+  foodGroup: string;
+  version: string;
+};
+
+export const NEVO_ATTRIBUTION = "NEVO-online version 2025/9.0, RIVM, Bilthoven";
 
 export type DiaryEntry = {
   id: string;

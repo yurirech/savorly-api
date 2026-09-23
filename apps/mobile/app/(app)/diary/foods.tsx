@@ -47,10 +47,11 @@ export default function DiaryFoodsScreen() {
     <Screen>
       <AppText variant="display">My foods</AppText>
       <AppText variant="body" color="muted">
-        A short list of what you actually eat. Search USDA for generics, or type a label yourself.
+        A short list of what you actually eat. Search NEVO for Dutch generics, USDA for US staples, or type a label yourself.
       </AppText>
       <Field label="Search my foods" value={query} onChangeText={setQuery} variant="search" />
-      <Button label="Search USDA" onPress={() => router.push("/(app)/diary/usda-search" as Href)} />
+      <Button label="Search NEVO" onPress={() => router.push("/(app)/diary/nevo-search" as Href)} />
+      <Button label="Search USDA" variant="secondary" onPress={() => router.push("/(app)/diary/usda-search" as Href)} />
       <Button label="Add manually" variant="secondary" onPress={() => router.push("/(app)/diary/food-form" as Href)} />
       {error ? (
         <AppText variant="body" color="danger">
@@ -67,7 +68,8 @@ export default function DiaryFoodsScreen() {
           <View style={styles.copy}>
             <AppText variant="title">{food.name}</AppText>
             <AppText variant="caption" color="muted">
-              {food.per100g.kcal} kcal / 100 g · {food.source === "usda" ? "USDA" : "Manual"}
+              {food.per100g.kcal} kcal / 100 g ·{" "}
+              {food.source === "nevo" ? "NEVO" : food.source === "usda" ? "USDA" : "Manual"}
             </AppText>
           </View>
           <Pressable onPress={() => void onDelete(food.id)} accessibilityLabel={`Delete ${food.name}`}>

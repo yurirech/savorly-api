@@ -29,6 +29,7 @@ describe("food and diary mapping", () => {
       name: "Peanut butter",
       source: "manual",
       fdcId: null,
+      nevoCode: null,
       per100g,
       createdAt: now,
       updatedAt: now,

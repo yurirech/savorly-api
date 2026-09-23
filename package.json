@@ -12,6 +12,7 @@
     "test": "npm run test -w @savorly/api && npm run test -w @savorly/shared",
     "db:generate": "npm run db:generate -w @savorly/api",
     "db:migrate": "npm run db:migrate -w @savorly/api",
+    "db:import-nevo": "npm run db:import-nevo -w @savorly/api",
     "host:api": "docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build"
   },
   "engines": {

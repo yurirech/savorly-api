@@ -38,10 +38,14 @@ import {
   getDiaryDay,
   getNutritionProfile,
   importUsdaFood,
+  importNevoFood,
   listUserFoods,
   upsertNutritionProfile,
 } from "./nutrition/nutritionStore";
+import { requireNevoFood, searchNevoFoods, nevoFoodsReady } from "./nutrition/nevoStore";
+import { seedNevoReferenceIfEmpty } from "./nutrition/nevoSeed";
 import { fetchUsdaFood, searchUsdaFoods } from "./nutrition/usdaClient";
+import { NEVO_ATTRIBUTION } from "@savorly/shared";
 
 const importSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("instagram"), url: z.string().url() }),
@@ -233,6 +237,11 @@ const manualFoodSchema = z.object({
 const importFoodSchema = z.object({
   fdcId: z.number().int().positive(),
   name: z.string().trim().min(1).max(80).optional(),
+});
+
+const importNevoFoodSchema = z.object({
+  nevoCode: z.number().int().positive(),
+  name: z.string().trim().min(1).max(120).optional(),
 });
 
 const diaryEntrySchema = z.object({
@@ -458,6 +467,20 @@ export function createApp(db: Database, env: Env) {
     return c.json({ foods: hits });
   });
 
+  app.get("/nutrition/foods/nevo", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    void user;
+    if (!(await nevoFoodsReady(db))) {
+      throw new AppError(
+        "internal_error",
+        "NEVO reference data is not loaded on this server yet.",
+        503,
+      );
+    }
+    const hits = await searchNevoFoods(db, c.req.query("q") ?? "");
+    return c.json({ foods: hits, attribution: NEVO_ATTRIBUTION });
+  });
+
   app.post("/nutrition/foods", async (c) => {
     const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
     const body = manualFoodSchema.parse(await c.req.json());
@@ -471,6 +494,18 @@ export function createApp(db: Database, env: Env) {
     const imported = await fetchUsdaFood(body.fdcId, env, body.name);
     const food = await importUsdaFood(db, user.id, imported);
     return c.json({ food }, 201);
+  });
+
+  app.post("/nutrition/foods/import/nevo", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = importNevoFoodSchema.parse(await c.req.json());
+    const reference = await requireNevoFood(db, body.nevoCode);
+    const food = await importNevoFood(db, user.id, {
+      nevoCode: reference.nevoCode,
+      name: body.name ?? reference.nameNl,
+      per100g: reference.per100g,
+    });
+    return c.json({ food, attribution: NEVO_ATTRIBUTION }, 201);
   });
 
   app.delete("/nutrition/foods/:id", async (c) => {

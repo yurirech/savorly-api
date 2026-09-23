@@ -144,9 +144,11 @@ export {
 export type {
   DiaryDayResponse,
   DiaryEntry,
+  NevoFoodHit,
   NutritionProfile,
   NutritionProfileResponse,
   UsdaFoodHit,
   UserFood,
   UserFoodSource,
 } from "./nutrition/types";
+export { NEVO_ATTRIBUTION } from "./nutrition/types";

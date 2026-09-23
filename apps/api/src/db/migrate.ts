@@ -3,6 +3,8 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { MIGRATIONS } from "./migrations";
+import { createDb } from "./client";
+import { seedNevoReferenceIfEmpty } from "../nutrition/nevoSeed";
 
 async function main() {
   const url = process.env.DATABASE_URL;
@@ -17,6 +19,12 @@ async function main() {
     await client.unsafe(sql);
   }
   await client.end();
+
+  const db = createDb(url);
+  const seeded = await seedNevoReferenceIfEmpty(db);
+  if (seeded > 0) {
+    console.log(`Seeded ${seeded} NEVO reference foods.`);
+  }
 }
 
 void main();

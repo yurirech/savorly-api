@@ -16,6 +16,7 @@ import type {
   RecipeImportRequest,
   SavedRecipe,
   UsdaFoodHit,
+  NevoFoodHit,
   UserFood,
   UserPantryItem,
 } from "@savorly/shared";
@@ -258,10 +259,23 @@ export function searchUsdaFoods(q: string) {
   return request<{ foods: UsdaFoodHit[] }>(`/nutrition/foods/usda?q=${encodeURIComponent(q)}`);
 }
 
+export function searchNevoFoods(q: string) {
+  return request<{ foods: NevoFoodHit[]; attribution: string }>(
+    `/nutrition/foods/nevo?q=${encodeURIComponent(q)}`,
+  );
+}
+
 export function importUsdaFood(fdcId: number, name?: string) {
   return request<{ food: UserFood }>("/nutrition/foods/import", {
     method: "POST",
     body: JSON.stringify({ fdcId, name }),
+  });
+}
+
+export function importNevoFood(nevoCode: number, name?: string) {
+  return request<{ food: UserFood; attribution: string }>("/nutrition/foods/import/nevo", {
+    method: "POST",
+    body: JSON.stringify({ nevoCode, name }),
   });
 }
 

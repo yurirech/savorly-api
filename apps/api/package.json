@@ -9,7 +9,9 @@
     "start:hosted": "tsx src/db/migrate.ts && tsx src/index.ts",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx --env-file=.env src/db/migrate.ts"
+    "db:migrate": "tsx --env-file=.env src/db/migrate.ts",
+    "db:import-nevo": "tsx --env-file=.env src/db/import-nevo.ts",
+    "db:build-nevo-json": "tsx src/db/build-nevo-json.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

@@ -132,6 +132,7 @@ export const userFoods = pgTable(
     name: text("name").notNull(),
     source: text("source").notNull(),
     fdcId: integer("fdc_id"),
+    nevoCode: integer("nevo_code"),
     per100g: jsonb("per_100g").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -141,8 +142,21 @@ export const userFoods = pgTable(
     uniqueIndex("user_foods_user_fdc_unique")
       .on(table.userId, table.fdcId)
       .where(sql`${table.fdcId} is not null`),
+    uniqueIndex("user_foods_user_nevo_unique")
+      .on(table.userId, table.nevoCode)
+      .where(sql`${table.nevoCode} is not null`),
   ],
 );
+
+export const nevoFoods = pgTable("nevo_foods", {
+  nevoCode: integer("nevo_code").primaryKey().notNull(),
+  version: text("version").notNull(),
+  foodGroupNl: text("food_group_nl").notNull(),
+  nameNl: text("name_nl").notNull(),
+  nameEn: text("name_en").notNull(),
+  searchText: text("search_text").notNull(),
+  per100g: jsonb("per_100g").notNull(),
+});
 
 export const diaryEntries = pgTable(
   "diary_entries",
