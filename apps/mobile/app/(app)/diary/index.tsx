@@ -1,11 +1,12 @@
 import { type Href, router, useFocusEffect } from "expo-router";
 import { CaretLeft, CaretRight } from "phosphor-react-native";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import type { DiaryDayResponse } from "@savorly/shared";
+import { hasExtendedNutrients, listPresentNutrients, type DiaryDayResponse } from "@savorly/shared";
 import { ApiRequestError, deleteDiaryEntry, fetchDiaryDay } from "../../../src/api/client";
 import { AppText } from "../../../src/components/AppText";
 import { Button } from "../../../src/components/Button";
+import NutrientDetailList from "../../../src/components/NutrientDetailList";
 import { Screen } from "../../../src/components/Screen";
 import { tokens } from "../../../src/theme/tokens";
 import { shiftIsoDate, todayIsoDate } from "../../../src/utils/isoDate";
@@ -15,6 +16,9 @@ export default function DiaryScreen() {
   const [day, setDay] = useState<DiaryDayResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [showMicronutrients, setShowMicronutrients] = useState(false);
+
+  const dayMicroGroups = useMemo(() => (day?.totals ? listPresentNutrients(day.totals) : []), [day?.totals]);
 
   const load = useCallback(async (nextDate: string, isActive: () => boolean = () => true) => {
     try {
@@ -96,6 +100,17 @@ export default function DiaryScreen() {
         </AppText>
       )}
 
+      {totals && hasExtendedNutrients(totals) ? (
+        <View style={styles.microSection}>
+          <Button
+            label={showMicronutrients ? "Hide micronutrients" : "Show today's micronutrients"}
+            variant="ghost"
+            onPress={() => setShowMicronutrients((current) => !current)}
+          />
+          {showMicronutrients ? <NutrientDetailList groups={dayMicroGroups} /> : null}
+        </View>
+      ) : null}
+
       {error ? (
         <AppText variant="body" color="danger">
           {error}
@@ -144,6 +159,9 @@ const styles = StyleSheet.create({
     borderColor: tokens.border,
     padding: tokens.space.md,
     gap: tokens.space.xs,
+  },
+  microSection: {
+    gap: tokens.space.sm,
   },
   entry: {
     flexDirection: "row",

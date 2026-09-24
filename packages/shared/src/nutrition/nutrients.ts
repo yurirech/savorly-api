@@ -3,22 +3,74 @@ export type NutrientVector = {
   proteinG: number;
   carbsG: number;
   fatG: number;
-  fiberG?: number | null;
-  sodiumMg?: number | null;
   saturatedFatG?: number | null;
-  ironMg?: number | null;
+  fiberG?: number | null;
+  omega3G?: number | null;
+  omega6G?: number | null;
+  transFatG?: number | null;
+  monoFatG?: number | null;
+  sugarsG?: number | null;
+  freeSugarsG?: number | null;
+  starchG?: number | null;
+  cholesterolMg?: number | null;
+  alcoholG?: number | null;
+  sodiumMg?: number | null;
+  potassiumMg?: number | null;
   calciumMg?: number | null;
+  phosphorusMg?: number | null;
+  magnesiumMg?: number | null;
+  ironMg?: number | null;
+  zincMg?: number | null;
+  copperMg?: number | null;
+  seleniumMcg?: number | null;
+  iodineMcg?: number | null;
+  vitaminAMcgRae?: number | null;
   vitaminDMcg?: number | null;
+  vitaminEMg?: number | null;
+  vitaminKMcg?: number | null;
+  vitaminCMg?: number | null;
+  thiaminMg?: number | null;
+  riboflavinMg?: number | null;
+  vitaminB6Mg?: number | null;
+  vitaminB12Mcg?: number | null;
+  niacinMg?: number | null;
+  folateMcg?: number | null;
 };
 
-const OPTIONAL_KEYS = [
-  "fiberG",
-  "sodiumMg",
+export const OPTIONAL_NUTRIENT_KEYS = [
   "saturatedFatG",
-  "ironMg",
+  "fiberG",
+  "omega3G",
+  "omega6G",
+  "transFatG",
+  "monoFatG",
+  "sugarsG",
+  "freeSugarsG",
+  "starchG",
+  "cholesterolMg",
+  "alcoholG",
+  "sodiumMg",
+  "potassiumMg",
   "calciumMg",
+  "phosphorusMg",
+  "magnesiumMg",
+  "ironMg",
+  "zincMg",
+  "copperMg",
+  "seleniumMcg",
+  "iodineMcg",
+  "vitaminAMcgRae",
   "vitaminDMcg",
-] as const;
+  "vitaminEMg",
+  "vitaminKMcg",
+  "vitaminCMg",
+  "thiaminMg",
+  "riboflavinMg",
+  "vitaminB6Mg",
+  "vitaminB12Mcg",
+  "niacinMg",
+  "folateMcg",
+] as const satisfies readonly (keyof NutrientVector)[];
 
 export function roundNutrition(value: number, decimals = 1): number {
   const factor = 10 ** decimals;
@@ -34,7 +86,7 @@ export function scaleNutrition(per100g: NutrientVector, grams: number): Nutrient
     fatG: roundNutrition(per100g.fatG * factor),
   };
 
-  for (const key of OPTIONAL_KEYS) {
+  for (const key of OPTIONAL_NUTRIENT_KEYS) {
     const value = per100g[key];
     if (value == null) {
       continue;
@@ -47,14 +99,14 @@ export function scaleNutrition(per100g: NutrientVector, grams: number): Nutrient
 
 export function sumNutrients(items: NutrientVector[]): NutrientVector {
   const total: NutrientVector = { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 };
-  const optionalSums = new Map<(typeof OPTIONAL_KEYS)[number], number>();
+  const optionalSums = new Map<(typeof OPTIONAL_NUTRIENT_KEYS)[number], number>();
 
   for (const item of items) {
     total.kcal += item.kcal;
     total.proteinG += item.proteinG;
     total.carbsG += item.carbsG;
     total.fatG += item.fatG;
-    for (const key of OPTIONAL_KEYS) {
+    for (const key of OPTIONAL_NUTRIENT_KEYS) {
       const value = item[key];
       if (value == null) {
         continue;
@@ -83,4 +135,8 @@ export function remainingMacros(
     carbsG: roundNutrition(targets.carbsG - consumed.carbsG),
     fatG: roundNutrition(targets.fatG - consumed.fatG),
   };
+}
+
+export function hasExtendedNutrients(per100g: NutrientVector): boolean {
+  return OPTIONAL_NUTRIENT_KEYS.some((key) => per100g[key] != null);
 }

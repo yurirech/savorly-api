@@ -7,6 +7,7 @@ const peanutButter = {
   carbsG: 20,
   fatG: 50,
   fiberG: 6,
+  sodiumMg: 17,
 };
 
 describe("scaleNutrition", () => {
@@ -17,6 +18,7 @@ describe("scaleNutrition", () => {
       carbsG: 2.4,
       fatG: 6,
       fiberG: 0.7,
+      sodiumMg: 2,
     });
   });
 
@@ -36,6 +38,8 @@ describe("sumNutrients", () => {
     const total = sumNutrients([scaleNutrition(peanutButter, 12), scaleNutrition(peanutButter, 100)]);
     expect(total.kcal).toBe(659);
     expect(total.proteinG).toBe(28);
+    expect(total.fiberG).toBe(6.7);
+    expect(total.sodiumMg).toBe(19);
   });
 });
 

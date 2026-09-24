@@ -135,7 +135,26 @@ export type {
   AuthUser,
 } from "./api";
 export type { NutrientVector } from "./nutrition/nutrients";
-export { remainingMacros, roundNutrition, scaleNutrition, sumNutrients } from "./nutrition/nutrients";
+export {
+  hasExtendedNutrients,
+  OPTIONAL_NUTRIENT_KEYS,
+  remainingMacros,
+  roundNutrition,
+  scaleNutrition,
+  sumNutrients,
+} from "./nutrition/nutrients";
+export type {
+  NutrientDisplayGroup,
+  NutrientDisplayUnit,
+  NutrientFieldMeta,
+  PresentNutrientGroup,
+  PresentNutrientRow,
+} from "./nutrition/nutrientDisplay";
+export {
+  formatNutrientAmount,
+  listPresentNutrients,
+  NUTRIENT_DISPLAY_GROUPS,
+} from "./nutrition/nutrientDisplay";
 export type {
   NutritionActivity,
   NutritionGoal,

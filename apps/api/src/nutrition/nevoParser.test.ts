@@ -1,5 +1,10 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parseNevoCsv, parseNevoDelimitedLine, parseNevoNumber } from "./nevoParser";
+
+const fixturePath = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures/nevo-milk-row.csv");
 
 describe("parseNevoNumber", () => {
   it("parses Dutch decimal commas", () => {
@@ -79,6 +84,30 @@ describe("parseNevoCsv", () => {
     expect(foods).toHaveLength(1);
     expect(foods[0]?.nevoCode).toBe(286);
     expect(foods[0]?.nameNl).toBe("Melk halfvolle");
-    expect(foods[0]?.per100g).toEqual({ kcal: 45, proteinG: 3.4, carbsG: 4.7, fatG: 1.4 });
+    expect(foods[0]?.per100g).toMatchObject({
+      kcal: 45,
+      proteinG: 3.4,
+      carbsG: 4.7,
+      fatG: 1.4,
+      saturatedFatG: 0.9,
+      monoFatG: 0.3,
+    });
+  });
+
+  it("maps summary micronutrients for semi-skimmed milk", () => {
+    const csv = readFileSync(fixturePath, "utf8");
+    const foods = parseNevoCsv(csv);
+    expect(foods).toHaveLength(1);
+    expect(foods[0]?.per100g).toMatchObject({
+      kcal: 45,
+      proteinG: 3.4,
+      carbsG: 4.7,
+      fatG: 1.4,
+      saturatedFatG: 0.9,
+      sodiumMg: 42,
+      calciumMg: 123,
+      vitaminB12Mcg: 0.45,
+      folateMcg: 6.5,
+    });
   });
 });

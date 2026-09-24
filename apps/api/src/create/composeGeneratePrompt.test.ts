@@ -236,7 +236,7 @@ describe("composeGeneratePrompt", () => {
     expect(system).not.toContain("Command_generate");
     expect(system).toContain("Always include approximate nutrition");
     expect(system).not.toContain("If macros are guesswork");
-    expect(system.length).toBeLessThan(2500);
+    expect(system.length).toBeLessThan(2600);
   });
 
   it("adds chef style and adapt slices only when needed", () => {

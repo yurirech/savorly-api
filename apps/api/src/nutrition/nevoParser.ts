@@ -1,4 +1,5 @@
 import type { NutrientVector } from "@savorly/shared";
+import { NEVO_NUTRIENT_COLUMNS } from "./nevoNutrientColumns";
 
 export const NEVO_DATA_VERSION = "2025/9.0";
 
@@ -66,6 +67,11 @@ export function parseNevoCsv(text: string): ParsedNevoFood[] {
   const carbsIdx = columnIndex(headers, "CHO (g)");
   const fatIdx = columnIndex(headers, "FAT (g)");
 
+  const optionalColumnIndices = NEVO_NUTRIENT_COLUMNS.map((entry) => ({
+    field: entry.field,
+    index: headers.findIndex((header) => header.includes(entry.headerIncludes)),
+  })).filter((entry) => entry.index >= 0);
+
   const foods: ParsedNevoFood[] = [];
 
   for (const line of lines.slice(1)) {
@@ -89,17 +95,26 @@ export function parseNevoCsv(text: string): ParsedNevoFood[] {
       continue;
     }
 
+    const per100g: NutrientVector = {
+      kcal: kcal!,
+      proteinG: proteinG!,
+      carbsG: carbsG!,
+      fatG: fatG!,
+    };
+
+    for (const { field, index } of optionalColumnIndices) {
+      const parsed = parseNevoNumber(row[index]);
+      if (parsed != null) {
+        per100g[field] = parsed;
+      }
+    }
+
     foods.push({
       nevoCode: Math.trunc(nevoCode),
       foodGroupNl: row[groupIdx]?.trim() ?? "",
       nameNl,
       nameEn: row[nameEnIdx]?.trim() ?? "",
-      per100g: {
-        kcal: kcal!,
-        proteinG: proteinG!,
-        carbsG: carbsG!,
-        fatG: fatG!,
-      },
+      per100g,
     });
   }
 
