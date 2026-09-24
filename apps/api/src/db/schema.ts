@@ -158,6 +158,21 @@ export const nevoFoods = pgTable("nevo_foods", {
   per100g: jsonb("per_100g").notNull(),
 });
 
+export const diaryMeals = pgTable(
+  "diary_meals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    date: date("date").notNull(),
+    name: text("name").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("diary_meals_user_date_idx").on(table.userId, table.date)],
+);
+
 export const diaryEntries = pgTable(
   "diary_entries",
   {
@@ -165,13 +180,19 @@ export const diaryEntries = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    foodId: uuid("food_id")
+    mealId: uuid("meal_id")
       .notNull()
-      .references(() => userFoods.id, { onDelete: "restrict" }),
+      .references(() => diaryMeals.id, { onDelete: "cascade" }),
+    foodId: uuid("food_id").references(() => userFoods.id, { onDelete: "restrict" }),
+    kind: text("kind").notNull().default("food"),
+    label: text("label"),
     date: date("date").notNull(),
     grams: real("grams").notNull(),
     nutrients: jsonb("nutrients").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index("diary_entries_user_date_idx").on(table.userId, table.date)],
+  (table) => [
+    index("diary_entries_user_date_idx").on(table.userId, table.date),
+    index("diary_entries_meal_idx").on(table.mealId),
+  ],
 );

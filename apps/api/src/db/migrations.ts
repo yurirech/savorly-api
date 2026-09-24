@@ -6,4 +6,6 @@ export const MIGRATIONS = [
   "0004_user_pantry.sql",
   "0005_nutrition_diary.sql",
   "0006_nevo_reference.sql",
+  "0007_diary_meal_groups.sql",
+  "0008_diary_quick_entries.sql",
 ] as const;

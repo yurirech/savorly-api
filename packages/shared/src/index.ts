@@ -172,6 +172,8 @@ export {
 export type {
   DiaryDayResponse,
   DiaryEntry,
+  DiaryEntryKind,
+  DiaryMealGroup,
   NevoFoodHit,
   NutritionProfile,
   NutritionProfileResponse,
@@ -181,3 +183,21 @@ export type {
   UserFoodSource,
 } from "./nutrition/types";
 export { NEVO_ATTRIBUTION } from "./nutrition/types";
+export {
+  buildDiaryMeals,
+  coerceDiaryDayResponse,
+  dayTotalsFromMeals,
+  DIARY_MEAL_NAME_MAX_LENGTH,
+  DIARY_MEAL_NAME_SUGGESTIONS,
+  LEGACY_DIARY_GENERAL_MEAL_ID,
+  mealTotalsFromEntries,
+} from "./nutrition/diaryMeals";
+export {
+  buildQuickDiaryNutrients,
+  parseQuickDiaryLabel,
+  QUICK_DIARY_DEFAULT_LABEL,
+  QUICK_DIARY_ENTRY_GRAMS,
+  QUICK_DIARY_LABEL_MAX_LENGTH,
+  validateQuickDiaryKcal,
+} from "./nutrition/quickDiaryEntry";
+export type { QuickDiaryNutrientsInput } from "./nutrition/quickDiaryEntry";

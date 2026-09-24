@@ -41,7 +41,10 @@ describe("food and diary mapping", () => {
       {
         id: "00000000-0000-0000-0000-000000000003",
         userId: food.id,
+        mealId: "00000000-0000-0000-0000-000000000099",
         foodId: food.id,
+        kind: "food",
+        label: null,
         date: "2026-09-22",
         grams: 12,
         nutrients,
@@ -51,6 +54,26 @@ describe("food and diary mapping", () => {
     );
     expect(entry.nutrients).toEqual({ kcal: 71, proteinG: 3, carbsG: 2.4, fatG: 6 });
     expect(entry.foodName).toBe("Peanut butter");
+    expect(entry.kind).toBe("food");
+
+    const quick = diaryFromRow(
+      {
+        id: "00000000-0000-0000-0000-000000000004",
+        userId: food.id,
+        mealId: "00000000-0000-0000-0000-000000000099",
+        foodId: null,
+        kind: "quick",
+        label: "Office lunch",
+        date: "2026-09-22",
+        grams: 100,
+        nutrients: { kcal: 450, proteinG: 20, carbsG: 40, fatG: 15 },
+        createdAt: now,
+      },
+      "Office lunch",
+    );
+    expect(quick.kind).toBe("quick");
+    expect(quick.foodId).toBeNull();
+    expect(quick.foodName).toBe("Office lunch");
   });
 });
 

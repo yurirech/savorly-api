@@ -1,15 +1,27 @@
 import { type Href, router, useFocusEffect } from "expo-router";
 import { CaretLeft, CaretRight } from "phosphor-react-native";
 import { useCallback, useMemo, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Alert, Pressable, StyleSheet, View } from "react-native";
 import { hasExtendedNutrients, listPresentNutrients, type DiaryDayResponse } from "@savorly/shared";
-import { ApiRequestError, deleteDiaryEntry, fetchDiaryDay } from "../../../src/api/client";
+import {
+  ApiRequestError,
+  createDiaryMeal,
+  deleteDiaryMeal,
+  fetchDiaryDay,
+  updateDiaryMeal,
+} from "../../../src/api/client";
 import { AppText } from "../../../src/components/AppText";
 import { Button } from "../../../src/components/Button";
 import NutrientDetailList from "../../../src/components/NutrientDetailList";
 import { Screen } from "../../../src/components/Screen";
+import DiaryMealNameSheet from "../../../src/diary/DiaryMealNameSheet";
+import DiaryMealPickerSheet from "../../../src/diary/DiaryMealPickerSheet";
+import DiaryMealSection from "../../../src/diary/DiaryMealSection";
+import { resolveMealForDate, writeLastDiaryMeal } from "../../../src/diary/lastDiaryMealStorage";
 import { tokens } from "../../../src/theme/tokens";
 import { shiftIsoDate, todayIsoDate } from "../../../src/utils/isoDate";
+
+type NameSheetMode = { kind: "create" } | { kind: "rename"; mealId: string; initialName: string };
 
 export default function DiaryScreen() {
   const [date, setDate] = useState(todayIsoDate);
@@ -17,6 +29,10 @@ export default function DiaryScreen() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [showMicronutrients, setShowMicronutrients] = useState(false);
+  const [collapsedMeals, setCollapsedMeals] = useState<Set<string>>(() => new Set());
+  const [nameSheet, setNameSheet] = useState<NameSheetMode | null>(null);
+  const [nameSaving, setNameSaving] = useState(false);
+  const [quickCalPickerVisible, setQuickCalPickerVisible] = useState(false);
 
   const dayMicroGroups = useMemo(() => (day?.totals ? listPresentNutrients(day.totals) : []), [day?.totals]);
 
@@ -53,15 +69,96 @@ export default function DiaryScreen() {
     }
   }
 
-  async function onDelete(entryId: string) {
+  function toggleMealCollapsed(mealId: string) {
+    setCollapsedMeals((current) => {
+      const next = new Set(current);
+      if (next.has(mealId)) {
+        next.delete(mealId);
+      } else {
+        next.add(mealId);
+      }
+      return next;
+    });
+  }
+
+  async function onConfirmMealName(name: string) {
+    if (!nameSheet || !name.trim()) {
+      setError("Give the meal group a name.");
+      return;
+    }
+    setNameSaving(true);
+    setError(null);
     try {
-      const live = await deleteDiaryEntry(entryId);
-      setDay(live);
+      if (nameSheet.kind === "create") {
+        const live = await createDiaryMeal(date, name);
+        setDay(live);
+        const created = live.meals[live.meals.length - 1];
+        if (created) {
+          await writeLastDiaryMeal({ mealId: created.id, mealName: created.name, date });
+        }
+      } else {
+        const live = await updateDiaryMeal(nameSheet.mealId, { name });
+        setDay(live);
+      }
+      setNameSheet(null);
     } catch (err) {
-      setError(err instanceof ApiRequestError ? err.message : "Could not remove that entry.");
+      setError(err instanceof ApiRequestError ? err.message : "Could not save meal group.");
+    } finally {
+      setNameSaving(false);
     }
   }
 
+  function onDeleteMeal(mealId: string, mealName: string) {
+    Alert.alert("Delete meal group?", `Remove "${mealName}" and its logged foods?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => {
+          void (async () => {
+            try {
+              const live = await deleteDiaryMeal(mealId);
+              setDay(live);
+            } catch (err) {
+              setError(err instanceof ApiRequestError ? err.message : "Could not delete meal group.");
+            }
+          })();
+        },
+      },
+    ]);
+  }
+
+  function goQuickCal(mealId: string) {
+    router.push({
+      pathname: "/(app)/diary/quick-cal",
+      params: { date, mealId },
+    } as Href);
+  }
+
+  async function openQuickCalFromDiary() {
+    try {
+      const meal = await resolveMealForDate(date);
+      if (meal) {
+        goQuickCal(meal.id);
+        return;
+      }
+      setQuickCalPickerVisible(true);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : "Could not open quick calories.");
+    }
+  }
+
+  function onSelectMealForQuickCal(mealId: string) {
+    setQuickCalPickerVisible(false);
+    const meal = meals.find((row) => row.id === mealId);
+    if (meal) {
+      void writeLastDiaryMeal({ mealId: meal.id, mealName: meal.name, date });
+    }
+    goQuickCal(mealId);
+  }
+
+  const meals = day?.meals ?? [];
   const remaining = day?.remaining;
   const totals = day?.totals;
 
@@ -117,31 +214,68 @@ export default function DiaryScreen() {
         </AppText>
       ) : null}
 
-      <Button label="Log food" onPress={() => router.push({ pathname: "/(app)/diary/log", params: { date } } as Href)} />
+      <Button label="Add meal group" onPress={() => setNameSheet({ kind: "create" })} />
+      <Button label="Quick calories" variant="secondary" onPress={() => void openQuickCalFromDiary()} />
       <Button label="My foods" variant="secondary" onPress={() => router.push("/(app)/diary/foods" as Href)} />
       <Button label="Targets" variant="ghost" onPress={() => router.push("/(app)/diary/profile" as Href)} />
 
-      {day && day.entries.length === 0 ? (
+      {day && meals.length === 0 ? (
         <AppText variant="body" color="muted">
-          Add foods you actually eat, then log grams for the day.
+          Add a meal group, then log foods with amounts for this day.
         </AppText>
       ) : null}
 
-      {day?.entries.map((entry) => (
-        <View key={entry.id} style={styles.entry}>
-          <View style={styles.entryCopy}>
-            <AppText variant="title">{entry.foodName}</AppText>
-            <AppText variant="caption" color="muted">
-              {entry.grams} g · {entry.nutrients.kcal} kcal
-            </AppText>
-          </View>
-          <Pressable onPress={() => void onDelete(entry.id)} accessibilityLabel={`Remove ${entry.foodName}`}>
-            <AppText variant="caption" color="danger">
-              Remove
-            </AppText>
-          </Pressable>
-        </View>
-      ))}
+      <View style={styles.meals}>
+        {meals.map((meal) => (
+          <DiaryMealSection
+            key={meal.id}
+            meal={meal}
+            collapsed={collapsedMeals.has(meal.id)}
+            onToggleCollapse={() => toggleMealCollapsed(meal.id)}
+            onPressEntry={(entry) =>
+              entry.kind === "quick"
+                ? router.push({
+                    pathname: "/(app)/diary/quick-cal",
+                    params: { date, mealId: meal.id, entryId: entry.id },
+                  } as Href)
+                : router.push({
+                    pathname: "/(app)/diary/log-food",
+                    params: { date, mealId: meal.id, entryId: entry.id },
+                  } as Href)
+            }
+            onAddFood={() =>
+              router.push({
+                pathname: "/(app)/diary/log",
+                params: { date, mealId: meal.id },
+              } as Href)
+            }
+            onQuickCal={() => goQuickCal(meal.id)}
+            onRename={() => setNameSheet({ kind: "rename", mealId: meal.id, initialName: meal.name })}
+            onDelete={() => onDeleteMeal(meal.id, meal.name)}
+          />
+        ))}
+      </View>
+
+      <DiaryMealPickerSheet
+        visible={quickCalPickerVisible}
+        meals={meals}
+        onClose={() => setQuickCalPickerVisible(false)}
+        onSelectMeal={onSelectMealForQuickCal}
+        onCreateMeal={() => {
+          setQuickCalPickerVisible(false);
+          setNameSheet({ kind: "create" });
+        }}
+      />
+
+      <DiaryMealNameSheet
+        visible={nameSheet != null}
+        title={nameSheet?.kind === "rename" ? "Rename meal group" : "New meal group"}
+        initialName={nameSheet?.kind === "rename" ? nameSheet.initialName : ""}
+        confirmLabel={nameSheet?.kind === "rename" ? "Save name" : "Add group"}
+        onClose={() => setNameSheet(null)}
+        onConfirm={onConfirmMealName}
+        loading={nameSaving}
+      />
     </Screen>
   );
 }
@@ -163,17 +297,7 @@ const styles = StyleSheet.create({
   microSection: {
     gap: tokens.space.sm,
   },
-  entry: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+  meals: {
     gap: tokens.space.md,
-    paddingVertical: tokens.space.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: tokens.border,
-  },
-  entryCopy: {
-    flex: 1,
-    gap: tokens.space.xs,
   },
 });

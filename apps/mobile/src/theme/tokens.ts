@@ -7,6 +7,7 @@ export const tokens = {
   textMuted: "#A8A093",
   accent: "#E8A87C",
   accentMuted: "rgba(232, 168, 124, 0.16)",
+  scrim: "rgba(14, 17, 22, 0.78)",
   danger: "#E26D5A",
   success: "#8FBF9F",
   space: {

@@ -20,6 +20,7 @@ import type {
   UserFood,
   UserPantryItem,
 } from "@savorly/shared";
+import { coerceDiaryDayResponse } from "@savorly/shared";
 import { getToken, clearSession } from "../auth/session";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -79,6 +80,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     throw new ApiRequestError("internal_error", "Empty response from the API.");
   }
   return data;
+}
+
+async function requestDiaryDay(path: string, init: RequestInit = {}): Promise<DiaryDayResponse> {
+  const data = await request<unknown>(path, init);
+  return coerceDiaryDayResponse(data);
 }
 
 export function login(email: string, password: string) {
@@ -288,16 +294,76 @@ export function deleteNutritionFood(id: string) {
 }
 
 export function fetchDiaryDay(date: string) {
-  return request<DiaryDayResponse>(`/nutrition/diary?date=${encodeURIComponent(date)}`);
+  return requestDiaryDay(`/nutrition/diary?date=${encodeURIComponent(date)}`);
 }
 
-export function addDiaryEntry(foodId: string, grams: number, date: string) {
-  return request<DiaryDayResponse>("/nutrition/diary", {
+export function createDiaryMeal(date: string, name: string) {
+  return requestDiaryDay("/nutrition/diary/meals", {
     method: "POST",
-    body: JSON.stringify({ foodId, grams, date }),
+    body: JSON.stringify({ date, name }),
+  });
+}
+
+export function updateDiaryMeal(id: string, body: { name?: string; sortOrder?: number }) {
+  return requestDiaryDay(`/nutrition/diary/meals/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteDiaryMeal(id: string) {
+  return requestDiaryDay(`/nutrition/diary/meals/${id}`, { method: "DELETE" });
+}
+
+export function addDiaryEntry(mealId: string, foodId: string, grams: number, date: string) {
+  return requestDiaryDay("/nutrition/diary", {
+    method: "POST",
+    body: JSON.stringify({ mealId, foodId, grams, date }),
+  });
+}
+
+export function updateDiaryEntry(id: string, grams: number) {
+  return requestDiaryDay(`/nutrition/diary/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ grams }),
+  });
+}
+
+export function addQuickDiaryEntry(body: {
+  mealId: string;
+  date: string;
+  label?: string;
+  kcal: number;
+  proteinG?: number;
+  carbsG?: number;
+  fatG?: number;
+}) {
+  return requestDiaryDay("/nutrition/diary/quick", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateQuickDiaryEntry(
+  id: string,
+  body: {
+    label?: string;
+    kcal: number;
+    proteinG?: number;
+    carbsG?: number;
+    fatG?: number;
+  },
+) {
+  return requestDiaryDay(`/nutrition/diary/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
   });
 }
 
 export function deleteDiaryEntry(id: string) {
-  return request<DiaryDayResponse>(`/nutrition/diary/${id}`, { method: "DELETE" });
+  return requestDiaryDay(`/nutrition/diary/${id}`, { method: "DELETE" });
+}
+
+export function fetchFrequentGrams(foodId: string) {
+  return request<{ grams: number[] }>(`/nutrition/foods/${foodId}/frequent-grams`);
 }

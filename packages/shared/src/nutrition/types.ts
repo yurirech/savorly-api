@@ -43,19 +43,33 @@ export type UserFoodDetail = UserFood & {
   attribution?: string;
 };
 
+export type DiaryEntryKind = "food" | "quick";
+
 export type DiaryEntry = {
   id: string;
   date: string;
-  foodId: string;
+  mealId: string;
+  kind: DiaryEntryKind;
+  foodId: string | null;
+  label?: string;
   foodName: string;
   grams: number;
   nutrients: NutrientVector;
   createdAt: string;
 };
 
+export type DiaryMealGroup = {
+  id: string;
+  date: string;
+  name: string;
+  sortOrder: number;
+  totals: NutrientVector;
+  entries: DiaryEntry[];
+};
+
 export type DiaryDayResponse = {
   date: string;
-  entries: DiaryEntry[];
+  meals: DiaryMealGroup[];
   totals: NutrientVector;
   remaining: Pick<NutrientVector, "kcal" | "proteinG" | "carbsG" | "fatG"> | null;
   targets: NutritionTargets | null;

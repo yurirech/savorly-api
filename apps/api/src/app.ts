@@ -32,15 +32,21 @@ import { parseMealSuggestionExcludeIds, suggestMeal } from "./pantry/suggestMeal
 import { suggestPantrySubstitutions } from "./pantry/suggestPantrySubstitutions";
 import {
   addDiaryEntry,
+  addQuickDiaryEntry,
+  createDiaryMeal,
   createManualFood,
   deleteDiaryEntry,
+  deleteDiaryMeal,
   deleteUserFood,
   getDiaryDay,
+  getFrequentGramsForFood,
   getNutritionProfile,
   importUsdaFood,
   importNevoFood,
   getOwnedUserFood,
   listUserFoods,
+  updateDiaryEntry,
+  updateDiaryMeal,
   upsertNutritionProfile,
 } from "./nutrition/nutritionStore";
 import { requireNevoFood, searchNevoFoods, nevoFoodsReady } from "./nutrition/nevoStore";
@@ -245,10 +251,47 @@ const importNevoFoodSchema = z.object({
 });
 
 const diaryEntrySchema = z.object({
+  mealId: z.string().uuid(),
   foodId: z.string().uuid(),
   grams: z.number().positive().max(5000),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
+
+const diaryEntryPatchSchema = z.object({
+  grams: z.number().positive().max(5000),
+});
+
+const quickDiaryEntrySchema = z.object({
+  mealId: z.string().uuid(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  label: z.string().trim().max(80).optional(),
+  kcal: z.number().finite().nonnegative(),
+  proteinG: z.number().finite().nonnegative().optional(),
+  carbsG: z.number().finite().nonnegative().optional(),
+  fatG: z.number().finite().nonnegative().optional(),
+});
+
+const quickDiaryEntryPatchSchema = z.object({
+  label: z.string().trim().max(80).optional(),
+  kcal: z.number().finite().nonnegative(),
+  proteinG: z.number().finite().nonnegative().optional(),
+  carbsG: z.number().finite().nonnegative().optional(),
+  fatG: z.number().finite().nonnegative().optional(),
+});
+
+const diaryMealSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  name: z.string().min(1).max(40),
+});
+
+const diaryMealPatchSchema = z
+  .object({
+    name: z.string().min(1).max(40).optional(),
+    sortOrder: z.number().int().min(0).optional(),
+  })
+  .refine((value) => value.name != null || value.sortOrder != null, {
+    message: "Provide a name or sort order to update.",
+  });
 
 export function createApp(db: Database, env: Env) {
   const app = new Hono();
@@ -481,6 +524,12 @@ export function createApp(db: Database, env: Env) {
     return c.json({ foods: hits, attribution: NEVO_ATTRIBUTION });
   });
 
+  app.get("/nutrition/foods/:id/frequent-grams", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const grams = await getFrequentGramsForFood(db, user.id, c.req.param("id"));
+    return c.json({ grams });
+  });
+
   app.get("/nutrition/foods/:id", async (c) => {
     const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
     const food = await getOwnedUserFood(db, user.id, c.req.param("id"));
@@ -538,9 +587,43 @@ export function createApp(db: Database, env: Env) {
     return c.json(await addDiaryEntry(db, user.id, body), 201);
   });
 
+  app.post("/nutrition/diary/quick", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = quickDiaryEntrySchema.parse(await c.req.json());
+    return c.json(await addQuickDiaryEntry(db, user.id, body), 201);
+  });
+
+  app.patch("/nutrition/diary/:id", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const raw = await c.req.json();
+    if (raw && typeof raw === "object" && "grams" in raw) {
+      diaryEntryPatchSchema.parse(raw);
+    } else {
+      quickDiaryEntryPatchSchema.parse(raw);
+    }
+    return c.json(await updateDiaryEntry(db, user.id, c.req.param("id"), raw));
+  });
+
   app.delete("/nutrition/diary/:id", async (c) => {
     const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
     return c.json(await deleteDiaryEntry(db, user.id, c.req.param("id")));
+  });
+
+  app.post("/nutrition/diary/meals", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = diaryMealSchema.parse(await c.req.json());
+    return c.json(await createDiaryMeal(db, user.id, body), 201);
+  });
+
+  app.patch("/nutrition/diary/meals/:id", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = diaryMealPatchSchema.parse(await c.req.json());
+    return c.json(await updateDiaryMeal(db, user.id, c.req.param("id"), body));
+  });
+
+  app.delete("/nutrition/diary/meals/:id", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    return c.json(await deleteDiaryMeal(db, user.id, c.req.param("id")));
   });
 
   return app;
