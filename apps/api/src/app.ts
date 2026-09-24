@@ -44,7 +44,6 @@ import {
   upsertNutritionProfile,
 } from "./nutrition/nutritionStore";
 import { requireNevoFood, searchNevoFoods, nevoFoodsReady } from "./nutrition/nevoStore";
-import { seedNevoReferenceIfEmpty } from "./nutrition/nevoSeed";
 import { fetchUsdaFood, searchUsdaFoods } from "./nutrition/usdaClient";
 import { NEVO_ATTRIBUTION } from "@savorly/shared";
 

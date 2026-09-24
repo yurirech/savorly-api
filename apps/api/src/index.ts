@@ -4,11 +4,13 @@ import { loadEnv } from "./config";
 import { createDb } from "./db/client";
 import { ensureAdminUser } from "./db/seedAdmin";
 import { ensureAdminDemoKitchen } from "./db/seedDemoKitchen";
+import { ensureNevoReferenceSynced } from "./nutrition/nevoSeed";
 
 const env = loadEnv();
 const db = createDb(env.databaseUrl);
 await ensureAdminUser(db, env.adminPassword);
 await ensureAdminDemoKitchen(db);
+await ensureNevoReferenceSynced(db);
 const app = createApp(db, env);
 
 serve({ fetch: app.fetch, port: env.port, hostname: "0.0.0.0" }, (info) => {
