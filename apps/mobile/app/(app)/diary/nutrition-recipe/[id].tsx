@@ -1,6 +1,6 @@
 import { type Href, router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import type { UserFood } from "@savorly/shared";
 import {
   addNutritionRecipeItem,
@@ -30,6 +30,9 @@ export default function NutritionRecipeScreen() {
   const [addGrams, setAddGrams] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [gramDrafts, setGramDrafts] = useState<Record<string, string>>({});
+  const [servingsDraft, setServingsDraft] = useState<string | null>(null);
+  const [cookedDraft, setCookedDraft] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     if (!id) return;
@@ -58,6 +61,17 @@ export default function NutritionRecipeScreen() {
     }
   }
 
+  function commitGrams(itemId: string, currentGrams: number | null, text: string) {
+    const grams = Number(text.replace(",", "."));
+    setGramDrafts((current) => {
+      const next = { ...current };
+      delete next[itemId];
+      return next;
+    });
+    if (!detail || !(grams > 0) || grams === currentGrams) return;
+    void run(() => updateNutritionRecipeItem(detail.id, itemId, { grams }));
+  }
+
   const libraryFoods = foods;
 
   return (
@@ -68,55 +82,88 @@ export default function NutritionRecipeScreen() {
       </AppText>
       {detail ? (
         <>
-          <Field
-            label="Servings"
-            value={String(detail.servings)}
-            keyboardType="numeric"
-            onChangeText={(value) => {
-              const servings = Number(value);
-              if (Number.isInteger(servings) && servings >= 1) {
-                void run(() => updateNutritionRecipe(detail.id, { servings }));
-              }
-            }}
-          />
-          <Field
-            label="Cooked weight g (optional)"
-            value={detail.cookedWeightG != null ? String(detail.cookedWeightG) : ""}
-            keyboardType="numeric"
-            placeholder={String(detail.ingredientGramsTotal || "")}
-            onChangeText={(value) => {
-              const trimmed = value.trim();
-              const cookedWeightG = trimmed ? Number(trimmed.replace(",", ".")) : null;
-              if (cookedWeightG == null || cookedWeightG > 0) {
-                void run(() => updateNutritionRecipe(detail.id, { cookedWeightG }));
-              }
-            }}
-          />
-          {detail.items.map((item) => (
-            <View key={item.id} style={styles.line}>
-              <AppText variant="title">{item.foodName || item.sourceLine}</AppText>
-              <AppText variant="caption" color="muted">
-                {item.foodId ? `${item.grams ?? "—"} g` : "Not matched"}
-              </AppText>
-              <Field
-                label="Grams"
-                value={item.grams != null ? String(item.grams) : ""}
+          <View style={styles.meta}>
+            <View style={styles.metaField}>
+              <AppText variant="caption" color="muted">Servings</AppText>
+              <TextInput
+                value={servingsDraft ?? String(detail.servings)}
                 keyboardType="numeric"
-                onChangeText={(value) => {
-                  const grams = Number(value.replace(",", "."));
-                  if (grams > 0) {
-                    void run(() => updateNutritionRecipeItem(detail.id, item.id, { grams }));
+                accessibilityLabel="Servings"
+                onChangeText={setServingsDraft}
+                onEndEditing={(event) => {
+                  setServingsDraft(null);
+                  const servings = Number(event.nativeEvent.text);
+                  if (Number.isInteger(servings) && servings >= 1 && servings !== detail.servings) {
+                    void run(() => updateNutritionRecipe(detail.id, { servings }));
                   }
                 }}
-              />
-              <Button label="Find food" variant="secondary" onPress={() => setPickingItemId(item.id)} />
-              <Button
-                label="Delete line"
-                variant="ghost"
-                onPress={() => void run(() => deleteNutritionRecipeItem(detail.id, item.id))}
+                onBlur={(event) => {
+                  setServingsDraft(null);
+                  const servings = Number(event.nativeEvent.text);
+                  if (Number.isInteger(servings) && servings >= 1 && servings !== detail.servings) {
+                    void run(() => updateNutritionRecipe(detail.id, { servings }));
+                  }
+                }}
+                style={styles.metaInput}
               />
             </View>
-          ))}
+            <View style={styles.metaField}>
+              <AppText variant="caption" color="muted">Cooked weight g</AppText>
+              <TextInput
+                value={cookedDraft ?? (detail.cookedWeightG != null ? String(detail.cookedWeightG) : "")}
+                keyboardType="numeric"
+                placeholder={String(detail.ingredientGramsTotal || "")}
+                placeholderTextColor={tokens.textMuted}
+                accessibilityLabel="Cooked weight g"
+                onChangeText={setCookedDraft}
+                onEndEditing={(event) => {
+                  setCookedDraft(null);
+                  const trimmed = event.nativeEvent.text.trim();
+                  const cookedWeightG = trimmed ? Number(trimmed.replace(",", ".")) : null;
+                  if ((cookedWeightG == null || cookedWeightG > 0) && cookedWeightG !== detail.cookedWeightG) {
+                    void run(() => updateNutritionRecipe(detail.id, { cookedWeightG }));
+                  }
+                }}
+                onBlur={(event) => {
+                  setCookedDraft(null);
+                  const trimmed = event.nativeEvent.text.trim();
+                  const cookedWeightG = trimmed ? Number(trimmed.replace(",", ".")) : null;
+                  if ((cookedWeightG == null || cookedWeightG > 0) && cookedWeightG !== detail.cookedWeightG) {
+                    void run(() => updateNutritionRecipe(detail.id, { cookedWeightG }));
+                  }
+                }}
+                style={styles.metaInput}
+              />
+            </View>
+          </View>
+          <View style={styles.list}>
+            {detail.items.map((item) => (
+              <View key={item.id} style={styles.row}>
+                <AppText variant="body" numberOfLines={1} color={item.foodId ? "text" : "muted"} style={styles.name}>
+                  {item.foodName || item.sourceLine}
+                </AppText>
+                <TextInput
+                  value={gramDrafts[item.id] ?? (item.grams != null ? String(item.grams) : "")}
+                  keyboardType="numeric"
+                  accessibilityLabel={`Grams for ${item.foodName || item.sourceLine}`}
+                  onChangeText={(value) => setGramDrafts((current) => ({ ...current, [item.id]: value }))}
+                  onEndEditing={(event) => commitGrams(item.id, item.grams, event.nativeEvent.text)}
+                  onBlur={(event) => commitGrams(item.id, item.grams, event.nativeEvent.text)}
+                  style={styles.grams}
+                />
+                <Pressable onPress={() => setPickingItemId(item.id)} hitSlop={8} accessibilityRole="button">
+                  <AppText variant="caption" color="accent">Find</AppText>
+                </Pressable>
+                <Pressable
+                  onPress={() => void run(() => deleteNutritionRecipeItem(detail.id, item.id))}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                >
+                  <AppText variant="caption" color="danger">Delete</AppText>
+                </Pressable>
+              </View>
+            ))}
+          </View>
           <Button label="Add ingredient" variant="secondary" onPress={() => setAdding(true)} />
           {pickingItemId || adding ? (
             <View style={styles.picker}>
@@ -196,18 +243,59 @@ export default function NutritionRecipeScreen() {
 }
 
 const styles = StyleSheet.create({
-  line: {
-    gap: tokens.space.xs,
-    padding: tokens.space.md,
-    borderWidth: 1,
-    borderColor: tokens.border,
-    borderRadius: tokens.radius.md,
+  meta: {
+    flexDirection: "row",
+    gap: tokens.space.sm,
   },
-  picker: { gap: tokens.space.sm },
-  food: {
-    padding: tokens.space.sm,
+  metaField: {
+    flex: 1,
+    gap: tokens.space.xs,
+  },
+  metaInput: {
+    color: tokens.text,
+    fontSize: tokens.type.body.fontSize,
+    fontFamily: tokens.font.body,
+    backgroundColor: tokens.surface,
     borderWidth: 1,
     borderColor: tokens.border,
-    borderRadius: tokens.radius.md,
+    borderRadius: tokens.radius.sm,
+    paddingHorizontal: tokens.space.sm,
+    paddingVertical: tokens.space.xs,
+    minHeight: 36,
+  },
+  list: {
+    borderTopWidth: 1,
+    borderTopColor: tokens.border,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.space.sm,
+    paddingVertical: tokens.space.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: tokens.border,
+  },
+  name: {
+    flex: 1,
+  },
+  grams: {
+    width: 64,
+    color: tokens.text,
+    fontSize: tokens.type.body.fontSize,
+    fontFamily: tokens.font.body,
+    textAlign: "right",
+    backgroundColor: tokens.surface,
+    borderWidth: 1,
+    borderColor: tokens.border,
+    borderRadius: tokens.radius.sm,
+    paddingHorizontal: tokens.space.sm,
+    paddingVertical: tokens.space.xs,
+    minHeight: 32,
+  },
+  picker: { gap: tokens.space.xs },
+  food: {
+    paddingVertical: tokens.space.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: tokens.border,
   },
 });
