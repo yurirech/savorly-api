@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, sql } from "drizzle-orm";
 import {
   buildDiaryMeals,
   buildQuickDiaryNutrients,
@@ -22,7 +22,9 @@ import {
   type UserFoodSource,
 } from "@savorly/shared";
 import type { Database } from "../db/client";
-import { diaryEntries, diaryMeals, nutritionProfiles, userFoods } from "../db/schema";
+import { diaryEntries, diaryMeals, nevoFoods, nutritionProfiles, userFoods, users } from "../db/schema";
+import { nevoFoodsReady } from "./nevoStore";
+import { STAPLE_NEVO_CODES } from "./stapleNevoCodes";
 import { AppError } from "../errors";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -82,9 +84,11 @@ export function foodFromRow(row: FoodRow): UserFood {
   return {
     id: row.id,
     name: row.name,
+    originalName: row.originalName,
     source: row.source as UserFoodSource,
     fdcId: row.fdcId,
     nevoCode: row.nevoCode,
+    nutritionRecipeId: row.nutritionRecipeId,
     per100g: requireNutrientVector(row.per100g, "Food nutrition"),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -273,6 +277,7 @@ export async function createManualFood(
     .values({
       userId,
       name: trimmed,
+      originalName: trimmed,
       source: "manual",
       fdcId: null,
       nevoCode: null,
@@ -304,6 +309,7 @@ export async function importUsdaFood(
     .values({
       userId,
       name: input.name.trim(),
+      originalName: input.name.trim(),
       source: "usda",
       fdcId: input.fdcId,
       nevoCode: null,
@@ -335,6 +341,7 @@ export async function importNevoFood(
     .values({
       userId,
       name: input.name.trim(),
+      originalName: input.name.trim(),
       source: "nevo",
       fdcId: null,
       nevoCode: input.nevoCode,
@@ -343,6 +350,23 @@ export async function importNevoFood(
     .returning();
   if (!row) {
     throw new AppError("internal_error", "Could not import food.", 500);
+  }
+  return foodFromRow(row);
+}
+
+export async function renameUserFood(db: Database, userId: string, foodId: string, name: string): Promise<UserFood> {
+  const food = await getOwnedUserFood(db, userId, foodId);
+  const trimmed = name.trim();
+  if (!trimmed || trimmed.length > 120) {
+    throw new AppError("validation_error", "Name must be 1–120 characters.", 400);
+  }
+  const [row] = await db
+    .update(userFoods)
+    .set({ name: trimmed, updatedAt: new Date() })
+    .where(and(eq(userFoods.id, food.id), eq(userFoods.userId, userId)))
+    .returning();
+  if (!row) {
+    throw new AppError("internal_error", "Could not rename food.", 500);
   }
   return foodFromRow(row);
 }
@@ -593,4 +617,45 @@ export async function getOwnedUserFood(db: Database, userId: string, foodId: str
     throw new AppError("not_found", "Food not found.", 404);
   }
   return foodFromRow(row);
+}
+
+export async function stapleFoodsImported(db: Database, userId: string): Promise<boolean> {
+  const [user] = await db
+    .select({ staplesImportedAt: users.staplesImportedAt })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return user?.staplesImportedAt != null;
+}
+
+export async function importStapleFoods(db: Database, userId: string): Promise<{ imported: true; added: number }> {
+  if (await stapleFoodsImported(db, userId)) {
+    return { imported: true, added: 0 };
+  }
+  if (!(await nevoFoodsReady(db))) {
+    throw new AppError("internal_error", "NEVO reference data is not loaded on this server yet.", 503);
+  }
+
+  const codes = [...STAPLE_NEVO_CODES];
+  const rows = await db.select().from(nevoFoods).where(inArray(nevoFoods.nevoCode, codes));
+  if (rows.length !== codes.length) {
+    throw new AppError("not_found", "A staple food is missing from the NEVO reference data.", 404);
+  }
+
+  const existing = await db
+    .select({ nevoCode: userFoods.nevoCode })
+    .from(userFoods)
+    .where(and(eq(userFoods.userId, userId), inArray(userFoods.nevoCode, codes)));
+  const already = new Set(existing.map((row) => row.nevoCode));
+
+  for (const row of rows) {
+    await importNevoFood(db, userId, {
+      nevoCode: row.nevoCode,
+      name: row.nameNl,
+      per100g: row.per100g as NutrientVector,
+    });
+  }
+
+  await db.update(users).set({ staplesImportedAt: new Date() }).where(eq(users.id, userId));
+  return { imported: true, added: rows.length - already.size };
 }

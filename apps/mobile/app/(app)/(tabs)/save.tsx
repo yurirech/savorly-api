@@ -3,6 +3,7 @@ import { Globe, InstagramLogo, NotePencil } from "phosphor-react-native";
 import { AppText } from "../../../src/components/AppText";
 import { Screen } from "../../../src/components/Screen";
 import { SourceCard } from "../../../src/components/SourceCard";
+import { setImportReturnTo } from "../../../src/store/reviewDraft";
 import { tokens } from "../../../src/theme/tokens";
 
 export default function ImportHubScreen() {
@@ -19,19 +20,28 @@ export default function ImportHubScreen() {
         title="Instagram Reel"
         subtitle="Public Reel URL"
         icon={<InstagramLogo size={22} color={tokens.accent} weight="fill" />}
-        onPress={() => router.push("/(app)/import/instagram")}
+        onPress={() => {
+          setImportReturnTo("/(app)/(tabs)/save");
+          router.push("/(app)/import/instagram");
+        }}
       />
       <SourceCard
         title="Recipe website"
         subtitle="JSON-LD first, then readable text"
         icon={<Globe size={22} color={tokens.accent} weight="regular" />}
-        onPress={() => router.push("/(app)/import/website")}
+        onPress={() => {
+          setImportReturnTo("/(app)/(tabs)/save");
+          router.push("/(app)/import/website");
+        }}
       />
       <SourceCard
         title="Paste text"
         subtitle="Caption, notes, or a full recipe"
         icon={<NotePencil size={22} color={tokens.accent} weight="regular" />}
-        onPress={() => router.push("/(app)/import/text")}
+        onPress={() => {
+          setImportReturnTo("/(app)/(tabs)/save");
+          router.push("/(app)/import/text");
+        }}
       />
     </Screen>
   );

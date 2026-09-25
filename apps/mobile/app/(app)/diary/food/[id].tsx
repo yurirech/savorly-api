@@ -32,6 +32,8 @@ import {
 
   deleteNutritionFood,
 
+  renameNutritionFood,
+
   fetchDiaryDay,
 
   fetchFrequentGrams,
@@ -82,6 +84,8 @@ function sourceLabel(source: UserFood["source"]): string {
 
   if (source === "usda") return "USDA";
 
+  if (source === "recipe") return "Recipe";
+
   return "Manual";
 
 }
@@ -127,6 +131,10 @@ export default function DiaryFoodDetailScreen() {
   const [defaultMeal, setDefaultMeal] = useState<{ id: string; name: string } | null>(null);
 
   const [logging, setLogging] = useState(false);
+
+  const [nameDraft, setNameDraft] = useState("");
+
+  const [renaming, setRenaming] = useState(false);
 
 
 
@@ -381,6 +389,7 @@ export default function DiaryFoodDetailScreen() {
       if (cached) {
 
         setFood(cached);
+        setNameDraft(cached.name);
 
         setError(null);
 
@@ -395,6 +404,7 @@ export default function DiaryFoodDetailScreen() {
           const live = await fetchNutritionFood(id);
 
           setFood(live.food);
+          setNameDraft(live.food.name);
 
           setAttribution(live.attribution);
 
@@ -421,6 +431,7 @@ export default function DiaryFoodDetailScreen() {
             if (fromList) {
 
               setFood(fromList);
+              setNameDraft(fromList.name);
 
               setError(null);
 
@@ -489,6 +500,33 @@ export default function DiaryFoodDetailScreen() {
     <Screen>
 
       <AppText variant="display">{food?.name ?? "Food"}</AppText>
+      {food ? (
+        <>
+          <Field label="Name" value={nameDraft} onChangeText={setNameDraft} />
+          <Button
+            label="Save name"
+            variant="secondary"
+            loading={renaming}
+            onPress={() => {
+              void (async () => {
+                const next = nameDraft.trim();
+                if (!next || next === food.name) return;
+                setRenaming(true);
+                setError(null);
+                try {
+                  const saved = await renameNutritionFood(food.id, next);
+                  setFood(saved.food);
+                  setNameDraft(saved.food.name);
+                } catch (err) {
+                  setError(err instanceof ApiRequestError ? err.message : "Could not rename food.");
+                } finally {
+                  setRenaming(false);
+                }
+              })();
+            }}
+          />
+        </>
+      ) : null}
 
       {food ? (
 

@@ -1,7 +1,7 @@
 import type { NutrientVector } from "./nutrients";
 import type { NutritionProfileInput, NutritionTargets } from "./targets";
 
-export type UserFoodSource = "usda" | "manual" | "nevo";
+export type UserFoodSource = "usda" | "manual" | "nevo" | "recipe";
 
 export type NutritionProfile = NutritionProfileInput & {
   updatedAt: string;
@@ -15,9 +15,11 @@ export type NutritionProfileResponse = {
 export type UserFood = {
   id: string;
   name: string;
+  originalName: string;
   source: UserFoodSource;
   fdcId: number | null;
   nevoCode: number | null;
+  nutritionRecipeId: string | null;
   per100g: NutrientVector;
   createdAt: string;
   updatedAt: string;

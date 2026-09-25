@@ -95,7 +95,13 @@ export default function ReviewScreen() {
         await setRecipeCookbooks(saved.recipe.id, selectedCookbookIds);
       }
       clearReviewDraft();
-      router.replace(`/(app)/recipe/${saved.recipe.id}`);
+      const destination = `/(app)/recipe/${saved.recipe.id}` as Href;
+      if (initial?.editingId) {
+        router.dismissTo(destination);
+        return;
+      }
+      router.dismissTo((initial?.returnTo ?? "/(app)/(tabs)") as Href);
+      router.push(destination);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save. Check your connection.");
     } finally {

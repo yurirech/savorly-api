@@ -282,10 +282,25 @@ export function importUsdaFood(fdcId: number, name?: string) {
   });
 }
 
+export function stapleFoodsStatus() {
+  return request<{ imported: boolean }>("/nutrition/foods/staples");
+}
+
+export function importStapleFoods() {
+  return request<{ imported: true; added: number }>("/nutrition/foods/staples", { method: "POST" });
+}
+
 export function importNevoFood(nevoCode: number, name?: string) {
   return request<{ food: UserFood; attribution: string }>("/nutrition/foods/import/nevo", {
     method: "POST",
     body: JSON.stringify({ nevoCode, name }),
+  });
+}
+
+export function renameNutritionFood(id: string, name: string) {
+  return request<{ food: UserFood }>(`/nutrition/foods/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name }),
   });
 }
 
@@ -366,4 +381,80 @@ export function deleteDiaryEntry(id: string) {
 
 export function fetchFrequentGrams(foodId: string) {
   return request<{ grams: number[] }>(`/nutrition/foods/${foodId}/frequent-grams`);
+}
+
+export type NutritionRecipeDetail = {
+  id: string;
+  sourceRecipeId: string | null;
+  title: string;
+  servings: number;
+  cookedWeightG: number | null;
+  items: Array<{
+    id: string;
+    sourceLine: string;
+    foodId: string | null;
+    foodName?: string | null;
+    grams: number | null;
+  }>;
+  ingredientGramsTotal: number;
+  recipeWeightG: number;
+  totals: NutrientVector;
+  perServing: NutrientVector;
+  complete: boolean;
+  libraryFood: UserFood | null;
+};
+
+export function listNutritionRecipesForCookbook(sourceRecipeId: string) {
+  return request<{ foods: UserFood[]; recipes: { id: string; title: string }[] }>(
+    `/nutrition/recipes?sourceRecipeId=${encodeURIComponent(sourceRecipeId)}`,
+  );
+}
+
+export function createNutritionRecipeFromCookbook(recipeId: string) {
+  return request<NutritionRecipeDetail>("/nutrition/recipes/from-cookbook", {
+    method: "POST",
+    body: JSON.stringify({ recipeId }),
+  });
+}
+
+export function fetchNutritionRecipe(id: string) {
+  return request<NutritionRecipeDetail>(`/nutrition/recipes/${id}`);
+}
+
+export function updateNutritionRecipe(
+  id: string,
+  body: { title?: string; servings?: number; cookedWeightG?: number | null },
+) {
+  return request<NutritionRecipeDetail>(`/nutrition/recipes/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateNutritionRecipeItem(
+  recipeId: string,
+  itemId: string,
+  body: { foodId?: string | null; grams?: number | null },
+) {
+  return request<NutritionRecipeDetail>(`/nutrition/recipes/${recipeId}/items/${itemId}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function addNutritionRecipeItem(recipeId: string, foodId: string, grams: number) {
+  return request<NutritionRecipeDetail>(`/nutrition/recipes/${recipeId}/items`, {
+    method: "POST",
+    body: JSON.stringify({ foodId, grams }),
+  });
+}
+
+export function deleteNutritionRecipeItem(recipeId: string, itemId: string) {
+  return request<NutritionRecipeDetail>(`/nutrition/recipes/${recipeId}/items/${itemId}`, {
+    method: "DELETE",
+  });
+}
+
+export function publishNutritionRecipe(id: string) {
+  return request<NutritionRecipeDetail>(`/nutrition/recipes/${id}/publish`, { method: "POST" });
 }

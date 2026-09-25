@@ -201,3 +201,12 @@ export {
   validateQuickDiaryKcal,
 } from "./nutrition/quickDiaryEntry";
 export type { QuickDiaryNutrientsInput } from "./nutrition/quickDiaryEntry";
+export {
+  computeNutritionRecipe,
+  isNutritionRecipeComplete,
+} from "./nutrition/nutritionRecipe";
+export type {
+  NutritionRecipeComputeInput,
+  NutritionRecipeItemInput,
+  NutritionRecipeTotals,
+} from "./nutrition/nutritionRecipe";

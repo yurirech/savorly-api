@@ -4,7 +4,7 @@ import { Check, Copy, Minus, Plus } from "phosphor-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Image, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { CookbookSummary, DisplayUnit, PantrySubstitutionResponse, SavedRecipe } from "@savorly/shared";
+import type { CookbookSummary, DisplayUnit, PantrySubstitutionResponse, SavedRecipe, UserFood } from "@savorly/shared";
 import {
   displayIngredient,
   formatIngredientLine,
@@ -14,7 +14,7 @@ import {
   isPantryIngredient,
   recipeNotesText,
 } from "@savorly/shared";
-import { deleteRecipe, getRecipe, listCookbooks, listRecipeCookbooks, requestPantrySubstitutions, setRecipeCookbooks, updateRecipe, ApiRequestError } from "../../../src/api/client";
+import { createNutritionRecipeFromCookbook, deleteRecipe, getRecipe, listCookbooks, listNutritionRecipesForCookbook, listRecipeCookbooks, requestPantrySubstitutions, setRecipeCookbooks, updateRecipe, ApiRequestError } from "../../../src/api/client";
 import { imageForCategory } from "../../../src/assets/categoryImages";
 import { AppText } from "../../../src/components/AppText";
 import { Button } from "../../../src/components/Button";
@@ -57,6 +57,8 @@ export default function RecipeDetailScreen() {
   const [substitutionResult, setSubstitutionResult] = useState<PantrySubstitutionResponse | null>(null);
   const [substitutionError, setSubstitutionError] = useState<string | null>(null);
   const [suggestingSwaps, setSuggestingSwaps] = useState(false);
+  const [diaryCopies, setDiaryCopies] = useState<UserFood[]>([]);
+  const [openingDiary, setOpeningDiary] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const insets = useSafeAreaInsets();
 
@@ -110,6 +112,9 @@ export default function RecipeDetailScreen() {
       void reloadRecipe();
       void reloadCookbooks();
       void reloadPantry();
+      void listNutritionRecipesForCookbook(recipeId)
+        .then((linked) => setDiaryCopies(linked.foods))
+        .catch(() => setDiaryCopies([]));
     }, [recipeId, reloadRecipe, reloadCookbooks, reloadPantry]),
   );
 
@@ -260,7 +265,7 @@ export default function RecipeDetailScreen() {
     if (!substitutionResult) {
       return;
     }
-    setReviewDraft(substitutionResult.adaptedRecipe, recipe.id);
+    setReviewDraft(substitutionResult.adaptedRecipe, recipe.id, `/(app)/recipe/${recipe.id}`);
     setSubstitutionsSheetOpen(false);
     router.push("/(app)/review");
   }
@@ -441,11 +446,47 @@ export default function RecipeDetailScreen() {
             setPickerOpen(true);
           }}
         />
+        {diaryCopies[0] ? (
+          <Pressable
+            onPress={() => router.push(`/(app)/diary/food/${diaryCopies[0]!.id}` as Href)}
+            style={styles.diaryChip}
+            accessibilityRole="button"
+            accessibilityLabel={diaryCopies[0].name}
+          >
+            <AppText variant="caption">My foods · {diaryCopies[0].name}</AppText>
+          </Pressable>
+        ) : null}
+        <Button
+          label="Use for diary"
+          variant="secondary"
+          loading={openingDiary}
+          onPress={() => {
+            if (!recipe) return;
+            setOpeningDiary(true);
+            void (async () => {
+              try {
+                const linked = await listNutritionRecipesForCookbook(recipe.id);
+                const savedIds = new Set(linked.foods.map((food) => food.nutritionRecipeId));
+                const draft = linked.recipes.find((row) => !savedIds.has(row.id));
+                if (draft) {
+                  router.push(`/(app)/diary/nutrition-recipe/${draft.id}` as Href);
+                  return;
+                }
+                const created = await createNutritionRecipeFromCookbook(recipe.id);
+                router.push(`/(app)/diary/nutrition-recipe/${created.id}` as Href);
+              } catch (err) {
+                setError(err instanceof ApiRequestError ? err.message : "Could not open diary copy.");
+              } finally {
+                setOpeningDiary(false);
+              }
+            })();
+          }}
+        />
         <Button
           label="Edit"
           variant="secondary"
           onPress={() => {
-            setReviewDraft(recipe, recipe.id);
+            setReviewDraft(recipe, recipe.id, `/(app)/recipe/${recipe.id}`);
             router.push("/(app)/review");
           }}
         />
@@ -506,6 +547,14 @@ export default function RecipeDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  diaryChip: {
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderColor: tokens.border,
+    borderRadius: tokens.radius.full,
+    paddingHorizontal: tokens.space.md,
+    paddingVertical: tokens.space.xs,
+  },
   heroWrap: {
     height: 320,
     justifyContent: "flex-end",

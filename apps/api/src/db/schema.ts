@@ -18,6 +18,7 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  staplesImportedAt: timestamp("staples_imported_at", { withTimezone: true }),
 });
 
 export const recipes = pgTable(
@@ -130,9 +131,11 @@ export const userFoods = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
+    originalName: text("original_name").notNull(),
     source: text("source").notNull(),
     fdcId: integer("fdc_id"),
     nevoCode: integer("nevo_code"),
+    nutritionRecipeId: uuid("nutrition_recipe_id"),
     per100g: jsonb("per_100g").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -195,4 +198,36 @@ export const diaryEntries = pgTable(
     index("diary_entries_user_date_idx").on(table.userId, table.date),
     index("diary_entries_meal_idx").on(table.mealId),
   ],
+);
+
+export const nutritionRecipes = pgTable(
+  "nutrition_recipes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    sourceRecipeId: uuid("source_recipe_id").references(() => recipes.id, { onDelete: "set null" }),
+    title: text("title").notNull(),
+    servings: integer("servings").notNull().default(1),
+    cookedWeightG: real("cooked_weight_g"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("nutrition_recipes_user_source_idx").on(table.userId, table.sourceRecipeId)],
+);
+
+export const nutritionRecipeItems = pgTable(
+  "nutrition_recipe_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    nutritionRecipeId: uuid("nutrition_recipe_id")
+      .notNull()
+      .references(() => nutritionRecipes.id, { onDelete: "cascade" }),
+    sourceLine: text("source_line").notNull(),
+    foodId: uuid("food_id").references(() => userFoods.id, { onDelete: "set null" }),
+    grams: real("grams"),
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (table) => [index("nutrition_recipe_items_recipe_idx").on(table.nutritionRecipeId)],
 );

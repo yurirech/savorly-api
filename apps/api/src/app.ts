@@ -43,12 +43,26 @@ import {
   getNutritionProfile,
   importUsdaFood,
   importNevoFood,
+  importStapleFoods,
+  stapleFoodsImported,
   getOwnedUserFood,
   listUserFoods,
+  renameUserFood,
   updateDiaryEntry,
   updateDiaryMeal,
   upsertNutritionProfile,
 } from "./nutrition/nutritionStore";
+import {
+  addNutritionRecipeItem,
+  createNutritionRecipeFromCookbook,
+  deleteNutritionRecipe,
+  deleteNutritionRecipeItem,
+  getNutritionRecipe,
+  listNutritionRecipesForSource,
+  publishNutritionRecipe,
+  updateNutritionRecipe,
+  updateNutritionRecipeItem,
+} from "./nutrition/nutritionRecipeStore";
 import { requireNevoFood, searchNevoFoods, nevoFoodsReady } from "./nutrition/nevoStore";
 import { fetchUsdaFood, searchUsdaFoods } from "./nutrition/usdaClient";
 import { NEVO_ATTRIBUTION } from "@savorly/shared";
@@ -530,6 +544,88 @@ export function createApp(db: Database, env: Env) {
     return c.json({ grams });
   });
 
+  app.patch("/nutrition/foods/:id", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = z.object({ name: z.string().trim().min(1).max(120) }).parse(await c.req.json());
+    return c.json({ food: await renameUserFood(db, user.id, c.req.param("id"), body.name) });
+  });
+
+  app.get("/nutrition/recipes", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const sourceRecipeId = c.req.query("sourceRecipeId");
+    if (!sourceRecipeId) {
+      return c.json({ error: { code: "validation_error", message: "sourceRecipeId is required." } }, 400);
+    }
+    return c.json(await listNutritionRecipesForSource(db, user.id, sourceRecipeId));
+  });
+
+  app.post("/nutrition/recipes/from-cookbook", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = z.object({ recipeId: z.string().uuid() }).parse(await c.req.json());
+    return c.json(await createNutritionRecipeFromCookbook(db, user.id, body.recipeId), 201);
+  });
+
+  app.get("/nutrition/recipes/:id", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    return c.json(await getNutritionRecipe(db, user.id, c.req.param("id")));
+  });
+
+  app.patch("/nutrition/recipes/:id", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = z
+      .object({
+        title: z.string().trim().min(1).max(120).optional(),
+        servings: z.number().int().min(1).optional(),
+        cookedWeightG: z.number().positive().nullable().optional(),
+      })
+      .parse(await c.req.json());
+    return c.json(await updateNutritionRecipe(db, user.id, c.req.param("id"), body));
+  });
+
+  app.post("/nutrition/recipes/:id/publish", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    return c.json(await publishNutritionRecipe(db, user.id, c.req.param("id")));
+  });
+
+  app.delete("/nutrition/recipes/:id", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    await deleteNutritionRecipe(db, user.id, c.req.param("id"));
+    return c.body(null, 204);
+  });
+
+  app.post("/nutrition/recipes/:id/items", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = z
+      .object({
+        foodId: z.string().uuid(),
+        grams: z.number().positive(),
+        sourceLine: z.string().trim().max(120).optional(),
+      })
+      .parse(await c.req.json());
+    return c.json(await addNutritionRecipeItem(db, user.id, c.req.param("id"), body), 201);
+  });
+
+  app.patch("/nutrition/recipes/:id/items/:itemId", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = z
+      .object({
+        foodId: z.string().uuid().nullable().optional(),
+        grams: z.number().positive().nullable().optional(),
+      })
+      .parse(await c.req.json());
+    return c.json(await updateNutritionRecipeItem(db, user.id, c.req.param("id"), c.req.param("itemId"), body));
+  });
+
+  app.delete("/nutrition/recipes/:id/items/:itemId", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    return c.json(await deleteNutritionRecipeItem(db, user.id, c.req.param("id"), c.req.param("itemId")));
+  });
+
+  app.get("/nutrition/foods/staples", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    return c.json({ imported: await stapleFoodsImported(db, user.id) });
+  });
+
   app.get("/nutrition/foods/:id", async (c) => {
     const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
     const food = await getOwnedUserFood(db, user.id, c.req.param("id"));
@@ -552,6 +648,11 @@ export function createApp(db: Database, env: Env) {
     const imported = await fetchUsdaFood(body.fdcId, env, body.name);
     const food = await importUsdaFood(db, user.id, imported);
     return c.json({ food }, 201);
+  });
+
+  app.post("/nutrition/foods/staples", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    return c.json(await importStapleFoods(db, user.id));
   });
 
   app.post("/nutrition/foods/import/nevo", async (c) => {

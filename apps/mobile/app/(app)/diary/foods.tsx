@@ -2,7 +2,7 @@ import { type Href, router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import type { UserFood } from "@savorly/shared";
-import { ApiRequestError, listNutritionFoods } from "../../../src/api/client";
+import { ApiRequestError, importStapleFoods, listNutritionFoods, stapleFoodsStatus } from "../../../src/api/client";
 import { AppText } from "../../../src/components/AppText";
 import { Button } from "../../../src/components/Button";
 import { Field } from "../../../src/components/Field";
@@ -14,11 +14,14 @@ export default function DiaryFoodsScreen() {
   const [query, setQuery] = useState("");
   const [foods, setFoods] = useState<UserFood[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [staplesImported, setStaplesImported] = useState(false);
+  const [importingStaples, setImportingStaples] = useState(false);
 
   const load = useCallback(async (value: string) => {
     try {
-      const live = await listNutritionFoods(value);
+      const [live, staples] = await Promise.all([listNutritionFoods(value), stapleFoodsStatus()]);
       setFoods(live.foods);
+      setStaplesImported(staples.imported);
       setError(null);
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : "Could not load foods.");
@@ -42,7 +45,22 @@ export default function DiaryFoodsScreen() {
         A short list of what you actually eat. Search NEVO for Dutch generics, USDA for US staples, or type a label yourself.
       </AppText>
       <Field label="Search my foods" value={query} onChangeText={setQuery} variant="search" />
-      <Button label="Search NEVO" onPress={() => router.push("/(app)/diary/nevo-search" as Href)} />
+      <Button
+        label={staplesImported ? "Staples added" : "Add my staples"}
+        disabled={staplesImported}
+        loading={importingStaples}
+        onPress={() => {
+          setImportingStaples(true);
+          setError(null);
+          void importStapleFoods()
+            .then(() => load(""))
+            .catch((err: unknown) => {
+              setError(err instanceof ApiRequestError ? err.message : "Could not add staples.");
+            })
+            .finally(() => setImportingStaples(false));
+        }}
+      />
+      <Button label="Search NEVO" variant="secondary" onPress={() => router.push("/(app)/diary/nevo-search" as Href)} />
       <Button label="Search USDA" variant="secondary" onPress={() => router.push("/(app)/diary/usda-search" as Href)} />
       <Button label="Add manually" variant="secondary" onPress={() => router.push("/(app)/diary/food-form" as Href)} />
       {error ? (

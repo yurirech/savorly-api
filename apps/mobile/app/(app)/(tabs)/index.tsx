@@ -11,6 +11,7 @@ import { Screen } from "../../../src/components/Screen";
 import { SectionHeader } from "../../../src/components/SectionHeader";
 import { SourceCard } from "../../../src/components/SourceCard";
 import { replaceCache, searchCachedRecipes } from "../../../src/db/cache";
+import { setImportReturnTo } from "../../../src/store/reviewDraft";
 import { tokens } from "../../../src/theme/tokens";
 
 export default function HomeScreen() {
@@ -93,19 +94,28 @@ export default function HomeScreen() {
         title="Instagram"
         subtitle="Public Reel URL"
         icon={<InstagramLogo size={22} color={tokens.accent} weight="fill" />}
-        onPress={() => router.push("/(app)/import/instagram")}
+        onPress={() => {
+          setImportReturnTo("/(app)/(tabs)");
+          router.push("/(app)/import/instagram");
+        }}
       />
       <SourceCard
         title="Website"
         subtitle="Recipe page URL"
         icon={<Globe size={22} color={tokens.accent} weight="regular" />}
-        onPress={() => router.push("/(app)/import/website")}
+        onPress={() => {
+          setImportReturnTo("/(app)/(tabs)");
+          router.push("/(app)/import/website");
+        }}
       />
       <SourceCard
         title="Paste text"
         subtitle="Notes, caption, or a full recipe"
         icon={<NotePencil size={22} color={tokens.accent} weight="regular" />}
-        onPress={() => router.push("/(app)/import/text")}
+        onPress={() => {
+          setImportReturnTo("/(app)/(tabs)");
+          router.push("/(app)/import/text");
+        }}
       />
     </Screen>
   );

@@ -147,7 +147,7 @@ export default function CreateScreen() {
 
   function looksGood() {
     if (!recipe) return;
-    setReviewDraft(recipe);
+    setReviewDraft(recipe, undefined, "/(app)/(tabs)/create");
     router.push("/(app)/review" as Href);
   }
 
