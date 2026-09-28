@@ -7,6 +7,7 @@ import { AppText } from "../../../src/components/AppText";
 import { Button } from "../../../src/components/Button";
 import { Field } from "../../../src/components/Field";
 import { Screen } from "../../../src/components/Screen";
+import { SegmentedControl } from "../../../src/components/SegmentedControl";
 import { tokens } from "../../../src/theme/tokens";
 import { setCachedFood } from "../../../src/diary/foodDetailCache";
 
@@ -16,6 +17,7 @@ export default function DiaryFoodsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [staplesImported, setStaplesImported] = useState(false);
   const [importingStaples, setImportingStaples] = useState(false);
+  const [tab, setTab] = useState<"all" | "recipes">("all");
 
   const load = useCallback(async (value: string) => {
     try {
@@ -34,9 +36,17 @@ export default function DiaryFoodsScreen() {
     }, [load]),
   );
 
-  const visible = query.trim()
+  const searched = query.trim()
     ? foods.filter((food) => food.name.toLowerCase().includes(query.trim().toLowerCase()))
     : foods;
+  const visible = tab === "recipes" ? searched.filter((food) => food.source === "recipe") : searched;
+
+  function sourceCaption(source: UserFood["source"]): string {
+    if (source === "nevo") return "NEVO";
+    if (source === "usda") return "USDA";
+    if (source === "recipe") return "Recipe";
+    return "Manual";
+  }
 
   return (
     <Screen>
@@ -45,7 +55,16 @@ export default function DiaryFoodsScreen() {
         A short list of what you actually eat. Search NEVO for Dutch generics, USDA for US staples, or type a label yourself.
       </AppText>
       <Field label="Search my foods" value={query} onChangeText={setQuery} variant="search" />
-      <Button
+      <SegmentedControl
+        value={tab}
+        onChange={setTab}
+        options={[
+          { value: "all", label: "All foods" },
+          { value: "recipes", label: "My recipes" },
+        ]}
+      />
+      <View style={styles.actions}>
+      <Button size="compact"
         label={staplesImported ? "Staples added" : "Add my staples"}
         disabled={staplesImported}
         loading={importingStaples}
@@ -60,9 +79,10 @@ export default function DiaryFoodsScreen() {
             .finally(() => setImportingStaples(false));
         }}
       />
-      <Button label="Search NEVO" variant="secondary" onPress={() => router.push("/(app)/diary/nevo-search" as Href)} />
-      <Button label="Search USDA" variant="secondary" onPress={() => router.push("/(app)/diary/usda-search" as Href)} />
-      <Button label="Add manually" variant="secondary" onPress={() => router.push("/(app)/diary/food-form" as Href)} />
+      <Button size="compact" label="Search NEVO" variant="secondary" onPress={() => router.push("/(app)/diary/nevo-search" as Href)} />
+      <Button size="compact" label="Search USDA" variant="secondary" onPress={() => router.push("/(app)/diary/usda-search" as Href)} />
+      <Button size="compact" label="Add manually" variant="secondary" onPress={() => router.push("/(app)/diary/food-form" as Href)} />
+      </View>
       {error ? (
         <AppText variant="body" color="danger">
           {error}
@@ -87,8 +107,7 @@ export default function DiaryFoodsScreen() {
           <View style={styles.copy}>
             <AppText variant="title">{food.name}</AppText>
             <AppText variant="caption" color="muted">
-              {food.per100g.kcal} kcal / 100 g ·{" "}
-              {food.source === "nevo" ? "NEVO" : food.source === "usda" ? "USDA" : "Manual"}
+              {food.per100g.kcal} kcal / 100 g · {sourceCaption(food.source)}
             </AppText>
           </View>
         </Pressable>
@@ -98,6 +117,12 @@ export default function DiaryFoodsScreen() {
 }
 
 const styles = StyleSheet.create({
+  actions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: tokens.space.sm,
+  },
   row: {
     flexDirection: "row",
     alignItems: "center",

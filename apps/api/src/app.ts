@@ -33,6 +33,11 @@ import { suggestPantrySubstitutions } from "./pantry/suggestPantrySubstitutions"
 import {
   addDiaryEntry,
   addQuickDiaryEntry,
+  copyDiaryEntry,
+  copyPreviousDiaryMeal,
+  listMealStapleNames,
+  logMealStaples,
+  setMealStaple,
   createDiaryMeal,
   createManualFood,
   deleteDiaryEntry,
@@ -54,6 +59,7 @@ import {
 } from "./nutrition/nutritionStore";
 import {
   addNutritionRecipeItem,
+  createNutritionRecipe,
   createNutritionRecipeFromCookbook,
   deleteNutritionRecipe,
   deleteNutritionRecipeItem,
@@ -87,6 +93,7 @@ const generatedRecipeSchema = z.object({
       notes: z.string().nullable().optional(),
       canonicalKey: z.string().nullable().optional(),
       gramsPerCup: z.number().nullable().optional(),
+      lineKind: z.enum(["ingredient", "section"]).optional(),
     }),
   ),
   steps: z.array(
@@ -267,12 +274,16 @@ const importNevoFoodSchema = z.object({
 const diaryEntrySchema = z.object({
   mealId: z.string().uuid(),
   foodId: z.string().uuid(),
-  grams: z.number().positive().max(5000),
+  grams: z.number().nonnegative().max(5000),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 
 const diaryEntryPatchSchema = z.object({
-  grams: z.number().positive().max(5000),
+  grams: z.number().nonnegative().max(5000),
+});
+
+const diaryEntryCopySchema = z.object({
+  mealId: z.string().uuid(),
 });
 
 const quickDiaryEntrySchema = z.object({
@@ -381,6 +392,30 @@ export function createApp(db: Database, env: Env) {
     const body = cookbookIdsSchema.parse(await c.req.json());
     const cookbookIds = await setRecipeCookbooks(db, user.id, c.req.param("id"), body.cookbookIds);
     return c.json({ cookbookIds });
+  });
+
+  app.post("/recipes/:id/copy", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const source = await getRecipe(db, user.id, c.req.param("id"));
+    const saved = await saveRecipe(db, user.id, {
+      title: `${source.title} copy`,
+      category: source.category,
+      servings: source.servings,
+      prepTimeMinutes: source.prepTimeMinutes,
+      cookTimeMinutes: source.cookTimeMinutes,
+      ingredients: source.ingredients,
+      steps: source.steps,
+      tags: source.tags,
+      notes: source.notes,
+      uncertainties: source.uncertainties,
+      nutrition: source.nutrition,
+      source: source.source,
+    });
+    const cookbookIds = await listCookbookIdsForRecipe(db, user.id, source.id);
+    if (cookbookIds.length > 0) {
+      await setRecipeCookbooks(db, user.id, saved.id, cookbookIds);
+    }
+    return c.json({ recipe: saved }, 201);
   });
 
   app.get("/recipes/:id", async (c) => {
@@ -559,6 +594,12 @@ export function createApp(db: Database, env: Env) {
     return c.json(await listNutritionRecipesForSource(db, user.id, sourceRecipeId));
   });
 
+  app.post("/nutrition/recipes", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = z.object({ title: z.string().trim().min(1).max(120) }).parse(await c.req.json());
+    return c.json(await createNutritionRecipe(db, user.id, body.title), 201);
+  });
+
   app.post("/nutrition/recipes/from-cookbook", async (c) => {
     const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
     const body = z.object({ recipeId: z.string().uuid() }).parse(await c.req.json());
@@ -577,6 +618,7 @@ export function createApp(db: Database, env: Env) {
         title: z.string().trim().min(1).max(120).optional(),
         servings: z.number().int().min(1).optional(),
         cookedWeightG: z.number().positive().nullable().optional(),
+        sourceRecipeId: z.string().uuid().nullable().optional(),
       })
       .parse(await c.req.json());
     return c.json(await updateNutritionRecipe(db, user.id, c.req.param("id"), body));
@@ -710,6 +752,12 @@ export function createApp(db: Database, env: Env) {
     return c.json(await deleteDiaryEntry(db, user.id, c.req.param("id")));
   });
 
+  app.post("/nutrition/diary/:id/copy", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = diaryEntryCopySchema.parse(await c.req.json());
+    return c.json(await copyDiaryEntry(db, user.id, c.req.param("id"), body.mealId));
+  });
+
   app.post("/nutrition/diary/meals", async (c) => {
     const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
     const body = diaryMealSchema.parse(await c.req.json());
@@ -720,6 +768,33 @@ export function createApp(db: Database, env: Env) {
     const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
     const body = diaryMealPatchSchema.parse(await c.req.json());
     return c.json(await updateDiaryMeal(db, user.id, c.req.param("id"), body));
+  });
+
+  app.post("/nutrition/diary/meals/:id/copy-previous", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    return c.json(await copyPreviousDiaryMeal(db, user.id, c.req.param("id")));
+  });
+
+  app.post("/nutrition/diary/meals/:id/staples", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    return c.json(await logMealStaples(db, user.id, c.req.param("id")));
+  });
+
+  app.get("/nutrition/foods/:id/meal-staples", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    return c.json({ mealNames: await listMealStapleNames(db, user.id, c.req.param("id")) });
+  });
+
+  app.put("/nutrition/foods/:id/meal-staples", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = z
+      .object({
+        mealName: z.string().trim().min(1).max(40),
+        enabled: z.boolean(),
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      })
+      .parse(await c.req.json());
+    return c.json({ mealNames: await setMealStaple(db, user.id, c.req.param("id"), body) });
   });
 
   app.delete("/nutrition/diary/meals/:id", async (c) => {

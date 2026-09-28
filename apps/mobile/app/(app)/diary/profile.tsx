@@ -135,7 +135,7 @@ export default function DiaryProfileScreen() {
           {error}
         </AppText>
       ) : null}
-      <Button label="Save targets" onPress={() => void onSave()} loading={saving} />
+      <Button size="compact" label="Save targets" onPress={() => void onSave()} loading={saving} />
     </Screen>
   );
 }

@@ -7,7 +7,9 @@ import {
   ApiRequestError,
   deleteNutritionRecipeItem,
   fetchNutritionRecipe,
+  getRecipe,
   listNutritionFoods,
+  listRecipes,
   publishNutritionRecipe,
   updateNutritionRecipe,
   updateNutritionRecipeItem,
@@ -26,6 +28,7 @@ export default function NutritionRecipeScreen() {
   const [foods, setFoods] = useState<UserFood[]>([]);
   const [pickingItemId, setPickingItemId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [foodQuery, setFoodQuery] = useState("");
   const [addFoodId, setAddFoodId] = useState<string | null>(null);
   const [addGrams, setAddGrams] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -33,12 +36,22 @@ export default function NutritionRecipeScreen() {
   const [gramDrafts, setGramDrafts] = useState<Record<string, string>>({});
   const [servingsDraft, setServingsDraft] = useState<string | null>(null);
   const [cookedDraft, setCookedDraft] = useState<string | null>(null);
+  const [linkedTitle, setLinkedTitle] = useState<string | null>(null);
+  const [linking, setLinking] = useState(false);
+  const [cookbookRecipes, setCookbookRecipes] = useState<Array<{ id: string; title: string }>>([]);
+  const [cookbookLoaded, setCookbookLoaded] = useState(false);
 
   const reload = useCallback(async () => {
     if (!id) return;
     const [live, library] = await Promise.all([fetchNutritionRecipe(id), listNutritionFoods()]);
     setDetail(live);
     setFoods(library.foods.filter((food) => food.source !== "recipe"));
+    if (live.sourceRecipeId) {
+      const saved = await getRecipe(live.sourceRecipeId);
+      setLinkedTitle(saved.recipe.title);
+    } else {
+      setLinkedTitle(null);
+    }
   }, [id]);
 
   useFocusEffect(
@@ -136,6 +149,71 @@ export default function NutritionRecipeScreen() {
               />
             </View>
           </View>
+          {detail.sourceRecipeId ? (
+            <View style={styles.actionRow}>
+              <AppText variant="body">{linkedTitle ? `Linked to ${linkedTitle}` : "Linked cookbook recipe"}</AppText>
+              <Button
+                size="compact"
+                label="Unlink"
+                variant="ghost"
+                onPress={() => {
+                  setLinking(false);
+                  void run(async () => {
+                    const next = await updateNutritionRecipe(detail.id, { sourceRecipeId: null });
+                    setLinkedTitle(null);
+                    return next;
+                  });
+                }}
+              />
+            </View>
+          ) : (
+            <Button
+              size="compact"
+              label="Link cookbook recipe"
+              variant="secondary"
+              onPress={() => {
+                setLinking(true);
+                void listRecipes()
+                  .then((live) => {
+                    setCookbookRecipes(live.recipes.map((recipe) => ({ id: recipe.id, title: recipe.title })));
+                    setCookbookLoaded(true);
+                  })
+                  .catch((err) => setError(err instanceof ApiRequestError ? err.message : "Could not load cookbook recipes."));
+              }}
+            />
+          )}
+          {linking && !detail.sourceRecipeId ? (
+            <View style={styles.picker}>
+              {cookbookRecipes.map((recipe) => (
+                <Pressable
+                  key={recipe.id}
+                  style={styles.food}
+                  onPress={() => {
+                    setLinking(false);
+                    void run(async () => {
+                      const next = await updateNutritionRecipe(detail.id, { sourceRecipeId: recipe.id });
+                      setLinkedTitle(recipe.title);
+                      return next;
+                    });
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Link ${recipe.title}`}
+                >
+                  <AppText variant="body">{recipe.title}</AppText>
+                </Pressable>
+              ))}
+              {!cookbookLoaded ? (
+                <AppText variant="caption" color="muted">
+                  Loading cookbook recipes.
+                </AppText>
+              ) : null}
+              {cookbookLoaded && cookbookRecipes.length === 0 ? (
+                <AppText variant="caption" color="muted">
+                  No cookbook recipes yet.
+                </AppText>
+              ) : null}
+            </View>
+          ) : null}
           <View style={styles.list}>
             {detail.items.map((item) => (
               <View key={item.id} style={styles.row}>
@@ -151,42 +229,105 @@ export default function NutritionRecipeScreen() {
                   onBlur={(event) => commitGrams(item.id, item.grams, event.nativeEvent.text)}
                   style={styles.grams}
                 />
-                <Pressable onPress={() => setPickingItemId(item.id)} hitSlop={8} accessibilityRole="button">
-                  <AppText variant="caption" color="accent">Find</AppText>
+                <Pressable
+                  onPress={() => {
+                    setAdding(false);
+                    setFoodQuery("");
+                    setPickingItemId(item.id);
+                  }}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  style={styles.action}
+                >
+                  <AppText variant="caption">Find</AppText>
                 </Pressable>
                 <Pressable
                   onPress={() => void run(() => deleteNutritionRecipeItem(detail.id, item.id))}
                   hitSlop={8}
                   accessibilityRole="button"
+                  style={styles.action}
                 >
                   <AppText variant="caption" color="danger">Delete</AppText>
                 </Pressable>
               </View>
             ))}
           </View>
-          <Button label="Add ingredient" variant="secondary" onPress={() => setAdding(true)} />
+          <Button size="compact"
+            label="Add ingredient"
+            variant="secondary"
+            onPress={() => {
+              setPickingItemId(null);
+              setFoodQuery("");
+              setAdding(true);
+            }}
+          />
           {pickingItemId || adding ? (
             <View style={styles.picker}>
-              {libraryFoods.map((food) => (
-                <Pressable
-                  key={food.id}
-                  style={styles.food}
-                  onPress={() => {
-                    if (pickingItemId) {
-                      void run(() => updateNutritionRecipeItem(detail.id, pickingItemId, { foodId: food.id }));
-                      setPickingItemId(null);
-                      return;
+              <Field
+                label="Search My foods"
+                value={foodQuery}
+                onChangeText={setFoodQuery}
+                placeholder="Type a food name"
+                variant="search"
+              />
+              {foodQuery.trim()
+                ? libraryFoods
+                    .filter((food) => food.name.toLowerCase().includes(foodQuery.trim().toLowerCase()))
+                    .map((food) => (
+                      <Pressable
+                        key={food.id}
+                        style={styles.food}
+                        onPress={() => {
+                          if (pickingItemId) {
+                            void run(() => updateNutritionRecipeItem(detail.id, pickingItemId, { foodId: food.id }));
+                            setPickingItemId(null);
+                            setFoodQuery("");
+                            return;
+                          }
+                          setAddFoodId(food.id);
+                        }}
+                      >
+                        <AppText variant="body" color={addFoodId === food.id ? "accent" : "text"}>
+                          {food.name}
+                        </AppText>
+                      </Pressable>
+                    ))
+                : null}
+              {pickingItemId &&
+              foodQuery.trim() &&
+              !libraryFoods.some((food) => food.name.toLowerCase().includes(foodQuery.trim().toLowerCase())) ? (
+                <View style={styles.database}>
+                  <AppText variant="caption" color="muted">
+                    Nothing in My foods matches that name.
+                  </AppText>
+                  <View style={styles.actionRow}>
+                  <Button size="compact"
+                    label="Search NEVO"
+                    variant="secondary"
+                    onPress={() =>
+                      router.push({
+                        pathname: "/(app)/diary/nevo-search",
+                        params: { q: foodQuery.trim(), recipeId: detail.id, itemId: pickingItemId },
+                      })
                     }
-                    setAddFoodId(food.id);
-                  }}
-                >
-                  <AppText variant="body">{food.name}</AppText>
-                </Pressable>
-              ))}
+                  />
+                  <Button size="compact"
+                    label="Search USDA"
+                    variant="secondary"
+                    onPress={() =>
+                      router.push({
+                        pathname: "/(app)/diary/usda-search",
+                        params: { q: foodQuery.trim(), recipeId: detail.id, itemId: pickingItemId },
+                      })
+                    }
+                  />
+                  </View>
+                </View>
+              ) : null}
               {adding ? (
                 <>
                   <Field label="Grams for extra" value={addGrams} onChangeText={setAddGrams} keyboardType="numeric" />
-                  <Button
+                  <Button size="compact"
                     label="Add selected food"
                     onPress={() => {
                       const grams = Number(addGrams.replace(",", "."));
@@ -210,7 +351,8 @@ export default function NutritionRecipeScreen() {
               ? `${detail.totals.kcal} kcal · ${detail.perServing.kcal} kcal / serving · ${detail.recipeWeightG} g`
               : "Match or delete every line before saving to My foods."}
           </AppText>
-          <Button
+          <View style={styles.actionRow}>
+          <Button size="compact"
             label="Save to My foods"
             loading={saving}
             disabled={!detail.complete}
@@ -225,12 +367,13 @@ export default function NutritionRecipeScreen() {
             }
           />
           {detail.libraryFood ? (
-            <Button
+            <Button size="compact"
               label="Open saved copy"
               variant="secondary"
               onPress={() => router.push(`/(app)/diary/food/${detail.libraryFood!.id}` as Href)}
             />
           ) : null}
+          </View>
         </>
       ) : null}
       {error ? (
@@ -293,6 +436,20 @@ const styles = StyleSheet.create({
     minHeight: 32,
   },
   picker: { gap: tokens.space.xs },
+  database: { gap: tokens.space.xs },
+  actionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: tokens.space.sm,
+  },
+  action: {
+    borderWidth: 1,
+    borderColor: tokens.border,
+    borderRadius: tokens.radius.sm,
+    paddingHorizontal: tokens.space.sm,
+    paddingVertical: tokens.space.xs,
+  },
   food: {
     paddingVertical: tokens.space.sm,
     borderBottomWidth: 1,

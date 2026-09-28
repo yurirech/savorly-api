@@ -1,8 +1,8 @@
-import { router } from "expo-router";
-import { useState } from "react";
+import { router, useLocalSearchParams } from "expo-router";
+import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import type { UsdaFoodHit } from "@savorly/shared";
-import { ApiRequestError, importUsdaFood, searchUsdaFoods } from "../../../src/api/client";
+import { ApiRequestError, importUsdaFood, searchUsdaFoods, updateNutritionRecipeItem } from "../../../src/api/client";
 import { AppText } from "../../../src/components/AppText";
 import { Button } from "../../../src/components/Button";
 import { Field } from "../../../src/components/Field";
@@ -10,17 +10,21 @@ import { Screen } from "../../../src/components/Screen";
 import { tokens } from "../../../src/theme/tokens";
 
 export default function UsdaSearchScreen() {
-  const [query, setQuery] = useState("");
+  const params = useLocalSearchParams<{ q?: string; recipeId?: string; itemId?: string }>();
+  const recipeId = Array.isArray(params.recipeId) ? params.recipeId[0] : params.recipeId;
+  const itemId = Array.isArray(params.itemId) ? params.itemId[0] : params.itemId;
+  const initialQuery = Array.isArray(params.q) ? params.q[0] : params.q;
+  const [query, setQuery] = useState(initialQuery ?? "");
   const [hits, setHits] = useState<UsdaFoodHit[]>([]);
   const [loading, setLoading] = useState(false);
   const [importingId, setImportingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function onSearch() {
+  async function onSearch(nextQuery = query) {
     setLoading(true);
     setError(null);
     try {
-      const live = await searchUsdaFoods(query);
+      const live = await searchUsdaFoods(nextQuery);
       setHits(live.foods);
       if (live.foods.length === 0) {
         setError("No generics matched. Try “milk nonfat” or “peanut butter”.");
@@ -32,11 +36,40 @@ export default function UsdaSearchScreen() {
     }
   }
 
+  useEffect(() => {
+    const q = initialQuery?.trim();
+    if (!q) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    void searchUsdaFoods(q)
+      .then((live) => {
+        if (cancelled) return;
+        setHits(live.foods);
+        if (live.foods.length === 0) {
+          setError("No generics matched. Try “milk nonfat” or “peanut butter”.");
+        }
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setError(err instanceof ApiRequestError ? err.message : "Could not search USDA.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [initialQuery]);
+
   async function onImport(hit: UsdaFoodHit) {
     setImportingId(hit.fdcId);
     setError(null);
     try {
-      await importUsdaFood(hit.fdcId, hit.name);
+      const saved = await importUsdaFood(hit.fdcId, hit.name);
+      if (recipeId && itemId) {
+        await updateNutritionRecipeItem(recipeId, itemId, { foodId: saved.food.id });
+      }
       router.back();
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : "Could not import that food.");
@@ -52,7 +85,7 @@ export default function UsdaSearchScreen() {
         Pull a generic staple, then it lives in your library. Brands you can type yourself.
       </AppText>
       <Field label="Food" value={query} onChangeText={setQuery} placeholder="milk nonfat" variant="search" />
-      <Button label="Search" onPress={() => void onSearch()} loading={loading} />
+      <Button size="compact" label="Search" onPress={() => void onSearch()} loading={loading} />
       {error ? (
         <AppText variant="body" color="danger">
           {error}

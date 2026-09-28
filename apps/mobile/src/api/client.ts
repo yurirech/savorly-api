@@ -131,6 +131,10 @@ export function getRecipe(id: string) {
   return request<{ recipe: SavedRecipe }>(`/recipes/${id}`);
 }
 
+export function copyRecipe(id: string) {
+  return request<{ recipe: SavedRecipe }>(`/recipes/${id}/copy`, { method: "POST" });
+}
+
 export function deleteRecipe(id: string) {
   return request<void>(`/recipes/${id}`, { method: "DELETE" });
 }
@@ -330,6 +334,25 @@ export function deleteDiaryMeal(id: string) {
   return requestDiaryDay(`/nutrition/diary/meals/${id}`, { method: "DELETE" });
 }
 
+export function copyPreviousDiaryMeal(id: string) {
+  return requestDiaryDay(`/nutrition/diary/meals/${id}/copy-previous`, { method: "POST" });
+}
+
+export function logMealStaples(id: string) {
+  return requestDiaryDay(`/nutrition/diary/meals/${id}/staples`, { method: "POST" });
+}
+
+export function fetchMealStaples(foodId: string) {
+  return request<{ mealNames: string[] }>(`/nutrition/foods/${foodId}/meal-staples`);
+}
+
+export function setMealStaple(foodId: string, body: { mealName: string; enabled: boolean; date: string }) {
+  return request<{ mealNames: string[] }>(`/nutrition/foods/${foodId}/meal-staples`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
 export function addDiaryEntry(mealId: string, foodId: string, grams: number, date: string) {
   return requestDiaryDay("/nutrition/diary", {
     method: "POST",
@@ -379,6 +402,24 @@ export function deleteDiaryEntry(id: string) {
   return requestDiaryDay(`/nutrition/diary/${id}`, { method: "DELETE" });
 }
 
+export function copyDiaryEntry(id: string, mealId: string) {
+  return requestDiaryDay(`/nutrition/diary/${id}/copy`, {
+    method: "POST",
+    body: JSON.stringify({ mealId }),
+  });
+}
+
+export async function copyDiaryEntries(entryIds: string[], mealId: string): Promise<DiaryDayResponse> {
+  let day: DiaryDayResponse | null = null;
+  for (const id of entryIds) {
+    day = await copyDiaryEntry(id, mealId);
+  }
+  if (!day) {
+    throw new ApiRequestError("validation_error", "Pick a food to copy.");
+  }
+  return day;
+}
+
 export function fetchFrequentGrams(foodId: string) {
   return request<{ grams: number[] }>(`/nutrition/foods/${foodId}/frequent-grams`);
 }
@@ -410,6 +451,13 @@ export function listNutritionRecipesForCookbook(sourceRecipeId: string) {
   );
 }
 
+export function createNutritionRecipe(title: string) {
+  return request<NutritionRecipeDetail>("/nutrition/recipes", {
+    method: "POST",
+    body: JSON.stringify({ title }),
+  });
+}
+
 export function createNutritionRecipeFromCookbook(recipeId: string) {
   return request<NutritionRecipeDetail>("/nutrition/recipes/from-cookbook", {
     method: "POST",
@@ -423,7 +471,7 @@ export function fetchNutritionRecipe(id: string) {
 
 export function updateNutritionRecipe(
   id: string,
-  body: { title?: string; servings?: number; cookedWeightG?: number | null },
+  body: { title?: string; servings?: number; cookedWeightG?: number | null; sourceRecipeId?: string | null },
 ) {
   return request<NutritionRecipeDetail>(`/nutrition/recipes/${id}`, {
     method: "PATCH",

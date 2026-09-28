@@ -7,19 +7,22 @@ type ButtonProps = {
   label: string;
   onPress: () => void;
   variant?: "primary" | "secondary" | "ghost";
+  size?: "default" | "compact";
   loading?: boolean;
   disabled?: boolean;
   icon?: ReactNode;
 };
 
 export function Button(props: ButtonProps) {
-  const { label, onPress, variant = "primary", loading, disabled, icon } = props;
+  const { label, onPress, variant = "primary", size = "default", loading, disabled, icon } = props;
+  const compact = size === "compact";
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled || loading}
       style={({ pressed }) => [
         styles.base,
+        compact && styles.compact,
         variant === "primary" && styles.primary,
         variant === "secondary" && styles.secondary,
         variant === "ghost" && styles.ghost,
@@ -28,11 +31,14 @@ export function Button(props: ButtonProps) {
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={variant === "primary" ? tokens.bg : tokens.text} />
+        <ActivityIndicator color={variant === "primary" ? tokens.bg : tokens.text} size={compact ? "small" : "large"} />
       ) : (
         <View style={styles.row}>
           {icon}
-          <AppText variant="body" style={[styles.label, variant === "primary" && styles.primaryLabel]}>
+          <AppText
+            variant={compact ? "caption" : "body"}
+            style={[styles.label, variant === "primary" && styles.primaryLabel]}
+          >
             {label}
           </AppText>
         </View>
@@ -48,6 +54,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: tokens.space.lg,
+  },
+  compact: {
+    minHeight: 32,
+    alignSelf: "flex-start",
+    borderRadius: tokens.radius.sm,
+    paddingHorizontal: tokens.space.sm,
+    paddingVertical: tokens.space.xs,
   },
   primary: {
     backgroundColor: tokens.accent,

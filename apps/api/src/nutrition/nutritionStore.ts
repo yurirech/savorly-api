@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, ilike, inArray, lt, sql } from "drizzle-orm";
 import {
   buildDiaryMeals,
   buildQuickDiaryNutrients,
@@ -12,6 +12,7 @@ import {
   scaleNutrition,
   type DiaryDayResponse,
   type DiaryEntry,
+  type DiaryMealGroup,
   type DiaryEntryKind,
   type NutrientVector,
   type NutritionProfile,
@@ -22,7 +23,7 @@ import {
   type UserFoodSource,
 } from "@savorly/shared";
 import type { Database } from "../db/client";
-import { diaryEntries, diaryMeals, nevoFoods, nutritionProfiles, userFoods, users } from "../db/schema";
+import { diaryEntries, diaryMealTemplates, diaryMeals, mealStaples, nevoFoods, nutritionProfiles, userFoods, users } from "../db/schema";
 import { nevoFoodsReady } from "./nevoStore";
 import { STAPLE_NEVO_CODES } from "./stapleNevoCodes";
 import { AppError } from "../errors";
@@ -191,7 +192,7 @@ async function getOwnedDiaryEntry(db: Database, userId: string, entryId: string)
 }
 
 function validateGrams(grams: number): void {
-  if (!(grams > 0) || grams > 5000) {
+  if (!(grams >= 0) || grams > 5000 || !Number.isFinite(grams)) {
     throw new AppError("validation_error", "Grams must be between 0 and 5000.", 400);
   }
 }
@@ -383,8 +384,131 @@ export async function deleteUserFood(db: Database, userId: string, foodId: strin
   await db.delete(userFoods).where(and(eq(userFoods.id, food.id), eq(userFoods.userId, userId)));
 }
 
+async function listMealTemplates(db: Database, userId: string) {
+  return db
+    .select()
+    .from(diaryMealTemplates)
+    .where(eq(diaryMealTemplates.userId, userId))
+    .orderBy(asc(diaryMealTemplates.sortOrder));
+}
+
+async function seedMealTemplatesIfEmpty(db: Database, userId: string) {
+  const [user] = await db
+    .select({ seededAt: users.mealTemplatesSeededAt })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  if (user?.seededAt) {
+    return listMealTemplates(db, userId);
+  }
+  const existing = await listMealTemplates(db, userId);
+  if (existing.length === 0) {
+    const [latest] = await db
+      .select({ date: diaryMeals.date })
+      .from(diaryMeals)
+      .where(eq(diaryMeals.userId, userId))
+      .orderBy(desc(diaryMeals.date))
+      .limit(1);
+    if (latest) {
+      const source = await db
+        .select()
+        .from(diaryMeals)
+        .where(and(eq(diaryMeals.userId, userId), eq(diaryMeals.date, latest.date)))
+        .orderBy(asc(diaryMeals.sortOrder), asc(diaryMeals.createdAt));
+      if (source.length > 0) {
+        const seen = new Set<string>();
+        await db.insert(diaryMealTemplates).values(
+          source.flatMap((meal) => {
+            if (seen.has(meal.name)) return [];
+            seen.add(meal.name);
+            return [{ userId, name: meal.name, sortOrder: meal.sortOrder }];
+          }),
+        );
+      }
+    }
+  }
+  await db.update(users).set({ mealTemplatesSeededAt: new Date() }).where(eq(users.id, userId));
+  return listMealTemplates(db, userId);
+}
+
+async function materializeMealTemplates(db: Database, userId: string, isoDate: string) {
+  const templates = await seedMealTemplatesIfEmpty(db, userId);
+  if (templates.length === 0) {
+    return;
+  }
+  const present = await db
+    .select({ name: diaryMeals.name })
+    .from(diaryMeals)
+    .where(and(eq(diaryMeals.userId, userId), eq(diaryMeals.date, isoDate)));
+  const names = new Set(present.map((row) => row.name));
+  const missing = templates.filter((template) => !names.has(template.name));
+  if (missing.length === 0) {
+    return;
+  }
+  await db.insert(diaryMeals).values(
+    missing.map((template) => ({
+      userId,
+      date: isoDate,
+      name: template.name,
+      sortOrder: template.sortOrder,
+    })),
+  );
+}
+
+async function upsertMealTemplate(db: Database, userId: string, name: string) {
+  const [existing] = await db
+    .select({ id: diaryMealTemplates.id })
+    .from(diaryMealTemplates)
+    .where(and(eq(diaryMealTemplates.userId, userId), eq(diaryMealTemplates.name, name)))
+    .limit(1);
+  if (existing) {
+    return;
+  }
+  const [maxOrder] = await db
+    .select({ value: sql<number>`coalesce(max(${diaryMealTemplates.sortOrder}), -1)` })
+    .from(diaryMealTemplates)
+    .where(eq(diaryMealTemplates.userId, userId));
+  await db.insert(diaryMealTemplates).values({
+    userId,
+    name,
+    sortOrder: Number(maxOrder?.value ?? -1) + 1,
+  });
+}
+
+async function annotateDiaryMeals(
+  db: Database,
+  userId: string,
+  isoDate: string,
+  meals: DiaryMealGroup[],
+): Promise<DiaryMealGroup[]> {
+  const names = [...new Set(meals.map((meal) => meal.name))];
+  if (names.length === 0) {
+    return meals;
+  }
+  const earlier = await db
+    .select({ name: diaryMeals.name })
+    .from(diaryMeals)
+    .innerJoin(diaryEntries, eq(diaryEntries.mealId, diaryMeals.id))
+    .where(and(eq(diaryMeals.userId, userId), lt(diaryMeals.date, isoDate), inArray(diaryMeals.name, names)));
+  const earlierNames = new Set(earlier.map((row) => row.name));
+  const stapleRows = await db
+    .select({ mealName: mealStaples.mealName })
+    .from(mealStaples)
+    .where(and(eq(mealStaples.userId, userId), inArray(mealStaples.mealName, names)));
+  const stapleCounts = new Map<string, number>();
+  for (const row of stapleRows) {
+    stapleCounts.set(row.mealName, (stapleCounts.get(row.mealName) ?? 0) + 1);
+  }
+  return meals.map((meal) => ({
+    ...meal,
+    canCopyPrevious: earlierNames.has(meal.name),
+    stapleCount: stapleCounts.get(meal.name) ?? 0,
+  }));
+}
+
 export async function getDiaryDay(db: Database, userId: string, date: string): Promise<DiaryDayResponse> {
   const isoDate = parseIsoDate(date);
+  await materializeMealTemplates(db, userId, isoDate);
   const mealRows = await db
     .select()
     .from(diaryMeals)
@@ -404,7 +528,7 @@ export async function getDiaryDay(db: Database, userId: string, date: string): P
   const entries = entryRows.map((row) =>
     diaryFromRow(row.entry, entryDisplayName(row.entry, row.foodName)),
   );
-  const meals = buildDiaryMeals(
+  const built = buildDiaryMeals(
     mealRows.map((row) => ({
       id: row.id,
       date: asIsoDate(row.date),
@@ -413,6 +537,7 @@ export async function getDiaryDay(db: Database, userId: string, date: string): P
     })),
     entries,
   );
+  const meals = await annotateDiaryMeals(db, userId, isoDate, built);
   const totals = dayTotalsFromMeals(meals);
   const profile = await getNutritionProfile(db, userId);
   return {
@@ -431,6 +556,7 @@ export async function createDiaryMeal(
 ): Promise<DiaryDayResponse> {
   const isoDate = parseIsoDate(input.date);
   const name = parseMealName(input.name);
+  await materializeMealTemplates(db, userId, isoDate);
   const [maxOrder] = await db
     .select({ value: sql<number>`coalesce(max(${diaryMeals.sortOrder}), -1)` })
     .from(diaryMeals)
@@ -442,6 +568,7 @@ export async function createDiaryMeal(
     name,
     sortOrder: Number(maxOrder?.value ?? -1) + 1,
   });
+  await upsertMealTemplate(db, userId, name);
 
   return getDiaryDay(db, userId, isoDate);
 }
@@ -466,12 +593,48 @@ export async function updateDiaryMeal(
   if (Object.keys(patch).length === 0) {
     throw new AppError("validation_error", "Nothing to update.", 400);
   }
+  const previousName = meal.name;
+  if (patch.name != null && patch.name !== previousName) {
+    const [clash] = await db
+      .select({ id: diaryMealTemplates.id })
+      .from(diaryMealTemplates)
+      .where(and(eq(diaryMealTemplates.userId, userId), eq(diaryMealTemplates.name, patch.name)))
+      .limit(1);
+    if (clash) {
+      throw new AppError("validation_error", "You already have a meal group with that name.", 400);
+    }
+  }
   await db.update(diaryMeals).set(patch).where(eq(diaryMeals.id, meal.id));
+  if (patch.name != null && patch.name !== previousName) {
+    await db
+      .update(diaryMealTemplates)
+      .set({ name: patch.name })
+      .where(and(eq(diaryMealTemplates.userId, userId), eq(diaryMealTemplates.name, previousName)));
+    await db
+      .update(mealStaples)
+      .set({ mealName: patch.name })
+      .where(and(eq(mealStaples.userId, userId), eq(mealStaples.mealName, previousName)));
+    await db
+      .update(diaryMeals)
+      .set({ name: patch.name })
+      .where(
+        and(eq(diaryMeals.userId, userId), eq(diaryMeals.name, previousName), gt(diaryMeals.date, meal.date)),
+      );
+  }
+  if (patch.sortOrder != null) {
+    await db
+      .update(diaryMealTemplates)
+      .set({ sortOrder: patch.sortOrder })
+      .where(and(eq(diaryMealTemplates.userId, userId), eq(diaryMealTemplates.name, patch.name ?? previousName)));
+  }
   return getDiaryDay(db, userId, asIsoDate(meal.date));
 }
 
 export async function deleteDiaryMeal(db: Database, userId: string, mealId: string): Promise<DiaryDayResponse> {
   const meal = await getOwnedDiaryMeal(db, userId, mealId);
+  await db
+    .delete(diaryMealTemplates)
+    .where(and(eq(diaryMealTemplates.userId, userId), eq(diaryMealTemplates.name, meal.name)));
   await db.delete(diaryMeals).where(eq(diaryMeals.id, meal.id));
   return getDiaryDay(db, userId, asIsoDate(meal.date));
 }
@@ -499,6 +662,176 @@ export async function addDiaryEntry(
     nutrients,
   });
   return getDiaryDay(db, userId, isoDate);
+}
+
+export async function copyDiaryEntry(
+  db: Database,
+  userId: string,
+  entryId: string,
+  targetMealId: string,
+): Promise<DiaryDayResponse> {
+  const entry = await getOwnedDiaryEntry(db, userId, entryId);
+  const meal = await getOwnedDiaryMeal(db, userId, targetMealId);
+  if (asIsoDate(meal.date) !== asIsoDate(entry.date)) {
+    throw new AppError("validation_error", "Meal group belongs to a different day.", 400);
+  }
+  if (meal.id === entry.mealId) {
+    throw new AppError("validation_error", "Pick a different meal group.", 400);
+  }
+
+  if (entry.kind === "quick") {
+    await db.insert(diaryEntries).values({
+      userId,
+      mealId: meal.id,
+      foodId: null,
+      kind: "quick",
+      label: entry.label,
+      date: meal.date,
+      grams: entry.grams,
+      nutrients: entry.nutrients,
+    });
+    return getDiaryDay(db, userId, asIsoDate(meal.date));
+  }
+
+  if (!entry.foodId) {
+    throw new AppError("internal_error", "Food entry is missing food.", 500);
+  }
+  const food = await getOwnedUserFood(db, userId, entry.foodId);
+  await db.insert(diaryEntries).values({
+    userId,
+    mealId: meal.id,
+    foodId: food.id,
+    kind: "food",
+    date: meal.date,
+    grams: entry.grams,
+    nutrients: scaleNutrition(food.per100g, entry.grams),
+  });
+  return getDiaryDay(db, userId, asIsoDate(meal.date));
+}
+
+async function assertMealEmpty(db: Database, mealId: string): Promise<void> {
+  const [row] = await db
+    .select({ id: diaryEntries.id })
+    .from(diaryEntries)
+    .where(eq(diaryEntries.mealId, mealId))
+    .limit(1);
+  if (row) {
+    throw new AppError("validation_error", "This group already has foods.", 400);
+  }
+}
+
+async function lastLoggedGrams(db: Database, userId: string, foodId: string): Promise<number> {
+  const [row] = await db
+    .select({ grams: diaryEntries.grams })
+    .from(diaryEntries)
+    .where(and(eq(diaryEntries.userId, userId), eq(diaryEntries.foodId, foodId), eq(diaryEntries.kind, "food")))
+    .orderBy(desc(diaryEntries.createdAt))
+    .limit(1);
+  return row?.grams ?? 0;
+}
+
+export async function copyPreviousDiaryMeal(db: Database, userId: string, mealId: string): Promise<DiaryDayResponse> {
+  const meal = await getOwnedDiaryMeal(db, userId, mealId);
+  await assertMealEmpty(db, meal.id);
+  const [source] = await db
+    .select({ id: diaryMeals.id })
+    .from(diaryMeals)
+    .innerJoin(diaryEntries, eq(diaryEntries.mealId, diaryMeals.id))
+    .where(and(eq(diaryMeals.userId, userId), eq(diaryMeals.name, meal.name), lt(diaryMeals.date, meal.date)))
+    .orderBy(desc(diaryMeals.date))
+    .limit(1);
+  if (!source) {
+    throw new AppError("validation_error", "No earlier log for this group.", 400);
+  }
+  const rows = await db.select().from(diaryEntries).where(eq(diaryEntries.mealId, source.id));
+  for (const entry of rows) {
+    if (entry.kind === "quick") {
+      await db.insert(diaryEntries).values({
+        userId,
+        mealId: meal.id,
+        foodId: null,
+        kind: "quick",
+        label: entry.label,
+        date: meal.date,
+        grams: entry.grams,
+        nutrients: entry.nutrients,
+      });
+      continue;
+    }
+    if (!entry.foodId) {
+      continue;
+    }
+    const food = await getOwnedUserFood(db, userId, entry.foodId);
+    await db.insert(diaryEntries).values({
+      userId,
+      mealId: meal.id,
+      foodId: food.id,
+      kind: "food",
+      date: meal.date,
+      grams: entry.grams,
+      nutrients: scaleNutrition(food.per100g, entry.grams),
+    });
+  }
+  return getDiaryDay(db, userId, asIsoDate(meal.date));
+}
+
+export async function listMealStapleNames(db: Database, userId: string, foodId: string): Promise<string[]> {
+  await getOwnedUserFood(db, userId, foodId);
+  const rows = await db
+    .select({ mealName: mealStaples.mealName })
+    .from(mealStaples)
+    .where(and(eq(mealStaples.userId, userId), eq(mealStaples.foodId, foodId)))
+    .orderBy(asc(mealStaples.mealName));
+  return rows.map((row) => row.mealName);
+}
+
+export async function setMealStaple(
+  db: Database,
+  userId: string,
+  foodId: string,
+  input: { mealName: string; enabled: boolean; date: string },
+): Promise<string[]> {
+  await getOwnedUserFood(db, userId, foodId);
+  const mealName = parseMealName(input.mealName);
+  const isoDate = parseIsoDate(input.date);
+  const day = await getDiaryDay(db, userId, isoDate);
+  if (!day.meals.some((meal) => meal.name === mealName)) {
+    throw new AppError("validation_error", "That meal group is not on this day.", 400);
+  }
+  if (input.enabled) {
+    await db.insert(mealStaples).values({ userId, mealName, foodId }).onConflictDoNothing();
+  } else {
+    await db
+      .delete(mealStaples)
+      .where(and(eq(mealStaples.userId, userId), eq(mealStaples.mealName, mealName), eq(mealStaples.foodId, foodId)));
+  }
+  return listMealStapleNames(db, userId, foodId);
+}
+
+export async function logMealStaples(db: Database, userId: string, mealId: string): Promise<DiaryDayResponse> {
+  const meal = await getOwnedDiaryMeal(db, userId, mealId);
+  await assertMealEmpty(db, meal.id);
+  const staples = await db
+    .select({ foodId: mealStaples.foodId })
+    .from(mealStaples)
+    .where(and(eq(mealStaples.userId, userId), eq(mealStaples.mealName, meal.name)));
+  if (staples.length === 0) {
+    throw new AppError("validation_error", "No staples for this group.", 400);
+  }
+  for (const staple of staples) {
+    const food = await getOwnedUserFood(db, userId, staple.foodId);
+    const grams = await lastLoggedGrams(db, userId, food.id);
+    await db.insert(diaryEntries).values({
+      userId,
+      mealId: meal.id,
+      foodId: food.id,
+      kind: "food",
+      date: meal.date,
+      grams,
+      nutrients: scaleNutrition(food.per100g, grams),
+    });
+  }
+  return getDiaryDay(db, userId, asIsoDate(meal.date));
 }
 
 export async function addQuickDiaryEntry(

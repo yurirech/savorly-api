@@ -1,27 +1,42 @@
 import { type Href, router, useFocusEffect } from "expo-router";
-import { CaretLeft, CaretRight } from "phosphor-react-native";
+import { CaretLeft, CaretRight, ChartPie } from "phosphor-react-native";
 import { useCallback, useMemo, useState } from "react";
-import { Alert, Pressable, StyleSheet, View } from "react-native";
-import { hasExtendedNutrients, listPresentNutrients, type DiaryDayResponse } from "@savorly/shared";
+import { Pressable, StyleSheet, View } from "react-native";
+import { hasExtendedNutrients, listPresentNutrients, type DiaryDayResponse, type NutritionSex } from "@savorly/shared";
+import type { DiaryEntry } from "@savorly/shared";
 import {
   ApiRequestError,
+  copyDiaryEntries,
+  copyPreviousDiaryMeal,
   createDiaryMeal,
+  createNutritionRecipe,
+  deleteDiaryEntry,
   deleteDiaryMeal,
   fetchDiaryDay,
+  logMealStaples,
+  fetchNutritionProfile,
   updateDiaryMeal,
 } from "../../../src/api/client";
 import { AppText } from "../../../src/components/AppText";
 import { Button } from "../../../src/components/Button";
 import NutrientDetailList from "../../../src/components/NutrientDetailList";
 import { Screen } from "../../../src/components/Screen";
+import DiaryConfirmSheet from "../../../src/diary/DiaryConfirmSheet";
+import DiaryDayNutrition from "../../../src/diary/DiaryDayNutrition";
 import DiaryMealNameSheet from "../../../src/diary/DiaryMealNameSheet";
 import DiaryMealPickerSheet from "../../../src/diary/DiaryMealPickerSheet";
 import DiaryMealSection from "../../../src/diary/DiaryMealSection";
-import { resolveMealForDate, writeLastDiaryMeal } from "../../../src/diary/lastDiaryMealStorage";
+import { writeLastDiaryMeal } from "../../../src/diary/lastDiaryMealStorage";
 import { tokens } from "../../../src/theme/tokens";
 import { shiftIsoDate, todayIsoDate } from "../../../src/utils/isoDate";
 
-type NameSheetMode = { kind: "create" } | { kind: "rename"; mealId: string; initialName: string };
+type NameSheetMode =
+  | { kind: "create" }
+  | { kind: "create-for-copy" }
+  | { kind: "recipe" }
+  | { kind: "rename"; mealId: string; initialName: string };
+
+type CopyRequest = { entryIds: string[]; mealId: string };
 
 export default function DiaryScreen() {
   const [date, setDate] = useState(todayIsoDate);
@@ -32,15 +47,25 @@ export default function DiaryScreen() {
   const [collapsedMeals, setCollapsedMeals] = useState<Set<string>>(() => new Set());
   const [nameSheet, setNameSheet] = useState<NameSheetMode | null>(null);
   const [nameSaving, setNameSaving] = useState(false);
-  const [quickCalPickerVisible, setQuickCalPickerVisible] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [pendingEntry, setPendingEntry] = useState<DiaryEntry | null>(null);
+  const [entryDeleting, setEntryDeleting] = useState(false);
+  const [copyRequest, setCopyRequest] = useState<CopyRequest | null>(null);
+  const [copying, setCopying] = useState(false);
+  const [sex, setSex] = useState<NutritionSex | null>(null);
 
   const dayMicroGroups = useMemo(() => (day?.totals ? listPresentNutrients(day.totals) : []), [day?.totals]);
 
   const load = useCallback(async (nextDate: string, isActive: () => boolean = () => true) => {
     try {
-      const live = await fetchDiaryDay(nextDate);
+      const [live, profile] = await Promise.all([
+        fetchDiaryDay(nextDate),
+        fetchNutritionProfile().catch(() => null),
+      ]);
       if (isActive()) {
         setDay(live);
+        setSex(profile?.profile?.sex ?? null);
         setError(null);
       }
     } catch (err) {
@@ -83,16 +108,27 @@ export default function DiaryScreen() {
 
   async function onConfirmMealName(name: string) {
     if (!nameSheet || !name.trim()) {
-      setError("Give the meal group a name.");
+      setError(nameSheet?.kind === "recipe" ? "Give the recipe a name." : "Give the meal group a name.");
       return;
     }
     setNameSaving(true);
     setError(null);
     try {
-      if (nameSheet.kind === "create") {
+      if (nameSheet.kind === "recipe") {
+        const recipe = await createNutritionRecipe(name.trim());
+        setNameSheet(null);
+        router.push(`/(app)/diary/nutrition-recipe/${recipe.id}` as Href);
+        return;
+      }
+      if (nameSheet.kind === "create" || nameSheet.kind === "create-for-copy") {
         const live = await createDiaryMeal(date, name);
-        setDay(live);
         const created = live.meals[live.meals.length - 1];
+        if (nameSheet.kind === "create-for-copy" && copyRequest && created) {
+          setDay(await copyDiaryEntries(copyRequest.entryIds, created.id));
+          setCopyRequest(null);
+        } else {
+          setDay(live);
+        }
         if (created) {
           await writeLastDiaryMeal({ mealId: created.id, mealName: created.name, date });
         }
@@ -102,60 +138,80 @@ export default function DiaryScreen() {
       }
       setNameSheet(null);
     } catch (err) {
-      setError(err instanceof ApiRequestError ? err.message : "Could not save meal group.");
+      setError(err instanceof ApiRequestError ? err.message : "Could not save.");
     } finally {
       setNameSaving(false);
     }
   }
 
-  function onDeleteMeal(mealId: string, mealName: string) {
-    Alert.alert("Delete meal group?", `Remove "${mealName}" and its logged foods?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: () => {
-          void (async () => {
-            try {
-              const live = await deleteDiaryMeal(mealId);
-              setDay(live);
-            } catch (err) {
-              setError(err instanceof ApiRequestError ? err.message : "Could not delete meal group.");
-            }
-          })();
-        },
-      },
-    ]);
+  async function confirmDeleteMeal() {
+    if (!pendingDelete) {
+      return;
+    }
+    setDeleting(true);
+    setError(null);
+    try {
+      const live = await deleteDiaryMeal(pendingDelete.id);
+      setDay(live);
+      setPendingDelete(null);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : "Could not delete meal group.");
+    } finally {
+      setDeleting(false);
+    }
   }
 
-  function goQuickCal(mealId: string) {
+  async function confirmDeleteEntry() {
+    if (!pendingEntry) {
+      return;
+    }
+    setEntryDeleting(true);
+    setError(null);
+    try {
+      setDay(await deleteDiaryEntry(pendingEntry.id));
+      setPendingEntry(null);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : "Could not delete that food.");
+    } finally {
+      setEntryDeleting(false);
+    }
+  }
+
+  async function copyEntriesToMeal(mealId: string) {
+    if (!copyRequest || copying) {
+      return;
+    }
+    setCopying(true);
+    setError(null);
+    try {
+      const live = await copyDiaryEntries(copyRequest.entryIds, mealId);
+      setDay(live);
+      setCopyRequest(null);
+      const meal = live.meals.find((row) => row.id === mealId);
+      if (meal) {
+        await writeLastDiaryMeal({ mealId: meal.id, mealName: meal.name, date });
+      }
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : "Could not copy that food.");
+    } finally {
+      setCopying(false);
+    }
+  }
+
+  async function fillMeal(action: () => Promise<DiaryDayResponse>) {
+    setError(null);
+    try {
+      setDay(await action());
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : "Could not fill this group.");
+    }
+  }
+
+  function openQuickCal() {
     router.push({
       pathname: "/(app)/diary/quick-cal",
-      params: { date, mealId },
+      params: { date },
     } as Href);
-  }
-
-  async function openQuickCalFromDiary() {
-    try {
-      const meal = await resolveMealForDate(date);
-      if (meal) {
-        goQuickCal(meal.id);
-        return;
-      }
-      setQuickCalPickerVisible(true);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof ApiRequestError ? err.message : "Could not open quick calories.");
-    }
-  }
-
-  function onSelectMealForQuickCal(mealId: string) {
-    setQuickCalPickerVisible(false);
-    const meal = meals.find((row) => row.id === mealId);
-    if (meal) {
-      void writeLastDiaryMeal({ mealId: meal.id, mealName: meal.name, date });
-    }
-    goQuickCal(mealId);
   }
 
   const meals = day?.meals ?? [];
@@ -163,7 +219,17 @@ export default function DiaryScreen() {
   const totals = day?.totals;
 
   return (
-    <Screen onRefresh={() => void onRefresh()} refreshing={refreshing}>
+    <Screen
+      onRefresh={() => void onRefresh()}
+      refreshing={refreshing}
+      footer={
+        <>
+          <Button size="compact" label="Add meal group" onPress={() => setNameSheet({ kind: "create" })} />
+          <Button size="compact" label="Quick calories" variant="secondary" onPress={openQuickCal} />
+          <Button size="compact" label="📝 New recipe" variant="secondary" onPress={() => setNameSheet({ kind: "recipe" })} />
+        </>
+      }
+    >
       <View style={styles.dateRow}>
         <Pressable onPress={() => setDate((current) => shiftIsoDate(current, -1))} accessibilityLabel="Previous day">
           <CaretLeft size={22} color={tokens.text} />
@@ -197,27 +263,31 @@ export default function DiaryScreen() {
         </AppText>
       )}
 
-      {totals && hasExtendedNutrients(totals) ? (
-        <View style={styles.microSection}>
-          <Button
-            label={showMicronutrients ? "Hide micronutrients" : "Show today's micronutrients"}
-            variant="ghost"
-            onPress={() => setShowMicronutrients((current) => !current)}
-          />
-          {showMicronutrients ? <NutrientDetailList groups={dayMicroGroups} /> : null}
-        </View>
-      ) : null}
-
       {error ? (
         <AppText variant="body" color="danger">
           {error}
         </AppText>
       ) : null}
 
-      <Button label="Add meal group" onPress={() => setNameSheet({ kind: "create" })} />
-      <Button label="Quick calories" variant="secondary" onPress={() => void openQuickCalFromDiary()} />
-      <Button label="My foods" variant="secondary" onPress={() => router.push("/(app)/diary/foods" as Href)} />
-      <Button label="Targets" variant="ghost" onPress={() => router.push("/(app)/diary/profile" as Href)} />
+      <View style={styles.actionRow}>
+        <Button size="compact" label="My foods" variant="secondary" onPress={() => router.push("/(app)/diary/foods" as Href)} />
+        <Button size="compact" label="Targets" variant="ghost" onPress={() => router.push("/(app)/diary/profile" as Href)} />
+        {totals && hasExtendedNutrients(totals) ? (
+          <Pressable
+            onPress={() => setShowMicronutrients((current) => !current)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={showMicronutrients ? "Hide today's micronutrients" : "Show today's micronutrients"}
+          >
+            <ChartPie size={22} color={showMicronutrients ? tokens.accent : tokens.text} />
+          </Pressable>
+        ) : null}
+      </View>
+      {showMicronutrients && totals && hasExtendedNutrients(totals) ? (
+        <View style={styles.microSection}>
+          <NutrientDetailList groups={dayMicroGroups} />
+        </View>
+      ) : null}
 
       {day && meals.length === 0 ? (
         <AppText variant="body" color="muted">
@@ -249,32 +319,81 @@ export default function DiaryScreen() {
                 params: { date, mealId: meal.id },
               } as Href)
             }
-            onQuickCal={() => goQuickCal(meal.id)}
+            onDeleteEntry={(entry) => setPendingEntry(entry)}
+            onCopyEntry={(entryIds) => setCopyRequest({ entryIds, mealId: meal.id })}
+            onCopyPrevious={
+              date === todayIsoDate() && meal.canCopyPrevious && meal.entries.length === 0
+                ? () => void fillMeal(() => copyPreviousDiaryMeal(meal.id))
+                : undefined
+            }
+            onAddStaples={
+              (meal.stapleCount ?? 0) > 0 && meal.entries.length === 0
+                ? () => void fillMeal(() => logMealStaples(meal.id))
+                : undefined
+            }
             onRename={() => setNameSheet({ kind: "rename", mealId: meal.id, initialName: meal.name })}
-            onDelete={() => onDeleteMeal(meal.id, meal.name)}
+            onDelete={() => setPendingDelete({ id: meal.id, name: meal.name })}
           />
         ))}
       </View>
 
-      <DiaryMealPickerSheet
-        visible={quickCalPickerVisible}
-        meals={meals}
-        onClose={() => setQuickCalPickerVisible(false)}
-        onSelectMeal={onSelectMealForQuickCal}
-        onCreateMeal={() => {
-          setQuickCalPickerVisible(false);
-          setNameSheet({ kind: "create" });
-        }}
-      />
+      {totals ? <DiaryDayNutrition date={date} totals={totals} targets={day?.targets ?? null} sex={sex} /> : null}
 
       <DiaryMealNameSheet
         visible={nameSheet != null}
-        title={nameSheet?.kind === "rename" ? "Rename meal group" : "New meal group"}
+        title={
+          nameSheet?.kind === "recipe"
+            ? "New recipe"
+            : nameSheet?.kind === "rename"
+              ? "Rename meal group"
+              : "New meal group"
+        }
         initialName={nameSheet?.kind === "rename" ? nameSheet.initialName : ""}
-        confirmLabel={nameSheet?.kind === "rename" ? "Save name" : "Add group"}
+        fieldLabel={nameSheet?.kind === "recipe" ? "Recipe name" : undefined}
+        placeholder={nameSheet?.kind === "recipe" ? "Oatmeal" : undefined}
+        suggestions={nameSheet?.kind === "recipe" ? [] : undefined}
+        confirmLabel={
+          nameSheet?.kind === "recipe"
+            ? "Create"
+            : nameSheet?.kind === "create-for-copy"
+              ? "Add and copy"
+              : nameSheet?.kind === "rename"
+                ? "Save name"
+                : "Add group"
+        }
         onClose={() => setNameSheet(null)}
         onConfirm={onConfirmMealName}
         loading={nameSaving}
+      />
+      <DiaryConfirmSheet
+        visible={pendingDelete != null}
+        title="Delete meal group?"
+        message={
+          pendingDelete
+            ? `Remove "${pendingDelete.name}" and the foods logged in it today. Earlier days keep this group.`
+            : ""
+        }
+        confirmLabel="Delete"
+        onClose={() => setPendingDelete(null)}
+        onConfirm={() => void confirmDeleteMeal()}
+        loading={deleting}
+      />
+      <DiaryConfirmSheet
+        visible={pendingEntry != null}
+        title="Delete this food?"
+        message={pendingEntry ? `Remove ${pendingEntry.foodName} from this meal group.` : ""}
+        confirmLabel="Delete"
+        onClose={() => setPendingEntry(null)}
+        onConfirm={() => void confirmDeleteEntry()}
+        loading={entryDeleting}
+      />
+      <DiaryMealPickerSheet
+        visible={copyRequest != null && nameSheet == null}
+        title="Copy to which meal?"
+        meals={meals.filter((meal) => meal.id !== copyRequest?.mealId)}
+        onClose={() => setCopyRequest(null)}
+        onSelectMeal={(mealId) => void copyEntriesToMeal(mealId)}
+        onCreateMeal={() => setNameSheet({ kind: "create-for-copy" })}
       />
     </Screen>
   );
@@ -299,5 +418,11 @@ const styles = StyleSheet.create({
   },
   meals: {
     gap: tokens.space.md,
+  },
+  actionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: tokens.space.sm,
   },
 });

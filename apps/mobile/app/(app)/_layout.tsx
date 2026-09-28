@@ -30,6 +30,7 @@ export default function AppLayout() {
       <Stack.Screen name="diary/usda-search" options={{ title: "USDA search" }} />
       <Stack.Screen name="diary/log" options={{ title: "Log food" }} />
       <Stack.Screen name="diary/profile" options={{ title: "Targets" }} />
+      <Stack.Screen name="diary/nutrient-group" options={{ title: "Nutrients" }} />
     </Stack>
   );
 }

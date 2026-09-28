@@ -10,6 +10,9 @@ interface DiaryMealNameSheetProps {
   visible: boolean;
   title: string;
   initialName?: string;
+  fieldLabel?: string;
+  placeholder?: string;
+  suggestions?: readonly string[];
   confirmLabel: string;
   onClose: () => void;
   onConfirm: (name: string) => void | Promise<void>;
@@ -17,7 +20,18 @@ interface DiaryMealNameSheetProps {
 }
 
 function DiaryMealNameSheet(props: DiaryMealNameSheetProps) {
-  const { visible, title, initialName = "", confirmLabel, onClose, onConfirm, loading } = props;
+  const {
+    visible,
+    title,
+    initialName = "",
+    fieldLabel = "Meal name",
+    placeholder = "Breakfast",
+    suggestions = DIARY_MEAL_NAME_SUGGESTIONS,
+    confirmLabel,
+    onClose,
+    onConfirm,
+    loading,
+  } = props;
   const [name, setName] = useState(initialName);
 
   useEffect(() => {
@@ -31,9 +45,10 @@ function DiaryMealNameSheet(props: DiaryMealNameSheetProps) {
       <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close">
         <Pressable style={styles.sheet} onPress={() => undefined}>
           <AppText variant="title">{title}</AppText>
-          <Field label="Meal name" value={name} onChangeText={setName} placeholder="Breakfast" />
+          <Field label={fieldLabel} value={name} onChangeText={setName} placeholder={placeholder} />
+          {suggestions.length > 0 ? (
           <View style={styles.chips}>
-            {DIARY_MEAL_NAME_SUGGESTIONS.map((suggestion) => (
+            {suggestions.map((suggestion) => (
               <Pressable
                 key={suggestion}
                 onPress={() => setName(suggestion)}
@@ -45,8 +60,11 @@ function DiaryMealNameSheet(props: DiaryMealNameSheetProps) {
               </Pressable>
             ))}
           </View>
-          <Button label={confirmLabel} onPress={() => void onConfirm(name.trim())} loading={loading} />
-          <Button label="Cancel" variant="ghost" onPress={onClose} />
+          ) : null}
+          <View style={styles.actions}>
+          <Button size="compact" label={confirmLabel} onPress={() => void onConfirm(name.trim())} loading={loading} />
+          <Button size="compact" label="Cancel" variant="ghost" onPress={onClose} />
+          </View>
         </Pressable>
       </Pressable>
     </Modal>
@@ -77,6 +95,12 @@ const styles = StyleSheet.create({
     borderRadius: tokens.radius.full,
     paddingHorizontal: tokens.space.md,
     paddingVertical: tokens.space.xs,
+  },
+  actions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: tokens.space.sm,
   },
 });
 

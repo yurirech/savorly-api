@@ -1,37 +1,30 @@
 import { Modal, Pressable, StyleSheet, View } from "react-native";
-import type { DiaryMealGroup } from "@savorly/shared";
 import { AppText } from "../components/AppText";
 import { Button } from "../components/Button";
 import { tokens } from "../theme/tokens";
 
-interface DiaryMealPickerSheetProps {
+interface DiaryConfirmSheetProps {
   visible: boolean;
-  meals: DiaryMealGroup[];
-  title?: string;
+  title: string;
+  message: string;
+  confirmLabel: string;
   onClose: () => void;
-  onSelectMeal: (mealId: string) => void;
-  onCreateMeal: () => void;
+  onConfirm: () => void;
+  loading?: boolean;
 }
 
-function DiaryMealPickerSheet(props: DiaryMealPickerSheetProps) {
-  const { visible, meals, title = "Log in which meal?", onClose, onSelectMeal, onCreateMeal } = props;
+function DiaryConfirmSheet(props: DiaryConfirmSheetProps) {
+  const { visible, title, message, confirmLabel, onClose, onConfirm, loading } = props;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close">
         <Pressable style={styles.sheet} onPress={() => undefined}>
           <AppText variant="title">{title}</AppText>
-          {meals.length === 0 ? (
-            <AppText variant="body" color="muted">
-              Add a meal group on today&apos;s diary first.
-            </AppText>
-          ) : null}
-          {meals.map((meal) => (
-            <Button size="compact" key={meal.id} label={meal.name} variant="secondary" onPress={() => onSelectMeal(meal.id)} />
-          ))}
+          <AppText variant="body">{message}</AppText>
           <View style={styles.actions}>
-          <Button size="compact" label="New meal group" variant="ghost" onPress={onCreateMeal} />
-          <Button size="compact" label="Cancel" variant="ghost" onPress={onClose} />
+            <Button size="compact" label={confirmLabel} onPress={onConfirm} loading={loading} />
+            <Button size="compact" label="Cancel" variant="ghost" onPress={onClose} />
           </View>
         </Pressable>
       </Pressable>
@@ -50,7 +43,7 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.surface,
     borderRadius: tokens.radius.lg,
     padding: tokens.space.lg,
-    gap: tokens.space.sm,
+    gap: tokens.space.md,
   },
   actions: {
     flexDirection: "row",
@@ -60,4 +53,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default DiaryMealPickerSheet;
+export default DiaryConfirmSheet;

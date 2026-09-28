@@ -5,7 +5,6 @@ import {
   hasExtendedNutrients,
   listPresentNutrients,
   scaleNutrition,
-  type NutrientVector,
   type UserFood,
 } from "@savorly/shared";
 import {
@@ -28,7 +27,7 @@ import { todayIsoDate } from "../../../src/utils/isoDate";
 
 function parseGrams(value: string): number | null {
   const amount = Number(value.replace(",", "."));
-  return Number.isFinite(amount) && amount > 0 ? amount : null;
+  return Number.isFinite(amount) && amount >= 0 ? amount : null;
 }
 
 function sourceLabel(source: UserFood["source"]): string {
@@ -122,14 +121,12 @@ export default function DiaryLogFoodScreen() {
     }, [date, entryId, foodIdParam, mealId]),
   );
 
-  const scaledPreview = useMemo((): NutrientVector | null => {
-    if (!food) return null;
-    const amount = parseGrams(grams);
-    if (amount == null) return null;
-    return scaleNutrition(food.per100g, amount);
-  }, [food, grams]);
-
-  const nutrientGroups = useMemo(() => (food ? listPresentNutrients(food.per100g) : []), [food]);
+  const amountGrams = parseGrams(grams);
+  const scaled = useMemo(
+    () => (food && amountGrams != null ? scaleNutrition(food.per100g, amountGrams) : null),
+    [amountGrams, food],
+  );
+  const nutrientGroups = useMemo(() => (scaled ? listPresentNutrients(scaled) : []), [scaled]);
 
   async function onSave() {
     if (!food || !mealId) return;
@@ -178,16 +175,29 @@ export default function DiaryLogFoodScreen() {
       <AppText variant="display">{isEdit ? "Edit entry" : "Log food"}</AppText>
       {food ? (
         <>
-          <AppText variant="title">{food.name}</AppText>
+          <View style={styles.titleRow}>
+            <AppText variant="title" style={styles.foodName}>
+              {food.name}
+            </AppText>
+            <Button
+              label={isEdit ? "Update" : "Log"}
+              size="compact"
+              onPress={() => void onSave()}
+              loading={saving}
+            />
+          </View>
           <AppText variant="caption" color="muted">
             {sourceLabel(food.source)} · {date}
           </AppText>
           <Field label="Grams" value={grams} onChangeText={setGrams} keyboardType="numeric" placeholder="100" />
-          {scaledPreview ? (
-            <AppText variant="caption" color="muted">
-              {scaledPreview.kcal} kcal · {scaledPreview.proteinG}g protein · {scaledPreview.carbsG}g carbs ·{" "}
-              {scaledPreview.fatG}g fat
-            </AppText>
+          {isEdit ? (
+            <Button
+              label="Delete entry"
+              size="compact"
+              variant="secondary"
+              onPress={() => void onDeleteEntry()}
+              loading={saving}
+            />
           ) : null}
           {frequentGrams.length > 0 ? (
             <View style={styles.quickRow}>
@@ -209,22 +219,22 @@ export default function DiaryLogFoodScreen() {
               </View>
             </View>
           ) : null}
-          <AppText variant="title">Per 100 g</AppText>
-          <View style={styles.macros}>
-            <MacroCell label="kcal" value={food.per100g.kcal} />
-            <MacroCell label="Protein" value={`${food.per100g.proteinG} g`} />
-            <MacroCell label="Carbs" value={`${food.per100g.carbsG} g`} />
-            <MacroCell label="Fat" value={`${food.per100g.fatG} g`} />
-          </View>
-          {nutrientGroups.length > 0 ? <NutrientDetailList groups={nutrientGroups} /> : null}
+          {scaled ? (
+            <>
+              <AppText variant="title">{amountGrams} g</AppText>
+              <View style={styles.macros}>
+                <MacroCell label="kcal" value={scaled.kcal} />
+                <MacroCell label="Protein" value={`${scaled.proteinG} g`} />
+                <MacroCell label="Carbs" value={`${scaled.carbsG} g`} />
+                <MacroCell label="Fat" value={`${scaled.fatG} g`} />
+              </View>
+              {nutrientGroups.length > 0 ? <NutrientDetailList groups={nutrientGroups} /> : null}
+            </>
+          ) : null}
           {food.source === "nevo" && !hasExtendedNutrients(food.per100g) ? (
             <AppText variant="caption" color="muted">
               Full NEVO nutrients appear after re-importing this food.
             </AppText>
-          ) : null}
-          <Button label={isEdit ? "Update entry" : "Add to meal"} onPress={() => void onSave()} loading={saving} />
-          {isEdit ? (
-            <Button label="Delete entry" variant="secondary" onPress={() => void onDeleteEntry()} loading={saving} />
           ) : null}
         </>
       ) : null}
@@ -255,6 +265,15 @@ function MacroCell(props: MacroCellProps) {
 }
 
 const styles = StyleSheet.create({
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: tokens.space.sm,
+  },
+  foodName: {
+    flex: 1,
+  },
   quickRow: {
     gap: tokens.space.sm,
   },

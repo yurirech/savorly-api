@@ -67,6 +67,8 @@ export type DiaryMealGroup = {
   sortOrder: number;
   totals: NutrientVector;
   entries: DiaryEntry[];
+  canCopyPrevious?: boolean;
+  stapleCount?: number;
 };
 
 export type DiaryDayResponse = {

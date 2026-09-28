@@ -16,8 +16,6 @@ import {
 
   type DiaryMealGroup,
 
-  type NutrientVector,
-
   type UserFood,
 
 } from "@savorly/shared";
@@ -60,6 +58,8 @@ import DiaryMealNameSheet from "../../../../src/diary/DiaryMealNameSheet";
 
 import DiaryMealPickerSheet from "../../../../src/diary/DiaryMealPickerSheet";
 
+import MealStaplesSection from "../../../../src/diary/MealStaplesSection";
+
 import { resolveMealForDate, writeLastDiaryMeal } from "../../../../src/diary/lastDiaryMealStorage";
 
 import { tokens } from "../../../../src/theme/tokens";
@@ -72,7 +72,7 @@ function parseGrams(value: string): number | null {
 
   const amount = Number(value.replace(",", "."));
 
-  return Number.isFinite(amount) && amount > 0 ? amount : null;
+  return Number.isFinite(amount) && amount >= 0 ? amount : null;
 
 }
 
@@ -124,7 +124,7 @@ export default function DiaryFoodDetailScreen() {
 
   const [mealSaving, setMealSaving] = useState(false);
 
-  const [grams, setGrams] = useState("");
+  const [grams, setGrams] = useState("100");
 
   const [frequentGrams, setFrequentGrams] = useState<number[]>([]);
 
@@ -142,27 +142,17 @@ export default function DiaryFoodDetailScreen() {
 
 
 
-  const nutrientGroups = useMemo(
+  const amountGrams = parseGrams(grams) ?? 100;
 
-    () => (food ? listPresentNutrients(food.per100g) : []),
-
-    [food],
-
+  const scaled = useMemo(
+    () => (food ? scaleNutrition(food.per100g, amountGrams) : null),
+    [food, amountGrams],
   );
 
-
-
-  const scaledPreview = useMemo((): NutrientVector | null => {
-
-    if (!food) return null;
-
-    const amount = parseGrams(grams);
-
-    if (amount == null) return null;
-
-    return scaleNutrition(food.per100g, amount);
-
-  }, [food, grams]);
+  const nutrientGroups = useMemo(
+    () => (scaled ? listPresentNutrients(scaled) : []),
+    [scaled],
+  );
 
 
 
@@ -503,7 +493,7 @@ export default function DiaryFoodDetailScreen() {
       {food ? (
         <>
           <Field label="Name" value={nameDraft} onChangeText={setNameDraft} />
-          <Button
+          <Button size="compact"
             label="Save name"
             variant="secondary"
             loading={renaming}
@@ -528,6 +518,8 @@ export default function DiaryFoodDetailScreen() {
         </>
       ) : null}
 
+      {food ? <MealStaplesSection foodId={food.id} /> : null}
+
       {food ? (
 
         <>
@@ -549,18 +541,6 @@ export default function DiaryFoodDetailScreen() {
             <AppText variant="title">Quick log</AppText>
 
             <Field label="Grams" value={grams} onChangeText={setGrams} keyboardType="numeric" placeholder="100" />
-
-            {scaledPreview ? (
-
-              <AppText variant="caption" color="muted">
-
-                {scaledPreview.kcal} kcal · {scaledPreview.proteinG}g protein · {scaledPreview.carbsG}g carbs ·{" "}
-
-                {scaledPreview.fatG}g fat
-
-              </AppText>
-
-            ) : null}
 
             {frequentGrams.length > 0 ? (
 
@@ -592,7 +572,8 @@ export default function DiaryFoodDetailScreen() {
 
             ) : null}
 
-            <Button
+            <View style={styles.actions}>
+            <Button size="compact"
 
               label={defaultMeal ? quickLogLabel : "Choose meal group to log"}
 
@@ -604,25 +585,28 @@ export default function DiaryFoodDetailScreen() {
 
             {defaultMeal ? (
 
-              <Button label="Choose meal…" variant="ghost" onPress={() => void openLogFlow()} />
+              <Button size="compact" label="Choose meal…" variant="ghost" onPress={() => void openLogFlow()} />
 
             ) : null}
+
+            <Button size="compact" label="Delete" variant="secondary" onPress={() => void onDelete()} loading={deleting} />
+            </View>
 
           </View>
 
 
 
-          <AppText variant="title">Per 100 g</AppText>
+          <AppText variant="title">{amountGrams} g</AppText>
 
           <View style={styles.macros}>
 
-            <MacroCell label="kcal" value={food.per100g.kcal} />
+            <MacroCell label="kcal" value={scaled?.kcal ?? 0} />
 
-            <MacroCell label="Protein" value={`${food.per100g.proteinG} g`} />
+            <MacroCell label="Protein" value={`${scaled?.proteinG ?? 0} g`} />
 
-            <MacroCell label="Carbs" value={`${food.per100g.carbsG} g`} />
+            <MacroCell label="Carbs" value={`${scaled?.carbsG ?? 0} g`} />
 
-            <MacroCell label="Fat" value={`${food.per100g.fatG} g`} />
+            <MacroCell label="Fat" value={`${scaled?.fatG ?? 0} g`} />
 
           </View>
 
@@ -637,8 +621,6 @@ export default function DiaryFoodDetailScreen() {
             </AppText>
 
           ) : null}
-
-          <Button label="Delete" variant="secondary" onPress={() => void onDelete()} loading={deleting} />
 
         </>
 
@@ -800,6 +782,13 @@ const styles = StyleSheet.create({
 
     backgroundColor: tokens.surface,
 
+  },
+
+  actions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: tokens.space.sm,
   },
 
   chips: {

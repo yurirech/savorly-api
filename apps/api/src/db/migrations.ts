@@ -11,4 +11,6 @@ export const MIGRATIONS = [
   "0009_food_original_name.sql",
   "0010_nutrition_recipes.sql",
   "0011_staple_foods.sql",
+  "0012_diary_meal_templates.sql",
+  "0013_meal_staples.sql",
 ] as const;

@@ -66,7 +66,7 @@ export default function DiaryFoodFormScreen() {
           {error}
         </AppText>
       ) : null}
-      <Button label="Save food" onPress={() => void onSave()} loading={saving} />
+      <Button size="compact" label="Save food" onPress={() => void onSave()} loading={saving} />
     </Screen>
   );
 }

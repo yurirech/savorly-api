@@ -14,7 +14,7 @@ import {
   isPantryIngredient,
   recipeNotesText,
 } from "@savorly/shared";
-import { createNutritionRecipeFromCookbook, deleteRecipe, getRecipe, listCookbooks, listNutritionRecipesForCookbook, listRecipeCookbooks, requestPantrySubstitutions, setRecipeCookbooks, updateRecipe, ApiRequestError } from "../../../src/api/client";
+import { copyRecipe, createNutritionRecipeFromCookbook, deleteRecipe, getRecipe, listCookbooks, listNutritionRecipesForCookbook, listRecipeCookbooks, requestPantrySubstitutions, setRecipeCookbooks, updateRecipe, ApiRequestError } from "../../../src/api/client";
 import { imageForCategory } from "../../../src/assets/categoryImages";
 import { AppText } from "../../../src/components/AppText";
 import { Button } from "../../../src/components/Button";
@@ -46,6 +46,7 @@ export default function RecipeDetailScreen() {
   pickerOpenRef.current = pickerOpen;
   const [savingCookbooks, setSavingCookbooks] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [copyingRecipe, setCopyingRecipe] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notesDraft, setNotesDraft] = useState("");
   const [displayServings, setDisplayServings] = useState<number | null>(null);
@@ -482,14 +483,34 @@ export default function RecipeDetailScreen() {
             })();
           }}
         />
-        <Button
-          label="Edit"
-          variant="secondary"
-          onPress={() => {
-            setReviewDraft(recipe, recipe.id, `/(app)/recipe/${recipe.id}`);
-            router.push("/(app)/review");
-          }}
-        />
+        <View style={styles.recipeActions}>
+          <Button
+            label="Copy recipe"
+            variant="secondary"
+            loading={copyingRecipe}
+            onPress={() => {
+              if (!recipe) return;
+              setCopyingRecipe(true);
+              setError(null);
+              void copyRecipe(recipe.id)
+                .then((saved) => {
+                  router.push(`/(app)/recipe/${saved.recipe.id}` as Href);
+                })
+                .catch((err: unknown) => {
+                  setError(err instanceof ApiRequestError ? err.message : "Could not copy that recipe.");
+                })
+                .finally(() => setCopyingRecipe(false));
+            }}
+          />
+          <Button
+            label="Edit"
+            variant="secondary"
+            onPress={() => {
+              setReviewDraft(recipe, recipe.id, `/(app)/recipe/${recipe.id}`);
+              router.push("/(app)/review");
+            }}
+          />
+        </View>
         {error ? (
           <AppText variant="body" color="danger">
             {error}
@@ -547,6 +568,12 @@ export default function RecipeDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  recipeActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: tokens.space.sm,
+  },
   diaryChip: {
     alignSelf: "flex-start",
     borderWidth: 1,

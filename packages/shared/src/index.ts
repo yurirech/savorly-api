@@ -156,6 +156,22 @@ export {
   NUTRIENT_DISPLAY_GROUPS,
 } from "./nutrition/nutrientDisplay";
 export type {
+  DayIntakeTargets,
+  HealthGroup,
+  HealthGroupId,
+  HealthNutrient,
+  HealthNutrientUnit,
+} from "./nutrition/healthGroups";
+export {
+  cappedProgress,
+  dayIntakeTargets,
+  findHealthGroup,
+  HEALTH_GROUPS,
+  healthGroupPercent,
+  healthNutrientAmount,
+  macroCalorieShares,
+} from "./nutrition/healthGroups";
+export type {
   NutritionActivity,
   NutritionGoal,
   NutritionProfileInput,

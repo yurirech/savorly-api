@@ -1,9 +1,11 @@
-import { type Href, router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
+import type { DiaryMealGroup } from "@savorly/shared";
 import {
   ApiRequestError,
   addQuickDiaryEntry,
+  createDiaryMeal,
   deleteDiaryEntry,
   fetchDiaryDay,
   updateQuickDiaryEntry,
@@ -12,6 +14,8 @@ import { AppText } from "../../../src/components/AppText";
 import { Button } from "../../../src/components/Button";
 import { Field } from "../../../src/components/Field";
 import { Screen } from "../../../src/components/Screen";
+import DiaryMealNameSheet from "../../../src/diary/DiaryMealNameSheet";
+import DiaryMealPickerSheet from "../../../src/diary/DiaryMealPickerSheet";
 import { writeLastDiaryMeal } from "../../../src/diary/lastDiaryMealStorage";
 import { tokens } from "../../../src/theme/tokens";
 import { todayIsoDate } from "../../../src/utils/isoDate";
@@ -47,6 +51,10 @@ export default function DiaryQuickCalScreen() {
   const [fat, setFat] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [pickerVisible, setPickerVisible] = useState(false);
+  const [creatingMeal, setCreatingMeal] = useState(false);
+  const [nameSaving, setNameSaving] = useState(false);
+  const [meals, setMeals] = useState<DiaryMealGroup[]>([]);
 
   useFocusEffect(
     useCallback(() => {
@@ -92,9 +100,29 @@ export default function DiaryQuickCalScreen() {
     [isEdit],
   );
 
-  async function onSave() {
-    if (!mealId && !isEdit) {
-      setError("Pick a meal group first.");
+  async function onSave(targetMealId?: string) {
+    const chosenMealId = targetMealId ?? mealId;
+    if (!chosenMealId && !isEdit) {
+      const kcalValue = parseRequiredKcal(kcal);
+      if (kcalValue == null) {
+        setError("Enter calories (zero or more).");
+        return;
+      }
+      if ([protein, carbs, fat].some((field) => field.trim() && parseOptionalNumber(field) == null)) {
+        setError("Macros must be valid numbers.");
+        return;
+      }
+      setSaving(true);
+      setError(null);
+      try {
+        const day = await fetchDiaryDay(date);
+        setMeals(day.meals);
+        setPickerVisible(true);
+      } catch (err) {
+        setError(err instanceof ApiRequestError ? err.message : "Could not load meal groups.");
+      } finally {
+        setSaving(false);
+      }
       return;
     }
     const kcalValue = parseRequiredKcal(kcal);
@@ -122,9 +150,9 @@ export default function DiaryQuickCalScreen() {
       };
       if (entryId) {
         await updateQuickDiaryEntry(entryId, payload);
-      } else if (mealId) {
-        const day = await addQuickDiaryEntry({ mealId, date, ...payload });
-        const meal = day.meals.find((row) => row.id === mealId);
+      } else if (chosenMealId) {
+        const day = await addQuickDiaryEntry({ mealId: chosenMealId, date, ...payload });
+        const meal = day.meals.find((row) => row.id === chosenMealId);
         if (meal) {
           await writeLastDiaryMeal({ mealId: meal.id, mealName: meal.name, date });
         }
@@ -169,10 +197,68 @@ export default function DiaryQuickCalScreen() {
           {error}
         </AppText>
       ) : null}
-      <Button label={isEdit ? "Update entry" : "Add to meal"} onPress={() => void onSave()} loading={saving} />
-      {isEdit ? (
-        <Button label="Delete entry" variant="secondary" onPress={() => void onDeleteEntry()} loading={saving} />
-      ) : null}
+      <View style={styles.actions}>
+        <Button
+          size="compact"
+          label={isEdit ? "Update entry" : "Choose meal"}
+          onPress={() => void onSave()}
+          loading={saving}
+        />
+        {isEdit ? (
+          <Button size="compact" label="Delete entry" variant="secondary" onPress={() => void onDeleteEntry()} loading={saving} />
+        ) : null}
+      </View>
+      <DiaryMealPickerSheet
+        visible={pickerVisible}
+        meals={meals}
+        onClose={() => setPickerVisible(false)}
+        onSelectMeal={(nextMealId) => {
+          setPickerVisible(false);
+          void onSave(nextMealId);
+        }}
+        onCreateMeal={() => {
+          setPickerVisible(false);
+          setCreatingMeal(true);
+        }}
+      />
+      <DiaryMealNameSheet
+        visible={creatingMeal}
+        title="New meal group"
+        confirmLabel="Add group"
+        loading={nameSaving}
+        onClose={() => setCreatingMeal(false)}
+        onConfirm={(mealName) => {
+          void (async () => {
+            if (!mealName.trim()) {
+              setError("Give the meal group a name.");
+              return;
+            }
+            setNameSaving(true);
+            setError(null);
+            try {
+              const live = await createDiaryMeal(date, mealName.trim());
+              const created = live.meals[live.meals.length - 1];
+              setCreatingMeal(false);
+              if (created) {
+                await onSave(created.id);
+              }
+            } catch (err) {
+              setError(err instanceof ApiRequestError ? err.message : "Could not add meal group.");
+            } finally {
+              setNameSaving(false);
+            }
+          })();
+        }}
+      />
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  actions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: tokens.space.sm,
+  },
+});

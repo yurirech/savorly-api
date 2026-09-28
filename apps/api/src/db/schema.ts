@@ -19,6 +19,7 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   staplesImportedAt: timestamp("staples_imported_at", { withTimezone: true }),
+  mealTemplatesSeededAt: timestamp("meal_templates_seeded_at", { withTimezone: true }),
 });
 
 export const recipes = pgTable(
@@ -160,6 +161,39 @@ export const nevoFoods = pgTable("nevo_foods", {
   searchText: text("search_text").notNull(),
   per100g: jsonb("per_100g").notNull(),
 });
+
+export const diaryMealTemplates = pgTable(
+  "diary_meal_templates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (table) => [
+    uniqueIndex("diary_meal_templates_user_name_unique").on(table.userId, table.name),
+    index("diary_meal_templates_user_idx").on(table.userId, table.sortOrder),
+  ],
+);
+
+export const mealStaples = pgTable(
+  "meal_staples",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    mealName: text("meal_name").notNull(),
+    foodId: uuid("food_id")
+      .notNull()
+      .references(() => userFoods.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.mealName, table.foodId] }),
+    index("meal_staples_user_meal_idx").on(table.userId, table.mealName),
+  ],
+);
 
 export const diaryMeals = pgTable(
   "diary_meals",

@@ -142,6 +142,26 @@ export async function getNutritionRecipe(db: Database, userId: string, id: strin
   return loadDetail(db, userId, id);
 }
 
+export async function createNutritionRecipe(db: Database, userId: string, title: string) {
+  const name = title.trim();
+  if (!name) {
+    throw new AppError("validation_error", "Give the recipe a name.", 400);
+  }
+  const [created] = await db
+    .insert(nutritionRecipes)
+    .values({
+      userId,
+      sourceRecipeId: null,
+      title: name,
+      servings: 1,
+    })
+    .returning();
+  if (!created) {
+    throw new AppError("internal_error", "Could not create recipe.", 500);
+  }
+  return loadDetail(db, userId, created.id);
+}
+
 export async function createNutritionRecipeFromCookbook(db: Database, userId: string, recipeId: string) {
   const cookbook = await getRecipe(db, userId, recipeId);
   const foods = await listUserFoods(db, userId);
@@ -176,10 +196,16 @@ export async function updateNutritionRecipe(
   db: Database,
   userId: string,
   id: string,
-  input: { title?: string; servings?: number; cookedWeightG?: number | null },
+  input: { title?: string; servings?: number; cookedWeightG?: number | null; sourceRecipeId?: string | null },
 ) {
   await loadDetail(db, userId, id);
-  const patch: { title?: string; servings?: number; cookedWeightG?: number | null; updatedAt: Date } = {
+  const patch: {
+    title?: string;
+    servings?: number;
+    cookedWeightG?: number | null;
+    sourceRecipeId?: string | null;
+    updatedAt: Date;
+  } = {
     updatedAt: new Date(),
   };
   if (input.title != null) {
@@ -200,6 +226,14 @@ export async function updateNutritionRecipe(
       throw new AppError("validation_error", "Cooked weight must be greater than 0.", 400);
     }
     patch.cookedWeightG = input.cookedWeightG;
+  }
+  if (input.sourceRecipeId !== undefined) {
+    if (input.sourceRecipeId == null) {
+      patch.sourceRecipeId = null;
+    } else {
+      await getRecipe(db, userId, input.sourceRecipeId);
+      patch.sourceRecipeId = input.sourceRecipeId;
+    }
   }
   await db.update(nutritionRecipes).set(patch).where(eq(nutritionRecipes.id, id));
   return loadDetail(db, userId, id);
