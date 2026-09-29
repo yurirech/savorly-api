@@ -8,6 +8,7 @@ export default function TextImportScreen() {
       label="Recipe text"
       placeholder="Ingredients, steps, or a caption..."
       multiline
+      allowManual
       buildRequest={(text) => ({ type: "text", text })}
     />
   );

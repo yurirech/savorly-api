@@ -12,9 +12,10 @@ import { tokens } from "../../../src/theme/tokens";
 import { todayIsoDate } from "../../../src/utils/isoDate";
 
 export default function DiaryPickFoodScreen() {
-  const params = useLocalSearchParams<{ date?: string; mealId?: string }>();
+  const params = useLocalSearchParams<{ date?: string; mealId?: string; nutritionRecipeId?: string }>();
   const date = Array.isArray(params.date) ? params.date[0] : params.date ?? todayIsoDate();
   const mealId = Array.isArray(params.mealId) ? params.mealId[0] : params.mealId;
+  const nutritionRecipeId = Array.isArray(params.nutritionRecipeId) ? params.nutritionRecipeId[0] : params.nutritionRecipeId;
   const [foods, setFoods] = useState<UserFood[]>([]);
   const [loggedFoodIds, setLoggedFoodIds] = useState<Set<string>>(() => new Set());
   const [query, setQuery] = useState("");
@@ -58,6 +59,13 @@ export default function DiaryPickFoodScreen() {
   const visible = tab === "recipes" ? searched.filter((food) => food.source === "recipe") : searched;
 
   function onPick(foodId: string) {
+    if (nutritionRecipeId) {
+      router.navigate({
+        pathname: "/(app)/diary/nutrition-recipe/[id]",
+        params: { id: nutritionRecipeId, addFoodId: foodId },
+      });
+      return;
+    }
     if (!mealId) {
       setError("Missing meal group.");
       return;
@@ -77,7 +85,7 @@ export default function DiaryPickFoodScreen() {
         <Button label="Diary" size="compact" variant="secondary" onPress={() => router.back()} />
       </View>
       <AppText variant="body" color="muted">
-        Choose a food to log in this meal group.
+        {nutritionRecipeId ? "Choose a food to add to this recipe." : "Choose a food to log in this meal group."}
       </AppText>
       <Field label="Search foods" value={query} onChangeText={setQuery} variant="search" />
       <SegmentedControl

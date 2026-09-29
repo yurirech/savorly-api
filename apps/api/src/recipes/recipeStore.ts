@@ -6,11 +6,21 @@ import { recipes } from "../db/schema";
 import { AppError } from "../errors";
 import { parseRecipeNutrition } from "../normalize/geminiRecipeSchema";
 
-export async function saveRecipe(db: Database, userId: string, recipe: GeneratedRecipe): Promise<SavedRecipe> {
-  const [row] = await db
-    .insert(recipes)
-    .values(toRow(userId, recipe))
-    .returning();
+export async function saveRecipe(
+  db: Database,
+  userId: string,
+  recipe: GeneratedRecipe,
+  id?: string,
+): Promise<SavedRecipe> {
+  const values = { ...toRow(userId, recipe), ...(id ? { id } : {}) };
+  if (id) {
+    await db.insert(recipes).values(values).onConflictDoNothing();
+    return getRecipe(db, userId, id);
+  }
+  const [row] = await db.insert(recipes).values(values).returning();
+  if (!row) {
+    throw new AppError("internal_error", "Could not save recipe.", 500);
+  }
   return fromRow(row);
 }
 

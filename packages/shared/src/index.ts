@@ -217,6 +217,8 @@ export {
   validateQuickDiaryKcal,
 } from "./nutrition/quickDiaryEntry";
 export type { QuickDiaryNutrientsInput } from "./nutrition/quickDiaryEntry";
+export { diaryLinesFromCookbook } from "./nutrition/diaryCopyLines";
+export type { DiaryCopyFood, DiaryCopyLine } from "./nutrition/diaryCopyLines";
 export {
   computeNutritionRecipe,
   isNutritionRecipeComplete,

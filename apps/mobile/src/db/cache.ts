@@ -6,7 +6,7 @@ const memory = new Map<string, SavedRecipe>();
 const useSqlite = Platform.OS !== "web";
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
-function openDb() {
+export function openDb() {
   if (!dbPromise) {
     dbPromise = SQLite.openDatabaseAsync("savorly.db").then(async (db) => {
       await db.execAsync(`
@@ -26,6 +26,58 @@ function openDb() {
         CREATE INDEX IF NOT EXISTS recipes_category_idx ON recipes (category);
         CREATE INDEX IF NOT EXISTS recipes_source_name_idx ON recipes (source_name);
         CREATE INDEX IF NOT EXISTS recipes_source_author_idx ON recipes (source_author);
+        CREATE TABLE IF NOT EXISTS cookbooks (
+          id TEXT PRIMARY KEY NOT NULL,
+          payload TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS cookbook_recipes (
+          cookbook_id TEXT NOT NULL,
+          recipe_id TEXT NOT NULL,
+          PRIMARY KEY (cookbook_id, recipe_id)
+        );
+        CREATE TABLE IF NOT EXISTS foods (
+          id TEXT PRIMARY KEY NOT NULL,
+          name TEXT NOT NULL,
+          payload TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS diary_days (
+          date TEXT PRIMARY KEY NOT NULL,
+          payload TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS nutrition_profile (
+          id TEXT PRIMARY KEY NOT NULL,
+          payload TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS nutrition_recipes (
+          id TEXT PRIMARY KEY NOT NULL,
+          payload TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS meal_staples (
+          meal_name TEXT NOT NULL,
+          food_id TEXT NOT NULL,
+          PRIMARY KEY (meal_name, food_id)
+        );
+        CREATE TABLE IF NOT EXISTS nevo_foods (
+          code INTEGER PRIMARY KEY NOT NULL,
+          name_nl TEXT NOT NULL,
+          name_en TEXT NOT NULL,
+          payload TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS app_meta (
+          key TEXT PRIMARY KEY NOT NULL,
+          value TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS outbox (
+          id TEXT PRIMARY KEY NOT NULL,
+          created_at TEXT NOT NULL,
+          method TEXT NOT NULL,
+          path TEXT NOT NULL,
+          body TEXT
+        );
       `);
       return db;
     });
@@ -78,6 +130,12 @@ export async function upsertCachedRecipe(recipe: SavedRecipe): Promise<void> {
   );
 }
 
+export async function mergeRecipes(recipes: SavedRecipe[]): Promise<void> {
+  for (const recipe of recipes) {
+    await upsertCachedRecipe(recipe);
+  }
+}
+
 export async function replaceCache(recipes: SavedRecipe[]): Promise<void> {
   if (!useSqlite) {
     memory.clear();
@@ -115,6 +173,16 @@ export async function searchCachedRecipes(q: string): Promise<SavedRecipe[]> {
         "SELECT payload FROM recipes ORDER BY updated_at DESC",
       );
   return rows.map((row) => JSON.parse(row.payload) as SavedRecipe);
+}
+
+export async function pruneRecipes(keepIds: string[]): Promise<void> {
+  const keep = new Set(keepIds);
+  const all = await searchCachedRecipes("");
+  for (const recipe of all) {
+    if (!keep.has(recipe.id)) {
+      await removeCachedRecipe(recipe.id);
+    }
+  }
 }
 
 export async function removeCachedRecipe(id: string): Promise<void> {

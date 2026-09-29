@@ -40,11 +40,21 @@ export async function listCookbooks(db: Database, userId: string): Promise<Cookb
   return books.map((book) => toCookbookSummary(book, members.get(book.id) ?? []));
 }
 
-export async function createCookbook(db: Database, userId: string, name: string): Promise<CookbookSummary> {
-  const [row] = await db
-    .insert(cookbooks)
-    .values({ userId, name: name.trim() })
-    .returning();
+export async function createCookbook(
+  db: Database,
+  userId: string,
+  name: string,
+  id?: string,
+): Promise<CookbookSummary> {
+  const values = { userId, name: name.trim(), ...(id ? { id } : {}) };
+  if (id) {
+    await db.insert(cookbooks).values(values).onConflictDoNothing();
+    return getCookbook(db, userId, id);
+  }
+  const [row] = await db.insert(cookbooks).values(values).returning();
+  if (!row) {
+    throw new AppError("internal_error", "Could not create cookbook.", 500);
+  }
   return toCookbookSummary(row, []);
 }
 

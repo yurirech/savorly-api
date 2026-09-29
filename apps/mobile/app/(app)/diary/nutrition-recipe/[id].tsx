@@ -1,5 +1,5 @@
 import { type Href, router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import type { UserFood } from "@savorly/shared";
 import {
@@ -7,7 +7,6 @@ import {
   ApiRequestError,
   deleteNutritionRecipeItem,
   fetchNutritionRecipe,
-  getRecipe,
   listNutritionFoods,
   listRecipes,
   publishNutritionRecipe,
@@ -22,21 +21,19 @@ import { Screen } from "../../../../src/components/Screen";
 import { tokens } from "../../../../src/theme/tokens";
 
 export default function NutritionRecipeScreen() {
-  const params = useLocalSearchParams<{ id?: string }>();
+  const params = useLocalSearchParams<{ id?: string; addFoodId?: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const [detail, setDetail] = useState<NutritionRecipeDetail | null>(null);
   const [foods, setFoods] = useState<UserFood[]>([]);
   const [pickingItemId, setPickingItemId] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
   const [foodQuery, setFoodQuery] = useState("");
-  const [addFoodId, setAddFoodId] = useState<string | null>(null);
+  const [pickedFoodId, setPickedFoodId] = useState<string | null>(null);
   const [addGrams, setAddGrams] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [gramDrafts, setGramDrafts] = useState<Record<string, string>>({});
   const [servingsDraft, setServingsDraft] = useState<string | null>(null);
   const [cookedDraft, setCookedDraft] = useState<string | null>(null);
-  const [linkedTitle, setLinkedTitle] = useState<string | null>(null);
   const [linking, setLinking] = useState(false);
   const [cookbookRecipes, setCookbookRecipes] = useState<Array<{ id: string; title: string }>>([]);
   const [cookbookLoaded, setCookbookLoaded] = useState(false);
@@ -45,13 +42,7 @@ export default function NutritionRecipeScreen() {
     if (!id) return;
     const [live, library] = await Promise.all([fetchNutritionRecipe(id), listNutritionFoods()]);
     setDetail(live);
-    setFoods(library.foods.filter((food) => food.source !== "recipe"));
-    if (live.sourceRecipeId) {
-      const saved = await getRecipe(live.sourceRecipeId);
-      setLinkedTitle(saved.recipe.title);
-    } else {
-      setLinkedTitle(null);
-    }
+    setFoods(library.foods);
   }, [id]);
 
   useFocusEffect(
@@ -85,7 +76,17 @@ export default function NutritionRecipeScreen() {
     void run(() => updateNutritionRecipeItem(detail.id, itemId, { grams }));
   }
 
-  const libraryFoods = foods;
+  const addFoodParam = Array.isArray(params.addFoodId) ? params.addFoodId[0] : params.addFoodId;
+  const libraryFoods = foods.filter((food) => food.source !== "recipe");
+  const pickedFood = foods.find((food) => food.id === pickedFoodId) ?? null;
+
+  useEffect(() => {
+    if (!addFoodParam) return;
+    setPickedFoodId(addFoodParam);
+    setAddGrams("");
+    setPickingItemId(null);
+    router.setParams({ addFoodId: "" });
+  }, [addFoodParam]);
 
   return (
     <Screen>
@@ -151,18 +152,21 @@ export default function NutritionRecipeScreen() {
           </View>
           {detail.sourceRecipeId ? (
             <View style={styles.actionRow}>
-              <AppText variant="body">{linkedTitle ? `Linked to ${linkedTitle}` : "Linked cookbook recipe"}</AppText>
+              <Pressable
+                onPress={() => router.push(`/(app)/recipe/${detail.sourceRecipeId}` as Href)}
+                accessibilityRole="button"
+                accessibilityLabel="Open cookbook recipe"
+                style={styles.emojiButton}
+              >
+                <AppText variant="body">📖</AppText>
+              </Pressable>
               <Button
                 size="compact"
                 label="Unlink"
                 variant="ghost"
                 onPress={() => {
                   setLinking(false);
-                  void run(async () => {
-                    const next = await updateNutritionRecipe(detail.id, { sourceRecipeId: null });
-                    setLinkedTitle(null);
-                    return next;
-                  });
+                  void run(() => updateNutritionRecipe(detail.id, { sourceRecipeId: null }));
                 }}
               />
             </View>
@@ -190,11 +194,7 @@ export default function NutritionRecipeScreen() {
                   style={styles.food}
                   onPress={() => {
                     setLinking(false);
-                    void run(async () => {
-                      const next = await updateNutritionRecipe(detail.id, { sourceRecipeId: recipe.id });
-                      setLinkedTitle(recipe.title);
-                      return next;
-                    });
+                    void run(() => updateNutritionRecipe(detail.id, { sourceRecipeId: recipe.id }));
                   }}
                   accessibilityRole="button"
                   accessibilityLabel={`Link ${recipe.title}`}
@@ -231,7 +231,7 @@ export default function NutritionRecipeScreen() {
                 />
                 <Pressable
                   onPress={() => {
-                    setAdding(false);
+                    setPickedFoodId(null);
                     setFoodQuery("");
                     setPickingItemId(item.id);
                   }}
@@ -257,11 +257,34 @@ export default function NutritionRecipeScreen() {
             variant="secondary"
             onPress={() => {
               setPickingItemId(null);
-              setFoodQuery("");
-              setAdding(true);
+              router.push({
+                pathname: "/(app)/diary/log",
+                params: { nutritionRecipeId: detail.id },
+              });
             }}
           />
-          {pickingItemId || adding ? (
+          {pickedFoodId ? (
+            <View style={styles.picker}>
+              <AppText variant="body">{pickedFood?.name ?? "Selected food"}</AppText>
+              <Field label="Grams" value={addGrams} onChangeText={setAddGrams} keyboardType="numeric" />
+              <Button
+                size="compact"
+                label="Add selected food"
+                onPress={() => {
+                  const grams = Number(addGrams.replace(",", "."));
+                  if (!(grams > 0)) {
+                    setError("Enter the grams.");
+                    return;
+                  }
+                  void run(() => addNutritionRecipeItem(detail.id, pickedFoodId, grams)).then(() => {
+                    setPickedFoodId(null);
+                    setAddGrams("");
+                  });
+                }}
+              />
+            </View>
+          ) : null}
+          {pickingItemId ? (
             <View style={styles.picker}>
               <Field
                 label="Search My foods"
@@ -278,18 +301,12 @@ export default function NutritionRecipeScreen() {
                         key={food.id}
                         style={styles.food}
                         onPress={() => {
-                          if (pickingItemId) {
-                            void run(() => updateNutritionRecipeItem(detail.id, pickingItemId, { foodId: food.id }));
-                            setPickingItemId(null);
-                            setFoodQuery("");
-                            return;
-                          }
-                          setAddFoodId(food.id);
+                          void run(() => updateNutritionRecipeItem(detail.id, pickingItemId, { foodId: food.id }));
+                          setPickingItemId(null);
+                          setFoodQuery("");
                         }}
                       >
-                        <AppText variant="body" color={addFoodId === food.id ? "accent" : "text"}>
-                          {food.name}
-                        </AppText>
+                        <AppText variant="body">{food.name}</AppText>
                       </Pressable>
                     ))
                 : null}
@@ -323,26 +340,6 @@ export default function NutritionRecipeScreen() {
                   />
                   </View>
                 </View>
-              ) : null}
-              {adding ? (
-                <>
-                  <Field label="Grams for extra" value={addGrams} onChangeText={setAddGrams} keyboardType="numeric" />
-                  <Button size="compact"
-                    label="Add selected food"
-                    onPress={() => {
-                      const grams = Number(addGrams.replace(",", "."));
-                      if (!addFoodId || !(grams > 0)) {
-                        setError("Pick a food and grams.");
-                        return;
-                      }
-                      void run(() => addNutritionRecipeItem(detail.id, addFoodId, grams)).then(() => {
-                        setAdding(false);
-                        setAddFoodId(null);
-                        setAddGrams("");
-                      });
-                    }}
-                  />
-                </>
               ) : null}
             </View>
           ) : null}
@@ -437,6 +434,16 @@ const styles = StyleSheet.create({
   },
   picker: { gap: tokens.space.xs },
   database: { gap: tokens.space.xs },
+  emojiButton: {
+    width: 40,
+    height: 40,
+    borderRadius: tokens.radius.full,
+    borderWidth: 1,
+    borderColor: tokens.border,
+    backgroundColor: tokens.surface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   actionRow: {
     flexDirection: "row",
     flexWrap: "wrap",

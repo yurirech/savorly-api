@@ -1,7 +1,23 @@
 import { Stack } from "expo-router";
+import { useEffect } from "react";
+import { ensureNevoSnapshot, fetchNutritionProfile, listCookbooks, listNutritionFoods, listRecipes } from "../../src/api/client";
+import { flushOutbox } from "../../src/offline/sync";
 import { tokens } from "../../src/theme/tokens";
 
 export default function AppLayout() {
+  useEffect(() => {
+    void (async () => {
+      await flushOutbox();
+      await Promise.allSettled([
+        listRecipes(),
+        listCookbooks(),
+        listNutritionFoods(),
+        fetchNutritionProfile(),
+        ensureNevoSnapshot(),
+      ]);
+    })();
+  }, []);
+
   return (
     <Stack
       screenOptions={{

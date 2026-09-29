@@ -1,10 +1,10 @@
 import { router, type Href, useFocusEffect, useLocalSearchParams } from "expo-router";
 import * as Clipboard from "expo-clipboard";
-import { Check, Copy, Minus, Plus } from "phosphor-react-native";
+import { Books, Check, Copy, Minus, PencilSimple, Plus } from "phosphor-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Image, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { CookbookSummary, DisplayUnit, PantrySubstitutionResponse, SavedRecipe, UserFood } from "@savorly/shared";
+import type { CookbookSummary, DisplayUnit, PantrySubstitutionResponse, SavedRecipe } from "@savorly/shared";
 import {
   displayIngredient,
   formatIngredientLine,
@@ -58,7 +58,7 @@ export default function RecipeDetailScreen() {
   const [substitutionResult, setSubstitutionResult] = useState<PantrySubstitutionResponse | null>(null);
   const [substitutionError, setSubstitutionError] = useState<string | null>(null);
   const [suggestingSwaps, setSuggestingSwaps] = useState(false);
-  const [diaryCopies, setDiaryCopies] = useState<UserFood[]>([]);
+  const [diaryRecipes, setDiaryRecipes] = useState<Array<{ id: string; title: string }>>([]);
   const [openingDiary, setOpeningDiary] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const insets = useSafeAreaInsets();
@@ -114,8 +114,8 @@ export default function RecipeDetailScreen() {
       void reloadCookbooks();
       void reloadPantry();
       void listNutritionRecipesForCookbook(recipeId)
-        .then((linked) => setDiaryCopies(linked.foods))
-        .catch(() => setDiaryCopies([]));
+        .then((linked) => setDiaryRecipes(linked.recipes))
+        .catch(() => setDiaryRecipes([]));
     }, [recipeId, reloadRecipe, reloadCookbooks, reloadPantry]),
   );
 
@@ -255,7 +255,10 @@ export default function RecipeDetailScreen() {
       setMissingSheetOpen(false);
       setSubstitutionsSheetOpen(true);
     } catch (err) {
-      setSubstitutionError(err instanceof ApiRequestError ? err.message : "Could not suggest swaps.");
+      const { isUnavailable } = await import("../../../src/offline/sync");
+      setSubstitutionError(
+        isUnavailable(err) ? "Pantry swaps need a connection." : err instanceof ApiRequestError ? err.message : "Could not suggest swaps.",
+      );
       setSubstitutionsSheetOpen(true);
     } finally {
       setSuggestingSwaps(false);
@@ -280,6 +283,30 @@ export default function RecipeDetailScreen() {
       <View style={styles.heroWrap}>
         <Image source={imageForCategory(recipe.category)} style={styles.hero} />
         <View style={styles.heroScrim} />
+        <View style={[styles.heroTools, { top: insets.top, left: tokens.space[7] + tokens.space.sm }]}>
+          <Pressable
+            onPress={() => {
+              setReviewDraft(recipe, recipe.id, `/(app)/recipe/${recipe.id}`);
+              router.push("/(app)/review");
+            }}
+            style={styles.stepperBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Edit"
+          >
+            <PencilSimple size={18} color={tokens.text} />
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              setSelectedCookbookIds(savedCookbookIds);
+              setPickerOpen(true);
+            }}
+            style={styles.stepperBtn}
+            accessibilityRole="button"
+            accessibilityLabel={savedCookbookIds.length > 0 ? "Edit cookbooks" : "Add to cookbooks"}
+          >
+            <Books size={18} color={tokens.text} />
+          </Pressable>
+        </View>
         <View style={styles.heroCopy}>
           <AppText variant="label" color="accent">
             {recipe.category}
@@ -439,23 +466,20 @@ export default function RecipeDetailScreen() {
             </View>
           </View>
         ) : null}
-        <Button
-          label={savedCookbookIds.length > 0 ? "Edit cookbooks" : "Add to cookbooks"}
-          variant="secondary"
-          onPress={() => {
-            setSelectedCookbookIds(savedCookbookIds);
-            setPickerOpen(true);
-          }}
-        />
-        {diaryCopies[0] ? (
-          <Pressable
-            onPress={() => router.push(`/(app)/diary/food/${diaryCopies[0]!.id}` as Href)}
-            style={styles.diaryChip}
-            accessibilityRole="button"
-            accessibilityLabel={diaryCopies[0].name}
-          >
-            <AppText variant="caption">My foods · {diaryCopies[0].name}</AppText>
-          </Pressable>
+        {diaryRecipes.length > 0 ? (
+          <View style={styles.recipeActions}>
+            {diaryRecipes.map((copy) => (
+              <Pressable
+                key={copy.id}
+                onPress={() => router.push(`/(app)/diary/nutrition-recipe/${copy.id}` as Href)}
+                style={styles.stepperBtn}
+                accessibilityRole="button"
+                accessibilityLabel={copy.title}
+              >
+                <AppText variant="body">🍽️</AppText>
+              </Pressable>
+            ))}
+          </View>
         ) : null}
         <Button
           label="Use for diary"
@@ -500,14 +524,6 @@ export default function RecipeDetailScreen() {
                   setError(err instanceof ApiRequestError ? err.message : "Could not copy that recipe.");
                 })
                 .finally(() => setCopyingRecipe(false));
-            }}
-          />
-          <Button
-            label="Edit"
-            variant="secondary"
-            onPress={() => {
-              setReviewDraft(recipe, recipe.id, `/(app)/recipe/${recipe.id}`);
-              router.push("/(app)/review");
             }}
           />
         </View>
@@ -574,14 +590,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: tokens.space.sm,
   },
-  diaryChip: {
-    alignSelf: "flex-start",
-    borderWidth: 1,
-    borderColor: tokens.border,
-    borderRadius: tokens.radius.full,
-    paddingHorizontal: tokens.space.md,
-    paddingVertical: tokens.space.xs,
-  },
   heroWrap: {
     height: 320,
     justifyContent: "flex-end",
@@ -594,6 +602,12 @@ const styles = StyleSheet.create({
     left: 0,
     width: "100%",
     height: "100%",
+  },
+  heroTools: {
+    position: "absolute",
+    zIndex: 2,
+    flexDirection: "row",
+    gap: tokens.space.sm,
   },
   heroScrim: {
     position: "absolute",

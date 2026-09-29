@@ -10,7 +10,7 @@ import { RecipeCard } from "../../../src/components/RecipeCard";
 import { Screen } from "../../../src/components/Screen";
 import { SectionHeader } from "../../../src/components/SectionHeader";
 import { SourceCard } from "../../../src/components/SourceCard";
-import { replaceCache, searchCachedRecipes } from "../../../src/db/cache";
+import { searchCachedRecipes } from "../../../src/db/cache";
 import { setImportReturnTo } from "../../../src/store/reviewDraft";
 import { tokens } from "../../../src/theme/tokens";
 
@@ -24,7 +24,6 @@ export default function HomeScreen() {
     });
     try {
       const live = await listRecipes();
-      void replaceCache(live.recipes);
       if (isActive()) setRecipes(live.recipes.slice(0, 4));
     } catch {
       // Offline: cached recipes remain.

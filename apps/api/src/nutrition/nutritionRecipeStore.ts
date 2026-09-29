@@ -1,11 +1,8 @@
 import { and, asc, desc, eq } from "drizzle-orm";
 import {
   computeNutritionRecipe,
-  isIngredientSection,
+  diaryLinesFromCookbook,
   isNutritionRecipeComplete,
-  normalizeUnit,
-  quantityToGrams,
-  type Ingredient,
   type NutrientVector,
   type NutritionRecipeItemInput,
   type UserFood,
@@ -32,34 +29,6 @@ export type NutritionRecipeDetail = {
   libraryFood: UserFood | null;
   updatedAt: string;
 };
-
-function lineGrams(ingredient: Ingredient): number | null {
-  const quantity = ingredient.quantity;
-  if (quantity == null || !(quantity > 0)) {
-    return null;
-  }
-  const unit = (ingredient.unit ?? "").trim().toLowerCase();
-  if (unit === "kg" || unit === "kilogram" || unit === "kilograms") {
-    return quantity * 1000;
-  }
-  const normalized = normalizeUnit(ingredient.unit);
-  if (normalized === "g") {
-    return quantity;
-  }
-  if (normalized && ingredient.gramsPerCup && ingredient.gramsPerCup > 0) {
-    return quantityToGrams(quantity, normalized, ingredient.gramsPerCup);
-  }
-  return null;
-}
-
-function matchFoodId(name: string, foods: UserFood[]): string | null {
-  const needle = name.trim().toLowerCase();
-  if (!needle) {
-    return null;
-  }
-  const hits = foods.filter((food) => food.name.trim().toLowerCase() === needle && food.source !== "recipe");
-  return hits.length === 1 ? hits[0]!.id : null;
-}
 
 async function loadDetail(db: Database, userId: string, id: string): Promise<NutritionRecipeDetail> {
   const [recipe] = await db
@@ -142,10 +111,23 @@ export async function getNutritionRecipe(db: Database, userId: string, id: strin
   return loadDetail(db, userId, id);
 }
 
-export async function createNutritionRecipe(db: Database, userId: string, title: string) {
+export async function createNutritionRecipe(db: Database, userId: string, title: string, id?: string) {
   const name = title.trim();
   if (!name) {
     throw new AppError("validation_error", "Give the recipe a name.", 400);
+  }
+  if (id) {
+    await db
+      .insert(nutritionRecipes)
+      .values({
+        id,
+        userId,
+        sourceRecipeId: null,
+        title: name,
+        servings: 1,
+      })
+      .onConflictDoNothing();
+    return loadDetail(db, userId, id);
   }
   const [created] = await db
     .insert(nutritionRecipes)
@@ -177,14 +159,14 @@ export async function createNutritionRecipeFromCookbook(db: Database, userId: st
   if (!created) {
     throw new AppError("internal_error", "Could not copy recipe.", 500);
   }
-  const lines = cookbook.ingredients.filter((line) => !isIngredientSection(line));
+  const lines = diaryLinesFromCookbook(cookbook.ingredients, foods);
   if (lines.length > 0) {
     await db.insert(nutritionRecipeItems).values(
       lines.map((line, index) => ({
         nutritionRecipeId: created.id,
-        sourceLine: line.name,
-        foodId: matchFoodId(line.name, foods),
-        grams: lineGrams(line),
+        sourceLine: line.sourceLine,
+        foodId: line.foodId,
+        grams: line.grams,
         sortOrder: index,
       })),
     );

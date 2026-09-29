@@ -84,6 +84,10 @@ export default function ReviewScreen() {
 
   async function onSave() {
     const nextRecipe = recipeForSave();
+    if (!nextRecipe.title.trim()) {
+      setError("Give the recipe a title.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {

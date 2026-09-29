@@ -69,7 +69,7 @@ import {
   updateNutritionRecipe,
   updateNutritionRecipeItem,
 } from "./nutrition/nutritionRecipeStore";
-import { requireNevoFood, searchNevoFoods, nevoFoodsReady } from "./nutrition/nevoStore";
+import { listNevoSnapshot, requireNevoFood, searchNevoFoods, nevoFoodsReady } from "./nutrition/nevoStore";
 import { fetchUsdaFood, searchUsdaFoods } from "./nutrition/usdaClient";
 import { NEVO_ATTRIBUTION } from "@savorly/shared";
 
@@ -205,6 +205,10 @@ const cookbookNameSchema = z.object({
   name: z.string().trim().min(1).max(80),
 });
 
+const cookbookCreateSchema = cookbookNameSchema.extend({
+  id: z.string().uuid().optional(),
+});
+
 const recipeIdsSchema = z.object({
   recipeIds: z.array(z.string().uuid()).min(1),
 });
@@ -257,6 +261,7 @@ const nutritionProfileSchema = z.object({
 });
 
 const manualFoodSchema = z.object({
+  id: z.string().uuid().optional(),
   name: z.string().trim().min(1).max(80),
   per100g: nutrientVectorSchema,
 });
@@ -267,11 +272,13 @@ const importFoodSchema = z.object({
 });
 
 const importNevoFoodSchema = z.object({
+  id: z.string().uuid().optional(),
   nevoCode: z.number().int().positive(),
   name: z.string().trim().min(1).max(120).optional(),
 });
 
 const diaryEntrySchema = z.object({
+  id: z.string().uuid().optional(),
   mealId: z.string().uuid(),
   foodId: z.string().uuid(),
   grams: z.number().nonnegative().max(5000),
@@ -287,6 +294,7 @@ const diaryEntryCopySchema = z.object({
 });
 
 const quickDiaryEntrySchema = z.object({
+  id: z.string().uuid().optional(),
   mealId: z.string().uuid(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   label: z.string().trim().max(80).optional(),
@@ -305,6 +313,7 @@ const quickDiaryEntryPatchSchema = z.object({
 });
 
 const diaryMealSchema = z.object({
+  id: z.string().uuid().optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   name: z.string().min(1).max(40),
 });
@@ -376,8 +385,12 @@ export function createApp(db: Database, env: Env) {
 
   app.post("/recipes", async (c) => {
     const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
-    const recipe = generatedRecipeSchema.parse(await c.req.json()) as GeneratedRecipe;
-    const saved = await saveRecipe(db, user.id, recipe);
+    const body = z
+      .object({ id: z.string().uuid().optional() })
+      .and(generatedRecipeSchema)
+      .parse(await c.req.json());
+    const { id, ...recipe } = body;
+    const saved = await saveRecipe(db, user.id, recipe as GeneratedRecipe, id);
     return c.json({ recipe: saved }, 201);
   });
 
@@ -452,8 +465,8 @@ export function createApp(db: Database, env: Env) {
 
   app.post("/cookbooks", async (c) => {
     const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
-    const body = cookbookNameSchema.parse(await c.req.json());
-    const cookbook = await createCookbook(db, user.id, body.name);
+    const body = cookbookCreateSchema.parse(await c.req.json());
+    const cookbook = await createCookbook(db, user.id, body.name, body.id);
     return c.json({ cookbook }, 201);
   });
 
@@ -559,6 +572,26 @@ export function createApp(db: Database, env: Env) {
     return c.json({ foods: hits });
   });
 
+  app.get("/nutrition/foods/nevo/snapshot", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    void user;
+    if (!(await nevoFoodsReady(db))) {
+      throw new AppError("internal_error", "NEVO reference data is not loaded on this server yet.", 503);
+    }
+    const rows = await listNevoSnapshot(db);
+    return c.json({
+      attribution: NEVO_ATTRIBUTION,
+      foods: rows.map((row) => ({
+        nevoCode: row.nevoCode,
+        name: row.nameNl,
+        nameEn: row.nameEn,
+        foodGroup: row.foodGroupNl,
+        version: row.version,
+        per100g: row.per100g,
+      })),
+    });
+  });
+
   app.get("/nutrition/foods/nevo", async (c) => {
     const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
     void user;
@@ -596,8 +629,10 @@ export function createApp(db: Database, env: Env) {
 
   app.post("/nutrition/recipes", async (c) => {
     const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
-    const body = z.object({ title: z.string().trim().min(1).max(120) }).parse(await c.req.json());
-    return c.json(await createNutritionRecipe(db, user.id, body.title), 201);
+    const body = z
+      .object({ id: z.string().uuid().optional(), title: z.string().trim().min(1).max(120) })
+      .parse(await c.req.json());
+    return c.json(await createNutritionRecipe(db, user.id, body.title, body.id), 201);
   });
 
   app.post("/nutrition/recipes/from-cookbook", async (c) => {
@@ -680,7 +715,7 @@ export function createApp(db: Database, env: Env) {
   app.post("/nutrition/foods", async (c) => {
     const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
     const body = manualFoodSchema.parse(await c.req.json());
-    const food = await createManualFood(db, user.id, body.name, body.per100g);
+    const food = await createManualFood(db, user.id, body.name, body.per100g, body.id);
     return c.json({ food }, 201);
   });
 
@@ -702,6 +737,7 @@ export function createApp(db: Database, env: Env) {
     const body = importNevoFoodSchema.parse(await c.req.json());
     const reference = await requireNevoFood(db, body.nevoCode);
     const food = await importNevoFood(db, user.id, {
+      id: body.id,
       nevoCode: reference.nevoCode,
       name: body.name ?? reference.nameNl,
       per100g: reference.per100g,

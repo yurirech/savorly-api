@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import type { FoodCategory, MealSuggestion } from "@savorly/shared";
 import { ApiRequestError, fetchMealSuggestion } from "../../src/api/client";
+import { isUnavailable } from "../../src/offline/sync";
 import { AppText } from "../../src/components/AppText";
 import { Button } from "../../src/components/Button";
 import { CategoryPicker } from "../../src/components/CategoryPicker";
@@ -54,7 +55,7 @@ export default function SuggestMealScreen() {
           setSuggestion(null);
           return;
         }
-        setError(err instanceof ApiRequestError ? err.message : "Could not suggest a meal.");
+        setError(isUnavailable(err) ? "Suggesting a meal needs a connection." : err instanceof ApiRequestError ? err.message : "Could not suggest a meal.");
         setPhase("result");
       } finally {
         setLoading(false);

@@ -17,7 +17,7 @@ import { Button } from "../../../src/components/Button";
 import { Field } from "../../../src/components/Field";
 import { RecipeGrid } from "../../../src/components/RecipeGrid";
 import { Screen } from "../../../src/components/Screen";
-import { replaceCache, searchCachedRecipes } from "../../../src/db/cache";
+import { searchCachedRecipes } from "../../../src/db/cache";
 import { usePantryMatchForRecipes } from "../../../src/hooks/useRecipePantry";
 import { tokens } from "../../../src/theme/tokens";
 import { confirmDestructive } from "../../../src/utils/confirmDestructive";
@@ -70,7 +70,6 @@ export default function CookbookDetailScreen() {
     void searchCachedRecipes("").then(setAllRecipes);
     try {
       const live = await listRecipes();
-      void replaceCache(live.recipes);
       setAllRecipes(live.recipes);
     } catch {
       // Cached recipes are enough to pick from.

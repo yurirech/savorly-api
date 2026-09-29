@@ -1,9 +1,11 @@
 import { router } from "expo-router";
 import { useState } from "react";
-import { Pressable } from "react-native";
+import { Pressable, View } from "react-native";
 import type { RecipeImportRequest } from "@savorly/shared";
 import { ApiRequestError, importRecipe } from "../api/client";
+import { isUnavailable } from "../offline/sync";
 import { setReviewDraft } from "../store/reviewDraft";
+import { tokens } from "../theme/tokens";
 import { Button } from "./Button";
 import { Field } from "./Field";
 import { Screen } from "./Screen";
@@ -16,11 +18,12 @@ type ImportFormProps = {
   placeholder: string;
   keyboardType?: "url" | "default";
   multiline?: boolean;
+  allowManual?: boolean;
   buildRequest: (value: string) => RecipeImportRequest;
 };
 
 export function ImportForm(props: ImportFormProps) {
-  const { title, subtitle, label, placeholder, keyboardType, multiline, buildRequest } = props;
+  const { title, subtitle, label, placeholder, keyboardType, multiline, allowManual, buildRequest } = props;
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [offerPaste, setOfferPaste] = useState(false);
@@ -35,7 +38,10 @@ export function ImportForm(props: ImportFormProps) {
       setReviewDraft(result.recipe);
       router.push("/(app)/review");
     } catch (err) {
-      if (err instanceof ApiRequestError) {
+      if (isUnavailable(err)) {
+        setError(allowManual ? "Import needs a connection. Enter manually instead." : "This needs a connection.");
+        setOfferPaste(!allowManual);
+      } else if (err instanceof ApiRequestError) {
         setError(err.message);
         setOfferPaste(err.offerTextPaste);
       } else {
@@ -44,6 +50,27 @@ export function ImportForm(props: ImportFormProps) {
     } finally {
       setLoading(false);
     }
+  }
+
+  function onManual() {
+    const text = value.trim();
+    const ingredients = text
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((name) => ({ name }));
+    setReviewDraft({
+      title: "",
+      category: "other",
+      ingredients,
+      steps: [],
+      tags: [],
+      notes: null,
+      uncertainties: [],
+      nutrition: null,
+      source: { type: "manual", originalText: text },
+    });
+    router.push("/(app)/review");
   }
 
   return (
@@ -73,7 +100,12 @@ export function ImportForm(props: ImportFormProps) {
           </AppText>
         </Pressable>
       ) : null}
-      <Button label="Import" onPress={() => void onSubmit()} loading={loading} disabled={!value.trim()} />
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: tokens.space[2] }}>
+        <Button label="Import" onPress={() => void onSubmit()} loading={loading} disabled={!value.trim()} />
+        {allowManual ? (
+          <Button label="Enter manually" variant="secondary" onPress={onManual} disabled={!value.trim()} />
+        ) : null}
+      </View>
     </Screen>
   );
 }

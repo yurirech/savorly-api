@@ -22,7 +22,7 @@ import { Screen } from "../../../src/components/Screen";
 
 import { SegmentedControl } from "../../../src/components/SegmentedControl";
 
-import { replaceCache, searchCachedRecipes } from "../../../src/db/cache";
+import { searchCachedRecipes } from "../../../src/db/cache";
 
 import { usePantryMatchForRecipes } from "../../../src/hooks/useRecipePantry";
 
@@ -63,8 +63,6 @@ export default function RecipesScreen() {
     try {
 
       const live = await listRecipes(value);
-
-      void replaceCache(live.recipes);
 
       setRecipes(live.recipes);
 

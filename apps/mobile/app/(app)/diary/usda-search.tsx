@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import type { UsdaFoodHit } from "@savorly/shared";
 import { ApiRequestError, importUsdaFood, searchUsdaFoods, updateNutritionRecipeItem } from "../../../src/api/client";
+import { isUnavailable } from "../../../src/offline/sync";
 import { AppText } from "../../../src/components/AppText";
 import { Button } from "../../../src/components/Button";
 import { Field } from "../../../src/components/Field";
@@ -30,7 +31,7 @@ export default function UsdaSearchScreen() {
         setError("No generics matched. Try “milk nonfat” or “peanut butter”.");
       }
     } catch (err) {
-      setError(err instanceof ApiRequestError ? err.message : "Could not search USDA.");
+      setError(isUnavailable(err) ? "USDA search needs a connection." : err instanceof ApiRequestError ? err.message : "Could not search USDA.");
     } finally {
       setLoading(false);
     }
@@ -52,7 +53,7 @@ export default function UsdaSearchScreen() {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        setError(err instanceof ApiRequestError ? err.message : "Could not search USDA.");
+        setError(isUnavailable(err) ? "USDA search needs a connection." : err instanceof ApiRequestError ? err.message : "Could not search USDA.");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -72,7 +73,7 @@ export default function UsdaSearchScreen() {
       }
       router.back();
     } catch (err) {
-      setError(err instanceof ApiRequestError ? err.message : "Could not import that food.");
+      setError(isUnavailable(err) ? "USDA search needs a connection." : err instanceof ApiRequestError ? err.message : "Could not import that food.");
     } finally {
       setImportingId(null);
     }

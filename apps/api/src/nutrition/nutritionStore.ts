@@ -268,23 +268,27 @@ export async function createManualFood(
   userId: string,
   name: string,
   per100g: NutrientVector,
+  id?: string,
 ): Promise<UserFood> {
   const trimmed = name.trim();
   if (!trimmed) {
     throw new AppError("validation_error", "Give the food a name.", 400);
   }
-  const [row] = await db
-    .insert(userFoods)
-    .values({
-      userId,
-      name: trimmed,
-      originalName: trimmed,
-      source: "manual",
-      fdcId: null,
-      nevoCode: null,
-      per100g: requireNutrientVector(per100g, "Food nutrition"),
-    })
-    .returning();
+  const values = {
+    userId,
+    name: trimmed,
+    originalName: trimmed,
+    source: "manual" as const,
+    fdcId: null,
+    nevoCode: null,
+    per100g: requireNutrientVector(per100g, "Food nutrition"),
+    ...(id ? { id } : {}),
+  };
+  if (id) {
+    await db.insert(userFoods).values(values).onConflictDoNothing();
+    return getOwnedUserFood(db, userId, id);
+  }
+  const [row] = await db.insert(userFoods).values(values).returning();
   if (!row) {
     throw new AppError("internal_error", "Could not save food.", 500);
   }
@@ -326,7 +330,7 @@ export async function importUsdaFood(
 export async function importNevoFood(
   db: Database,
   userId: string,
-  input: { nevoCode: number; name: string; per100g: NutrientVector },
+  input: { nevoCode: number; name: string; per100g: NutrientVector; id?: string },
 ): Promise<UserFood> {
   const [existing] = await db
     .select()
@@ -337,18 +341,21 @@ export async function importNevoFood(
     return foodFromRow(existing);
   }
 
-  const [row] = await db
-    .insert(userFoods)
-    .values({
-      userId,
-      name: input.name.trim(),
-      originalName: input.name.trim(),
-      source: "nevo",
-      fdcId: null,
-      nevoCode: input.nevoCode,
-      per100g: input.per100g,
-    })
-    .returning();
+  const values = {
+    userId,
+    name: input.name.trim(),
+    originalName: input.name.trim(),
+    source: "nevo" as const,
+    fdcId: null,
+    nevoCode: input.nevoCode,
+    per100g: input.per100g,
+    ...(input.id ? { id: input.id } : {}),
+  };
+  if (input.id) {
+    await db.insert(userFoods).values(values).onConflictDoNothing();
+    return getOwnedUserFood(db, userId, input.id);
+  }
+  const [row] = await db.insert(userFoods).values(values).returning();
   if (!row) {
     throw new AppError("internal_error", "Could not import food.", 500);
   }
@@ -552,7 +559,7 @@ export async function getDiaryDay(db: Database, userId: string, date: string): P
 export async function createDiaryMeal(
   db: Database,
   userId: string,
-  input: { date: string; name: string },
+  input: { date: string; name: string; id?: string },
 ): Promise<DiaryDayResponse> {
   const isoDate = parseIsoDate(input.date);
   const name = parseMealName(input.name);
@@ -562,12 +569,16 @@ export async function createDiaryMeal(
     .from(diaryMeals)
     .where(and(eq(diaryMeals.userId, userId), eq(diaryMeals.date, isoDate)));
 
-  await db.insert(diaryMeals).values({
-    userId,
-    date: isoDate,
-    name,
-    sortOrder: Number(maxOrder?.value ?? -1) + 1,
-  });
+  await db
+    .insert(diaryMeals)
+    .values({
+      userId,
+      date: isoDate,
+      name,
+      sortOrder: Number(maxOrder?.value ?? -1) + 1,
+      ...(input.id ? { id: input.id } : {}),
+    })
+    .onConflictDoNothing();
   await upsertMealTemplate(db, userId, name);
 
   return getDiaryDay(db, userId, isoDate);
@@ -642,7 +653,7 @@ export async function deleteDiaryMeal(db: Database, userId: string, mealId: stri
 export async function addDiaryEntry(
   db: Database,
   userId: string,
-  input: { mealId: string; foodId: string; grams: number; date: string },
+  input: { mealId: string; foodId: string; grams: number; date: string; id?: string },
 ): Promise<DiaryDayResponse> {
   const isoDate = parseIsoDate(input.date);
   validateGrams(input.grams);
@@ -652,15 +663,19 @@ export async function addDiaryEntry(
   }
   const food = await getOwnedUserFood(db, userId, input.foodId);
   const nutrients = scaleNutrition(food.per100g, input.grams);
-  await db.insert(diaryEntries).values({
-    userId,
-    mealId: meal.id,
-    foodId: food.id,
-    kind: "food",
-    date: isoDate,
-    grams: input.grams,
-    nutrients,
-  });
+  await db
+    .insert(diaryEntries)
+    .values({
+      userId,
+      mealId: meal.id,
+      foodId: food.id,
+      kind: "food",
+      date: isoDate,
+      grams: input.grams,
+      nutrients,
+      ...(input.id ? { id: input.id } : {}),
+    })
+    .onConflictDoNothing();
   return getDiaryDay(db, userId, isoDate);
 }
 
@@ -845,6 +860,7 @@ export async function addQuickDiaryEntry(
     proteinG?: number;
     carbsG?: number;
     fatG?: number;
+    id?: string;
   },
 ): Promise<DiaryDayResponse> {
   const isoDate = parseIsoDate(input.date);
@@ -854,16 +870,20 @@ export async function addQuickDiaryEntry(
   }
   const label = parseQuickLabelInput(input.label);
   const nutrients = parseQuickNutrientsInput(input);
-  await db.insert(diaryEntries).values({
-    userId,
-    mealId: meal.id,
-    foodId: null,
-    kind: "quick",
-    label,
-    date: isoDate,
-    grams: QUICK_DIARY_ENTRY_GRAMS,
-    nutrients,
-  });
+  await db
+    .insert(diaryEntries)
+    .values({
+      userId,
+      mealId: meal.id,
+      foodId: null,
+      kind: "quick",
+      label,
+      date: isoDate,
+      grams: QUICK_DIARY_ENTRY_GRAMS,
+      nutrients,
+      ...(input.id ? { id: input.id } : {}),
+    })
+    .onConflictDoNothing();
   return getDiaryDay(db, userId, isoDate);
 }
 

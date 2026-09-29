@@ -41,6 +41,19 @@ export async function replaceNevoFoods(db: Database, rows: NevoReferenceRow[]): 
   return rows.length;
 }
 
+export async function listNevoSnapshot(db: Database): Promise<NevoReferenceRow[]> {
+  const rows = await db.select().from(nevoFoods);
+  return rows.map((row) => ({
+    nevoCode: row.nevoCode,
+    version: row.version,
+    foodGroupNl: row.foodGroupNl,
+    nameNl: row.nameNl,
+    nameEn: row.nameEn,
+    searchText: row.searchText,
+    per100g: row.per100g as NutrientVector,
+  }));
+}
+
 export async function searchNevoFoods(db: Database, query: string, limit = 20): Promise<NevoFoodHit[]> {
   const trimmed = query.trim();
   if (trimmed.length < 2) {
