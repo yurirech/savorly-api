@@ -24,6 +24,7 @@ import type {
 } from "@savorly/shared";
 import { coerceDiaryDayResponse } from "@savorly/shared";
 import { getToken, clearSession } from "../auth/session";
+import { todayIsoDate } from "../utils/isoDate";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -495,6 +496,20 @@ export function fetchMealSuggestion(options: { category?: FoodCategory; excludeI
   return request<MealSuggestionResponse>(`/pantry/meal-suggestions${query ? `?${query}` : ""}`);
 }
 
+export function chatAboutRecipe(
+  recipeId: string,
+  body: {
+    message: string;
+    recipe?: GeneratedRecipe;
+    history?: { role: "user" | "assistant"; text: string }[];
+  },
+) {
+  return request<{ reply: string; recipe: GeneratedRecipe }>(`/recipes/${encodeURIComponent(recipeId)}/chat`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 export function requestPantrySubstitutions(recipeId: string, options?: { displayServings?: number }) {
   return request<PantrySubstitutionResponse>(`/recipes/${encodeURIComponent(recipeId)}/pantry-substitutions`, {
     method: "POST",
@@ -736,6 +751,44 @@ export async function fetchDiaryDay(date: string) {
       return day;
     });
   }
+}
+
+export type DiaryWeekDay = {
+  date: string;
+  eatenKcal: number;
+  targetKcal: number | null;
+};
+
+export type DiaryWeek = {
+  start: string;
+  days: DiaryWeekDay[];
+  eatenKcal: number;
+  targetKcal: number | null;
+  remainingKcal: number | null;
+  averageKcal: number;
+};
+
+export function fetchDiaryWeek(start: string) {
+  return request<DiaryWeek>(`/nutrition/diary/week?start=${encodeURIComponent(start)}`);
+}
+
+export async function setDiaryDayTarget(date: string, kcal: number) {
+  const live = await requestDiaryDay("/nutrition/diary/target", {
+    method: "PUT",
+    body: JSON.stringify({ date, kcal }),
+  });
+  const { saveDay } = await import("../offline/store");
+  await saveDay(live);
+  return live;
+}
+
+export async function clearDiaryDayTarget(date: string) {
+  const live = await requestDiaryDay(`/nutrition/diary/target?date=${encodeURIComponent(date)}`, {
+    method: "DELETE",
+  });
+  const { saveDay } = await import("../offline/store");
+  await saveDay(live);
+  return live;
 }
 
 export async function createDiaryMeal(date: string, name: string) {
@@ -1191,6 +1244,10 @@ export type NutritionRecipeDetail = {
   libraryFood: UserFood | null;
 };
 
+function withToday(path: string): string {
+  return `${path}${path.includes("?") ? "&" : "?"}from=${todayIsoDate()}`;
+}
+
 async function rememberRecipe(detail: NutritionRecipeDetail): Promise<NutritionRecipeDetail> {
   const { saveFood, saveNutritionRecipe } = await import("../offline/store");
   await saveNutritionRecipe(detail);
@@ -1321,7 +1378,7 @@ export function updateNutritionRecipe(
   id: string,
   body: { title?: string; servings?: number; cookedWeightG?: number | null; sourceRecipeId?: string | null },
 ) {
-  return editNutritionRecipe(id, `/nutrition/recipes/${id}`, { method: "PATCH", body: JSON.stringify(body) }, (current) => ({
+  return editNutritionRecipe(id, withToday(`/nutrition/recipes/${id}`), { method: "PATCH", body: JSON.stringify(body) }, (current) => ({
     ...current,
     ...body,
     title: body.title ?? current.title,
@@ -1335,7 +1392,7 @@ export function updateNutritionRecipeItem(
 ) {
   return editNutritionRecipe(
     recipeId,
-    `/nutrition/recipes/${recipeId}/items/${itemId}`,
+    withToday(`/nutrition/recipes/${recipeId}/items/${itemId}`),
     { method: "PATCH", body: JSON.stringify(body) },
     async (current) => {
       const { readFood } = await import("../offline/store");
@@ -1360,7 +1417,7 @@ export function updateNutritionRecipeItem(
 export function addNutritionRecipeItem(recipeId: string, foodId: string, grams: number) {
   return editNutritionRecipe(
     recipeId,
-    `/nutrition/recipes/${recipeId}/items`,
+    withToday(`/nutrition/recipes/${recipeId}/items`),
     { method: "POST", body: JSON.stringify({ foodId, grams }) },
     async (current) => {
       const { newId, readFood } = await import("../offline/store");
@@ -1379,7 +1436,7 @@ export function addNutritionRecipeItem(recipeId: string, foodId: string, grams: 
 export function deleteNutritionRecipeItem(recipeId: string, itemId: string) {
   return editNutritionRecipe(
     recipeId,
-    `/nutrition/recipes/${recipeId}/items/${itemId}`,
+    withToday(`/nutrition/recipes/${recipeId}/items/${itemId}`),
     { method: "DELETE" },
     (current) => ({ ...current, items: current.items.filter((item) => item.id !== itemId) }),
   );
@@ -1387,7 +1444,9 @@ export function deleteNutritionRecipeItem(recipeId: string, itemId: string) {
 
 export async function publishNutritionRecipe(id: string) {
   try {
-    return await rememberRecipe(await request<NutritionRecipeDetail>(`/nutrition/recipes/${id}/publish`, { method: "POST" }));
+    return await rememberRecipe(
+      await request<NutritionRecipeDetail>(withToday(`/nutrition/recipes/${id}/publish`), { method: "POST" }),
+    );
   } catch (err) {
     return offline(err, async () => {
       const { localFood, newId, readNutritionRecipe, saveFood, saveNutritionRecipe } = await import("../offline/store");

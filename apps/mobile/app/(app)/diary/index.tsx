@@ -1,6 +1,6 @@
 import { type Href, router, useFocusEffect, useSegments } from "expo-router";
-import { CaretLeft, CaretRight, ChartPie } from "phosphor-react-native";
-import { useCallback, useMemo, useState } from "react";
+import { CaretLeft, CaretRight, ChartPie, DotsThreeVertical } from "phosphor-react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { hasExtendedNutrients, listPresentNutrients, type DiaryDayResponse, type NutritionSex } from "@savorly/shared";
 import type { DiaryEntry } from "@savorly/shared";
@@ -16,6 +16,8 @@ import {
   fetchDiaryDay,
   logMealStaples,
   fetchNutritionProfile,
+  setDiaryDayTarget,
+  clearDiaryDayTarget,
   updateDiaryMeal,
 } from "../../../src/api/client";
 import { AppText } from "../../../src/components/AppText";
@@ -23,6 +25,8 @@ import { Button } from "../../../src/components/Button";
 import NutrientDetailList from "../../../src/components/NutrientDetailList";
 import { Screen } from "../../../src/components/Screen";
 import DiaryConfirmSheet from "../../../src/diary/DiaryConfirmSheet";
+import DiaryDayTargetSheet from "../../../src/diary/DiaryDayTargetSheet";
+import DiaryOptionsSheet from "../../../src/diary/DiaryOptionsSheet";
 import RemainingBanner from "../../../src/diary/RemainingBanner";
 import DiaryDayNutrition from "../../../src/diary/DiaryDayNutrition";
 import DiaryMealNameSheet from "../../../src/diary/DiaryMealNameSheet";
@@ -60,6 +64,14 @@ export default function DiaryScreen() {
   const [pasteText, setPasteText] = useState("");
   const [fillingPaste, setFillingPaste] = useState(false);
   const [fillError, setFillError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[] | null>(null);
+  const [selectionDeleting, setSelectionDeleting] = useState(false);
+  const [targetOpen, setTargetOpen] = useState(false);
+  const [targetSaving, setTargetSaving] = useState(false);
+  const [targetError, setTargetError] = useState<string | null>(null);
+  const [profileKcal, setProfileKcal] = useState<number | null>(null);
 
   const dayMicroGroups = useMemo(() => (day?.totals ? listPresentNutrients(day.totals) : []), [day?.totals]);
 
@@ -72,6 +84,7 @@ export default function DiaryScreen() {
       if (isActive()) {
         setDay(live);
         setSex(profile?.profile?.sex ?? null);
+        setProfileKcal(profile?.targets?.kcal ?? null);
         setError(null);
       }
     } catch (err) {
@@ -80,6 +93,10 @@ export default function DiaryScreen() {
       }
     }
   }, []);
+
+  useEffect(() => {
+    setSelectedIds(null);
+  }, [date]);
 
   useFocusEffect(
     useCallback(() => {
@@ -212,6 +229,7 @@ export default function DiaryScreen() {
       const live = await copyDiaryEntries(copyRequest.entryIds, mealId);
       setDay(live);
       setCopyRequest(null);
+      setSelectedIds(null);
       const meal = live.meals.find((row) => row.id === mealId);
       if (meal) {
         await writeLastDiaryMeal({ mealId: meal.id, mealName: meal.name, date });
@@ -232,6 +250,66 @@ export default function DiaryScreen() {
     }
   }
 
+  function startSelect(entry: DiaryEntry) {
+    setSelectedIds((current) => (current?.includes(entry.id) ? current : [...(current ?? []), entry.id]));
+  }
+
+  function toggleSelect(entry: DiaryEntry) {
+    setSelectedIds((current) => {
+      const ids = current ?? [];
+      return ids.includes(entry.id) ? ids.filter((id) => id !== entry.id) : [...ids, entry.id];
+    });
+  }
+
+  async function deleteSelected() {
+    if (!selectedIds?.length || selectionDeleting) {
+      return;
+    }
+    setSelectionDeleting(true);
+    setError(null);
+    try {
+      let live = day;
+      for (const id of selectedIds) {
+        live = await deleteDiaryEntry(id);
+      }
+      if (live) {
+        setDay(live);
+      }
+      setSelectedIds(null);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : "Could not delete those foods.");
+      await load(date);
+    } finally {
+      setSelectionDeleting(false);
+    }
+  }
+
+  async function saveDayTarget(kcal: number) {
+    setTargetSaving(true);
+    setTargetError(null);
+    try {
+      setDay(await setDiaryDayTarget(date, kcal));
+      setTargetOpen(false);
+    } catch (err) {
+      setTargetError(err instanceof ApiRequestError ? err.message : "Could not save this day's calories.");
+    } finally {
+      setTargetSaving(false);
+    }
+  }
+
+  async function clearDayTarget() {
+    setTargetSaving(true);
+    setTargetError(null);
+    try {
+      setDay(await clearDiaryDayTarget(date));
+      setTargetOpen(false);
+    } catch (err) {
+      setTargetError(err instanceof ApiRequestError ? err.message : "Could not clear this day's calories.");
+    } finally {
+      setTargetSaving(false);
+    }
+  }
+
   function openQuickCal() {
     router.push({
       pathname: "/(app)/diary/quick-cal",
@@ -249,11 +327,33 @@ export default function DiaryScreen() {
       onRefresh={() => void onRefresh()}
       refreshing={refreshing}
       footer={
-        <>
-          <Button size="compact" label="Add meal group" onPress={() => setNameSheet({ kind: "create" })} />
-          <Button size="compact" label="Quick calories" variant="secondary" onPress={openQuickCal} />
-          <Button size="compact" label="📝 New recipe" variant="secondary" onPress={() => setNameSheet({ kind: "recipe" })} />
-        </>
+        selectedIds ? (
+          <>
+            <Button
+              size="compact"
+              label="Delete"
+              onPress={() => void deleteSelected()}
+              loading={selectionDeleting}
+              disabled={selectedIds.length === 0}
+            />
+            <Button
+              size="compact"
+              label="Copy"
+              variant="secondary"
+              disabled={selectedIds.length === 0 || copying}
+              onPress={() => setCopyRequest({ entryIds: selectedIds, mealId: "" })}
+            />
+            <Button size="compact" label="Done" variant="ghost" onPress={() => setSelectedIds(null)} />
+          </>
+        ) : (
+          <>
+            {editing ? (
+              <Button size="compact" label="Add meal group" onPress={() => setNameSheet({ kind: "create" })} />
+            ) : null}
+            <Button size="compact" label="Quick calories" variant="secondary" onPress={openQuickCal} />
+            <Button size="compact" label="📝 New recipe" variant="secondary" onPress={() => setNameSheet({ kind: "recipe" })} />
+          </>
+        )
       }
     >
       <View style={styles.dateRow}>
@@ -263,6 +363,14 @@ export default function DiaryScreen() {
         <AppText variant="title">{date}</AppText>
         <Pressable onPress={() => setDate((current) => shiftIsoDate(current, 1))} accessibilityLabel="Next day">
           <CaretRight size={22} color={tokens.text} />
+        </Pressable>
+        <Pressable
+          onPress={() => setMenuOpen(true)}
+          style={styles.menuButton}
+          accessibilityRole="button"
+          accessibilityLabel="Diary menu"
+        >
+          <DotsThreeVertical size={22} color={tokens.text} weight="bold" />
         </Pressable>
       </View>
 
@@ -342,6 +450,11 @@ export default function DiaryScreen() {
             }
             onRename={() => setNameSheet({ kind: "rename", mealId: meal.id, initialName: meal.name })}
             onDelete={() => setPendingDelete({ id: meal.id, name: meal.name })}
+            editing={editing}
+            selecting={selectedIds != null}
+            selectedIds={new Set(selectedIds ?? [])}
+            onStartSelect={startSelect}
+            onToggleSelect={toggleSelect}
           />
         ))}
       </View>
@@ -411,6 +524,35 @@ export default function DiaryScreen() {
         onConfirm={() => void confirmDeleteEntry()}
         loading={entryDeleting}
       />
+      <DiaryOptionsSheet
+        visible={menuOpen}
+        editing={editing}
+        onClose={() => setMenuOpen(false)}
+        onToggleEditing={() => {
+          setEditing((current) => !current);
+          setMenuOpen(false);
+        }}
+        onCalorieTarget={() => {
+          setTargetError(null);
+          setMenuOpen(false);
+          setTargetOpen(true);
+        }}
+        onWeek={() => {
+          setMenuOpen(false);
+          router.push({ pathname: "/(app)/diary/week", params: { date } } as Href);
+        }}
+      />
+      <DiaryDayTargetSheet
+        visible={targetOpen}
+        date={date}
+        currentKcal={day?.targets?.kcal ?? null}
+        canClear={profileKcal != null && day?.targets != null && day.targets.kcal !== profileKcal}
+        saving={targetSaving}
+        error={targetError}
+        onClose={() => setTargetOpen(false)}
+        onSave={(kcal) => void saveDayTarget(kcal)}
+        onClear={() => void clearDayTarget()}
+      />
       <DiaryMealPickerSheet
         visible={copyRequest != null && nameSheet == null}
         title="Copy to which meal?"
@@ -428,6 +570,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: tokens.space.sm,
+  },
+  menuButton: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
   microSection: {
     gap: tokens.space.sm,

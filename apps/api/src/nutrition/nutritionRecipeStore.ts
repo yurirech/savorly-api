@@ -12,7 +12,7 @@ import type { Database } from "../db/client";
 import { nutritionRecipeItems, nutritionRecipes, userFoods } from "../db/schema";
 import { AppError } from "../errors";
 import { getRecipe } from "../recipes/recipeStore";
-import { foodFromRow, getOwnedUserFood, listUserFoods } from "./nutritionStore";
+import { foodFromRow, getOwnedUserFood, listUserFoods, rewriteFoodLogsFromDate } from "./nutritionStore";
 
 export type NutritionRecipeDetail = {
   id: string;
@@ -84,6 +84,19 @@ async function loadDetail(db: Database, userId: string, id: string): Promise<Nut
 
 async function touch(db: Database, id: string) {
   await db.update(nutritionRecipes).set({ updatedAt: new Date() }).where(eq(nutritionRecipes.id, id));
+}
+
+async function syncPublishedRecipe(db: Database, userId: string, recipeId: string, fromDate?: string) {
+  const detail = await loadDetail(db, userId, recipeId);
+  if (!detail.libraryFood || !isNutritionRecipeComplete(detail)) return detail;
+  await db
+    .update(userFoods)
+    .set({ name: detail.title, per100g: detail.per100g, updatedAt: new Date() })
+    .where(eq(userFoods.id, detail.libraryFood.id));
+  if (fromDate) {
+    await rewriteFoodLogsFromDate(db, userId, detail.libraryFood.id, detail.per100g, fromDate);
+  }
+  return loadDetail(db, userId, recipeId);
 }
 
 export async function listNutritionRecipesForSource(db: Database, userId: string, sourceRecipeId: string) {
@@ -215,6 +228,7 @@ export async function updateNutritionRecipe(
   userId: string,
   id: string,
   input: { title?: string; servings?: number; cookedWeightG?: number | null; sourceRecipeId?: string | null },
+  fromDate?: string,
 ) {
   await loadDetail(db, userId, id);
   const patch: {
@@ -254,7 +268,7 @@ export async function updateNutritionRecipe(
     }
   }
   await db.update(nutritionRecipes).set(patch).where(eq(nutritionRecipes.id, id));
-  return loadDetail(db, userId, id);
+  return syncPublishedRecipe(db, userId, id, fromDate);
 }
 
 export async function updateNutritionRecipeItem(
@@ -263,6 +277,7 @@ export async function updateNutritionRecipeItem(
   recipeId: string,
   itemId: string,
   input: { foodId?: string | null; grams?: number | null },
+  fromDate?: string,
 ) {
   await loadDetail(db, userId, recipeId);
   if (input.foodId) {
@@ -286,7 +301,7 @@ export async function updateNutritionRecipeItem(
     throw new AppError("not_found", "Ingredient line not found.", 404);
   }
   await touch(db, recipeId);
-  return loadDetail(db, userId, recipeId);
+  return syncPublishedRecipe(db, userId, recipeId, fromDate);
 }
 
 export async function addNutritionRecipeItem(
@@ -294,6 +309,7 @@ export async function addNutritionRecipeItem(
   userId: string,
   recipeId: string,
   input: { foodId: string; grams: number; sourceLine?: string },
+  fromDate?: string,
 ) {
   await loadDetail(db, userId, recipeId);
   const food = await getOwnedUserFood(db, userId, input.foodId);
@@ -314,10 +330,16 @@ export async function addNutritionRecipeItem(
     sortOrder: (maxOrder?.value ?? -1) + 1,
   });
   await touch(db, recipeId);
-  return loadDetail(db, userId, recipeId);
+  return syncPublishedRecipe(db, userId, recipeId, fromDate);
 }
 
-export async function deleteNutritionRecipeItem(db: Database, userId: string, recipeId: string, itemId: string) {
+export async function deleteNutritionRecipeItem(
+  db: Database,
+  userId: string,
+  recipeId: string,
+  itemId: string,
+  fromDate?: string,
+) {
   await loadDetail(db, userId, recipeId);
   const [row] = await db
     .delete(nutritionRecipeItems)
@@ -327,10 +349,10 @@ export async function deleteNutritionRecipeItem(db: Database, userId: string, re
     throw new AppError("not_found", "Ingredient line not found.", 404);
   }
   await touch(db, recipeId);
-  return loadDetail(db, userId, recipeId);
+  return syncPublishedRecipe(db, userId, recipeId, fromDate);
 }
 
-export async function publishNutritionRecipe(db: Database, userId: string, id: string) {
+export async function publishNutritionRecipe(db: Database, userId: string, id: string, fromDate?: string) {
   const detail = await loadDetail(db, userId, id);
   if (!isNutritionRecipeComplete(detail)) {
     throw new AppError(
@@ -366,7 +388,7 @@ export async function publishNutritionRecipe(db: Database, userId: string, id: s
     });
   }
   await touch(db, id);
-  return loadDetail(db, userId, id);
+  return syncPublishedRecipe(db, userId, id, fromDate);
 }
 
 export async function deleteNutritionRecipe(db: Database, userId: string, id: string) {

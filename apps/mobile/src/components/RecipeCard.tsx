@@ -26,7 +26,7 @@ export function RecipeCard(props: RecipeCardProps) {
     return (
       <Pressable onPress={onPress} style={({ pressed }) => [styles.rowCard, pressed && styles.pressed]}>
         {pantryBadge}
-        <Image source={imageForCategory(recipe.category)} style={styles.rowImage} />
+        <Image source={imageForCategory(recipe.category, recipe.id)} style={styles.rowImage} />
         <View style={styles.rowMeta}>
           <AppText variant="label" color="accent">
             {recipe.category}
@@ -45,7 +45,7 @@ export function RecipeCard(props: RecipeCardProps) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.gridCard, tokens.shadow.card, pressed && styles.pressed]}>
       {pantryBadge}
-      <Image source={imageForCategory(recipe.category)} style={styles.gridImage} />
+      <Image source={imageForCategory(recipe.category, recipe.id)} style={styles.gridImage} />
       <View style={styles.scrim} pointerEvents="none" />
       <View style={styles.gridMeta}>
         <AppText variant="label" color="accent">

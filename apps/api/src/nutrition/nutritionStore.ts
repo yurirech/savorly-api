@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, ilike, inArray, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, gt, ilike, inArray, lt, sql } from "drizzle-orm";
 import {
   buildDiaryMeals,
   buildQuickDiaryNutrients,
@@ -23,7 +23,7 @@ import {
   type UserFoodSource,
 } from "@savorly/shared";
 import type { Database } from "../db/client";
-import { diaryEntries, diaryMealTemplates, diaryMeals, mealStaples, nevoFoods, nutritionProfiles, userFoods, users } from "../db/schema";
+import { diaryDayTargets, diaryEntries, diaryMealTemplates, diaryMeals, mealStaples, nevoFoods, nutritionProfiles, userFoods, users } from "../db/schema";
 import { nevoFoodsReady } from "./nevoStore";
 import { STAPLE_NEVO_CODES } from "./stapleNevoCodes";
 import { AppError } from "../errors";
@@ -547,13 +547,134 @@ export async function getDiaryDay(db: Database, userId: string, date: string): P
   const meals = await annotateDiaryMeals(db, userId, isoDate, built);
   const totals = dayTotalsFromMeals(meals);
   const profile = await getNutritionProfile(db, userId);
+  const [override] = await db
+    .select({ kcal: diaryDayTargets.kcal })
+    .from(diaryDayTargets)
+    .where(and(eq(diaryDayTargets.userId, userId), eq(diaryDayTargets.date, isoDate)))
+    .limit(1);
+  const targets = profile.targets
+    ? { ...profile.targets, kcal: override?.kcal ?? profile.targets.kcal }
+    : null;
   return {
     date: isoDate,
     meals,
     totals,
-    remaining: profile.targets ? remainingMacros(profile.targets, totals) : null,
-    targets: profile.targets,
+    remaining: targets ? remainingMacros(targets, totals) : null,
+    targets,
   };
+}
+
+export async function setDiaryDayTarget(db: Database, userId: string, date: string, kcal: number): Promise<DiaryDayResponse> {
+  const isoDate = parseIsoDate(date);
+  if (!Number.isFinite(kcal) || kcal < 1 || kcal > 20000) {
+    throw new AppError("validation_error", "Enter a calorie target.", 400);
+  }
+  await db
+    .insert(diaryDayTargets)
+    .values({ userId, date: isoDate, kcal: Math.round(kcal) })
+    .onConflictDoUpdate({
+      target: [diaryDayTargets.userId, diaryDayTargets.date],
+      set: { kcal: Math.round(kcal) },
+    });
+  return getDiaryDay(db, userId, isoDate);
+}
+
+export async function clearDiaryDayTarget(db: Database, userId: string, date: string): Promise<DiaryDayResponse> {
+  const isoDate = parseIsoDate(date);
+  await db.delete(diaryDayTargets).where(and(eq(diaryDayTargets.userId, userId), eq(diaryDayTargets.date, isoDate)));
+  return getDiaryDay(db, userId, isoDate);
+}
+
+export async function rewriteFoodLogsFromDate(
+  db: Database,
+  userId: string,
+  foodId: string,
+  per100g: NutrientVector,
+  fromDate: string,
+) {
+  const isoDate = parseIsoDate(fromDate);
+  const rows = await db
+    .select({ id: diaryEntries.id, grams: diaryEntries.grams })
+    .from(diaryEntries)
+    .where(
+      and(
+        eq(diaryEntries.userId, userId),
+        eq(diaryEntries.foodId, foodId),
+        eq(diaryEntries.kind, "food"),
+        gte(diaryEntries.date, isoDate),
+      ),
+    );
+  for (const row of rows) {
+    await db
+      .update(diaryEntries)
+      .set({ nutrients: scaleNutrition(per100g, row.grams) })
+      .where(eq(diaryEntries.id, row.id));
+  }
+}
+
+export type DiaryWeekDay = {
+  date: string;
+  eatenKcal: number;
+  targetKcal: number | null;
+};
+
+export type DiaryWeek = {
+  start: string;
+  days: DiaryWeekDay[];
+  eatenKcal: number;
+  targetKcal: number | null;
+  remainingKcal: number | null;
+  averageKcal: number;
+};
+
+export async function getDiaryWeek(db: Database, userId: string, start: string): Promise<DiaryWeek> {
+  const isoStart = parseIsoDate(start);
+  const dates = Array.from({ length: 7 }, (_, index) => shiftUtcDate(isoStart, index));
+  const end = dates[6]!;
+  const profile = await getNutritionProfile(db, userId);
+  const overrides = await db
+    .select({ date: diaryDayTargets.date, kcal: diaryDayTargets.kcal })
+    .from(diaryDayTargets)
+    .where(and(eq(diaryDayTargets.userId, userId), gte(diaryDayTargets.date, isoStart), lt(diaryDayTargets.date, shiftUtcDate(end, 1))));
+  const overrideByDate = new Map(overrides.map((row) => [asIsoDate(row.date), row.kcal]));
+  const entries = await db
+    .select({ date: diaryEntries.date, nutrients: diaryEntries.nutrients })
+    .from(diaryEntries)
+    .where(and(eq(diaryEntries.userId, userId), gte(diaryEntries.date, isoStart), lt(diaryEntries.date, shiftUtcDate(end, 1))));
+  const eatenByDate = new Map<string, number>();
+  for (const row of entries) {
+    const key = asIsoDate(row.date);
+    const kcal = nutrientKcal(row.nutrients);
+    eatenByDate.set(key, (eatenByDate.get(key) ?? 0) + kcal);
+  }
+  const days = dates.map((date) => ({
+    date,
+    eatenKcal: Math.round(eatenByDate.get(date) ?? 0),
+    targetKcal: overrideByDate.get(date) ?? profile.targets?.kcal ?? null,
+  }));
+  const eatenKcal = days.reduce((sum, day) => sum + day.eatenKcal, 0);
+  const knownTargets = days.every((day) => day.targetKcal != null);
+  const targetKcal = knownTargets ? days.reduce((sum, day) => sum + (day.targetKcal ?? 0), 0) : null;
+  return {
+    start: isoStart,
+    days,
+    eatenKcal,
+    targetKcal,
+    remainingKcal: targetKcal == null ? null : targetKcal - eatenKcal,
+    averageKcal: Math.round(eatenKcal / 7),
+  };
+}
+
+function shiftUtcDate(iso: string, days: number): string {
+  const parsed = new Date(`${iso}T00:00:00.000Z`);
+  parsed.setUTCDate(parsed.getUTCDate() + days);
+  return parsed.toISOString().slice(0, 10);
+}
+
+function nutrientKcal(value: unknown): number {
+  if (!value || typeof value !== "object" || !("kcal" in value)) return 0;
+  const kcal = (value as { kcal?: unknown }).kcal;
+  return typeof kcal === "number" && Number.isFinite(kcal) ? kcal : 0;
 }
 
 export async function createDiaryMeal(

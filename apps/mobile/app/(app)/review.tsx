@@ -135,7 +135,7 @@ export default function ReviewScreen() {
 
   return (
     <Screen onRefresh={() => void onRefresh()} refreshing={refreshing}>
-      <Image source={imageForCategory(recipe.category)} style={styles.hero} />
+      <Image source={imageForCategory(recipe.category, initial?.editingId ?? undefined)} style={styles.hero} />
       <Text style={styles.kicker}>Review before saving</Text>
       <Field
         label="Title"

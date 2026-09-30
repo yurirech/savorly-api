@@ -590,6 +590,15 @@ export default function DiaryFoodDetailScreen() {
             ) : null}
 
             <Button size="compact" label="Delete" variant="secondary" onPress={() => void onDelete()} loading={deleting} />
+
+            {food.nutritionRecipeId ? (
+              <Button
+                size="compact"
+                label="Edit recipe"
+                variant="secondary"
+                onPress={() => router.push(`/(app)/diary/nutrition-recipe/${food.nutritionRecipeId}` as Href)}
+              />
+            ) : null}
             </View>
 
           </View>

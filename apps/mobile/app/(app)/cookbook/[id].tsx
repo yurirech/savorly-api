@@ -179,7 +179,7 @@ export default function CookbookDetailScreen() {
                 }
                 style={[styles.pickRow, selected && styles.pickRowSelected]}
               >
-                <Image source={imageForCategory(recipe.category)} style={styles.pickImage} />
+                <Image source={imageForCategory(recipe.category, recipe.id)} style={styles.pickImage} />
                 <View style={styles.pickMeta}>
                   <AppText variant="title" numberOfLines={2}>
                     {recipe.title}

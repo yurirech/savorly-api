@@ -20,7 +20,7 @@ export function CookbookCard(props: CookbookCardProps) {
       <View style={styles.mosaic}>
         {tiles.map((recipe, index) =>
           recipe ? (
-            <Image key={`${cookbook.id}-${index}`} source={imageForCategory(recipe.category)} style={styles.tile} />
+            <Image key={`${cookbook.id}-${index}`} source={imageForCategory(recipe.category, recipe.id)} style={styles.tile} />
           ) : (
             <View key={`${cookbook.id}-empty-${index}`} style={styles.emptyTile}>
               {index === 0 && cookbook.recipeCount === 0 ? (

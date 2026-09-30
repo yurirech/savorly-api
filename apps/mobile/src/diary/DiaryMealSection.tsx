@@ -1,5 +1,5 @@
-import { CaretDown, CaretUp, ChartPie, PencilSimple, Trash } from "phosphor-react-native";
-import { useEffect, useRef, useState } from "react";
+import { CaretDown, CaretUp, ChartPie, Check, PencilSimple, Trash } from "phosphor-react-native";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { PanResponder, Pressable, StyleSheet, View } from "react-native";
 import { listPresentNutrients, type DiaryEntry, type DiaryMealGroup } from "@savorly/shared";
 import { AppText } from "../components/AppText";
@@ -19,6 +19,11 @@ interface DiaryMealSectionProps {
   onAddStaples?: () => void;
   onRename: () => void;
   onDelete: () => void;
+  editing: boolean;
+  selecting: boolean;
+  selectedIds: ReadonlySet<string>;
+  onStartSelect: (entry: DiaryEntry) => void;
+  onToggleSelect: (entry: DiaryEntry) => void;
 }
 
 function formatMealMacros(meal: DiaryMealGroup): string {
@@ -39,6 +44,11 @@ function DiaryMealSection(props: DiaryMealSectionProps) {
     onAddStaples,
     onRename,
     onDelete,
+    editing,
+    selecting,
+    selectedIds,
+    onStartSelect,
+    onToggleSelect,
   } = props;
   const [nutrientsOpen, setNutrientsOpen] = useState(false);
   const [openEntryId, setOpenEntryId] = useState<string | null>(null);
@@ -59,20 +69,19 @@ function DiaryMealSection(props: DiaryMealSectionProps) {
             {formatMealMacros(meal)}
           </AppText>
         </Pressable>
-        <Pressable onPress={onRename} hitSlop={8} accessibilityRole="button" accessibilityLabel="Rename">
-          <PencilSimple size={20} color={tokens.text} />
-        </Pressable>
-        <Pressable onPress={onDelete} hitSlop={8} accessibilityRole="button" accessibilityLabel="Delete group">
-          <Trash size={20} color={tokens.danger} />
-        </Pressable>
-        <Pressable
-          onPress={onToggleCollapse}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={collapsed ? "Expand group" : "Collapse group"}
-        >
-          {collapsed ? <CaretDown size={20} color={tokens.text} /> : <CaretUp size={20} color={tokens.text} />}
-        </Pressable>
+        {editing ? (
+          <IconButton label="Rename" onPress={onRename}>
+            <PencilSimple size={22} color={tokens.text} />
+          </IconButton>
+        ) : null}
+        {editing ? (
+          <IconButton label="Delete group" onPress={onDelete}>
+            <Trash size={22} color={tokens.danger} />
+          </IconButton>
+        ) : null}
+        <IconButton label={collapsed ? "Expand group" : "Collapse group"} onPress={onToggleCollapse}>
+          {collapsed ? <CaretDown size={22} color={tokens.text} /> : <CaretUp size={22} color={tokens.text} />}
+        </IconButton>
       </View>
       {!collapsed && (
         <View style={styles.body}>
@@ -86,32 +95,34 @@ function DiaryMealSection(props: DiaryMealSectionProps) {
               key={entry.id}
               entry={entry}
               active={openEntryId === entry.id}
+              selecting={selecting}
+              selected={selectedIds.has(entry.id)}
               onActivate={() => setOpenEntryId(entry.id)}
               onPress={() => onPressEntry(entry)}
               onDelete={() => onDeleteEntry(entry)}
               onCopy={() => onCopyEntry([entry.id])}
+              onStartSelect={() => onStartSelect(entry)}
+              onToggleSelect={() => onToggleSelect(entry)}
             />
           ))}
           <View style={styles.actions}>
             <Button size="compact" label="Add food" variant="secondary" onPress={onAddFood} />
             {meal.entries.length === 0 && onCopyPrevious ? (
-              <Pressable onPress={onCopyPrevious} hitSlop={8} accessibilityRole="button" accessibilityLabel="Copy last time">
+              <IconButton label="Copy last time" onPress={onCopyPrevious}>
                 <AppText variant="body">↩</AppText>
-              </Pressable>
+              </IconButton>
             ) : null}
             {meal.entries.length === 0 && onAddStaples ? (
-              <Pressable onPress={onAddStaples} hitSlop={8} accessibilityRole="button" accessibilityLabel="Add staples">
+              <IconButton label="Add staples" onPress={onAddStaples}>
                 <AppText variant="body">🥣</AppText>
-              </Pressable>
+              </IconButton>
             ) : null}
-            <Pressable
+            <IconButton
+              label={nutrientsOpen ? "Hide nutrients" : "Nutrients"}
               onPress={() => setNutrientsOpen((open) => !open)}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel={nutrientsOpen ? "Hide nutrients" : "Nutrients"}
             >
               <ChartPie size={22} color={nutrientsOpen ? tokens.accent : tokens.text} />
-            </Pressable>
+            </IconButton>
           </View>
           {nutrientsOpen ? <NutrientDetailList groups={nutrientGroups} /> : null}
         </View>
@@ -123,17 +134,36 @@ function DiaryMealSection(props: DiaryMealSectionProps) {
 const SWIPE_LIMIT = 120;
 const SWIPE_TRIGGER = 56;
 
+interface IconButtonProps {
+  label: string;
+  onPress: () => void;
+  children: ReactNode;
+}
+
+function IconButton(props: IconButtonProps) {
+  const { label, onPress, children } = props;
+  return (
+    <Pressable onPress={onPress} style={styles.iconButton} accessibilityRole="button" accessibilityLabel={label}>
+      {children}
+    </Pressable>
+  );
+}
+
 interface DiaryEntryRowProps {
   entry: DiaryEntry;
   active: boolean;
+  selecting: boolean;
+  selected: boolean;
   onActivate: () => void;
   onPress: () => void;
   onDelete: () => void;
   onCopy: () => void;
+  onStartSelect: () => void;
+  onToggleSelect: () => void;
 }
 
 function DiaryEntryRow(props: DiaryEntryRowProps) {
-  const { entry, active, onActivate, onPress, onDelete, onCopy } = props;
+  const { entry, active, selecting, selected, onActivate, onPress, onDelete, onCopy, onStartSelect, onToggleSelect } = props;
   const [offset, setOffset] = useState(0);
   const dragged = useRef(false);
   const actions = useRef({ onActivate, onDelete, onCopy });
@@ -179,15 +209,15 @@ function DiaryEntryRow(props: DiaryEntryRowProps) {
       : `${entry.grams} g · ${entry.nutrients.kcal} kcal`;
 
   return (
-    <View style={styles.swipe} {...pan.panHandlers}>
-      {offset > 0 ? (
+    <View style={styles.swipe} {...(selecting ? {} : pan.panHandlers)}>
+      {!selecting && offset > 0 ? (
         <View style={[styles.underlay, styles.copyUnder]}>
           <AppText variant="caption" style={styles.copyLabel}>
             Copy
           </AppText>
         </View>
       ) : null}
-      {offset < 0 ? (
+      {!selecting && offset < 0 ? (
         <View style={[styles.underlay, styles.deleteUnder]}>
           <AppText variant="caption" style={styles.deleteLabel}>
             Delete
@@ -196,16 +226,28 @@ function DiaryEntryRow(props: DiaryEntryRowProps) {
       ) : null}
       <Pressable
         onPress={() => {
+          if (selecting) {
+            onToggleSelect();
+            return;
+          }
           if (dragged.current) {
             dragged.current = false;
             return;
           }
           onPress();
         }}
-        style={[styles.entryRow, { transform: [{ translateX: offset }] }]}
+        onLongPress={onStartSelect}
+        delayLongPress={350}
+        style={[styles.entryRow, { transform: [{ translateX: selecting ? 0 : offset }] }]}
         accessibilityRole="button"
+        accessibilityState={{ selected }}
         accessibilityLabel={entry.kind === "quick" ? `${entry.foodName}, ${entry.nutrients.kcal} kcal` : `${entry.foodName}, ${entry.grams} grams`}
       >
+        {selecting ? (
+          <View style={[styles.check, selected && styles.checkOn]}>
+            {selected ? <Check size={16} color={tokens.bg} weight="bold" /> : null}
+          </View>
+        ) : null}
         <View style={styles.entryCopy}>
           <AppText variant="body">{entry.foodName}</AppText>
           <AppText variant="caption" color="muted">
@@ -242,11 +284,33 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: tokens.border,
   },
+  iconButton: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   entryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.space.sm,
     paddingVertical: tokens.space.sm,
     borderBottomWidth: 1,
     borderBottomColor: tokens.border,
     backgroundColor: tokens.surface,
+  },
+  check: {
+    width: 22,
+    height: 22,
+    borderRadius: tokens.radius.sm,
+    borderWidth: 1,
+    borderColor: tokens.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkOn: {
+    backgroundColor: tokens.accent,
+    borderColor: tokens.accent,
   },
   swipe: {
     overflow: "hidden",
@@ -276,6 +340,7 @@ const styles = StyleSheet.create({
     color: tokens.text,
   },
   entryCopy: {
+    flex: 1,
     gap: tokens.space.xs,
   },
   actions: {

@@ -162,6 +162,18 @@ export const nevoFoods = pgTable("nevo_foods", {
   per100g: jsonb("per_100g").notNull(),
 });
 
+export const diaryDayTargets = pgTable(
+  "diary_day_targets",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    date: date("date").notNull(),
+    kcal: integer("kcal").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.date] })],
+);
+
 export const diaryMealTemplates = pgTable(
   "diary_meal_templates",
   {

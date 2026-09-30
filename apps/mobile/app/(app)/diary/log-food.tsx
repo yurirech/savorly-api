@@ -181,7 +181,6 @@ export default function DiaryLogFoodScreen() {
             </AppText>
             <Button
               label={isEdit ? "Update" : "Log"}
-              size="compact"
               onPress={() => void onSave()}
               loading={saving}
             />

@@ -30,6 +30,7 @@ import {
 } from "./pantry/pantryStore";
 import { parseMealSuggestionExcludeIds, suggestMeal } from "./pantry/suggestMeals";
 import { suggestPantrySubstitutions } from "./pantry/suggestPantrySubstitutions";
+import { chatAboutRecipe } from "./recipes/recipeChat";
 import {
   addDiaryEntry,
   addQuickDiaryEntry,
@@ -44,6 +45,9 @@ import {
   deleteDiaryMeal,
   deleteUserFood,
   getDiaryDay,
+  getDiaryWeek,
+  setDiaryDayTarget,
+  clearDiaryDayTarget,
   getFrequentGramsForFood,
   getNutritionProfile,
   importUsdaFood,
@@ -434,6 +438,28 @@ export function createApp(db: Database, env: Env) {
     return c.json({ recipe });
   });
 
+  app.post("/recipes/:id/chat", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = z
+      .object({
+        message: z.string().trim().min(1).max(2000),
+        recipe: generatedRecipeSchema.optional(),
+        history: z
+          .array(
+            z.object({
+              role: z.enum(["user", "assistant"]),
+              text: z.string().trim().min(1).max(500),
+            }),
+          )
+          .max(8)
+          .optional(),
+      })
+      .parse(await c.req.json());
+    const saved = await getRecipe(db, user.id, c.req.param("id"));
+    const result = await chatAboutRecipe(saved, body, env);
+    return c.json(result);
+  });
+
   app.post("/recipes/:id/pantry-substitutions", async (c) => {
     const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
     const body = pantrySubstitutionsBodySchema.parse(await c.req.json().catch(() => ({})));
@@ -660,12 +686,12 @@ export function createApp(db: Database, env: Env) {
         sourceRecipeId: z.string().uuid().nullable().optional(),
       })
       .parse(await c.req.json());
-    return c.json(await updateNutritionRecipe(db, user.id, c.req.param("id"), body));
+    return c.json(await updateNutritionRecipe(db, user.id, c.req.param("id"), body, c.req.query("from")));
   });
 
   app.post("/nutrition/recipes/:id/publish", async (c) => {
     const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
-    return c.json(await publishNutritionRecipe(db, user.id, c.req.param("id")));
+    return c.json(await publishNutritionRecipe(db, user.id, c.req.param("id"), c.req.query("from")));
   });
 
   app.delete("/nutrition/recipes/:id", async (c) => {
@@ -683,7 +709,7 @@ export function createApp(db: Database, env: Env) {
         sourceLine: z.string().trim().max(120).optional(),
       })
       .parse(await c.req.json());
-    return c.json(await addNutritionRecipeItem(db, user.id, c.req.param("id"), body), 201);
+    return c.json(await addNutritionRecipeItem(db, user.id, c.req.param("id"), body, c.req.query("from")), 201);
   });
 
   app.patch("/nutrition/recipes/:id/items/:itemId", async (c) => {
@@ -694,12 +720,14 @@ export function createApp(db: Database, env: Env) {
         grams: z.number().positive().nullable().optional(),
       })
       .parse(await c.req.json());
-    return c.json(await updateNutritionRecipeItem(db, user.id, c.req.param("id"), c.req.param("itemId"), body));
+    return c.json(
+      await updateNutritionRecipeItem(db, user.id, c.req.param("id"), c.req.param("itemId"), body, c.req.query("from")),
+    );
   });
 
   app.delete("/nutrition/recipes/:id/items/:itemId", async (c) => {
     const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
-    return c.json(await deleteNutritionRecipeItem(db, user.id, c.req.param("id"), c.req.param("itemId")));
+    return c.json(await deleteNutritionRecipeItem(db, user.id, c.req.param("id"), c.req.param("itemId"), c.req.query("from")));
   });
 
   app.get("/nutrition/foods/staples", async (c) => {
@@ -759,6 +787,30 @@ export function createApp(db: Database, env: Env) {
     const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
     await deleteUserFood(db, user.id, c.req.param("id"));
     return c.body(null, 204);
+  });
+
+  app.get("/nutrition/diary/week", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const start = c.req.query("start");
+    if (!start) {
+      return c.json({ error: { code: "validation_error", message: "Start date is required." } }, 400);
+    }
+    return c.json(await getDiaryWeek(db, user.id, start));
+  });
+
+  app.put("/nutrition/diary/target", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = z.object({ date: z.string(), kcal: z.number().int().min(1).max(20000) }).parse(await c.req.json());
+    return c.json(await setDiaryDayTarget(db, user.id, body.date, body.kcal));
+  });
+
+  app.delete("/nutrition/diary/target", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const date = c.req.query("date");
+    if (!date) {
+      return c.json({ error: { code: "validation_error", message: "Date is required." } }, 400);
+    }
+    return c.json(await clearDiaryDayTarget(db, user.id, date));
   });
 
   app.get("/nutrition/diary", async (c) => {

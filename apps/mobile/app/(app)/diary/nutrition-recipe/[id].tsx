@@ -32,6 +32,7 @@ export default function NutritionRecipeScreen() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [gramDrafts, setGramDrafts] = useState<Record<string, string>>({});
+  const [titleDraft, setTitleDraft] = useState<string | null>(null);
   const [servingsDraft, setServingsDraft] = useState<string | null>(null);
   const [cookedDraft, setCookedDraft] = useState<string | null>(null);
   const [linking, setLinking] = useState(false);
@@ -97,6 +98,24 @@ export default function NutritionRecipeScreen() {
       </AppText>
       {detail ? (
         <>
+          <View style={styles.metaField}>
+            <AppText variant="caption" color="muted">Title</AppText>
+            <TextInput
+              value={titleDraft ?? detail.title}
+              accessibilityLabel="Recipe title"
+              onChangeText={setTitleDraft}
+              onEndEditing={(event) => {
+                const text = event.nativeEvent.text;
+                setTitleDraft(null);
+                if (typeof text !== "string") return;
+                const title = text.trim();
+                if (title && title !== detail.title) {
+                  void run(() => updateNutritionRecipe(detail.id, { title }));
+                }
+              }}
+              style={styles.metaInput}
+            />
+          </View>
           <View style={styles.meta}>
             <View style={styles.metaField}>
               <AppText variant="caption" color="muted">Servings</AppText>

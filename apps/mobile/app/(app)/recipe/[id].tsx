@@ -1,8 +1,8 @@
 import { router, type Href, useFocusEffect, useLocalSearchParams } from "expo-router";
 import * as Clipboard from "expo-clipboard";
-import { Books, Check, Copy, Minus, PencilSimple, Plus } from "phosphor-react-native";
+import { Books, Check, Copy, DotsThreeVertical, Minus, Plus, Sparkle } from "phosphor-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Image, Pressable, StyleSheet, View } from "react-native";
+import { Image, Modal, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { CookbookSummary, DisplayUnit, PantrySubstitutionResponse, SavedRecipe } from "@savorly/shared";
 import {
@@ -60,6 +60,7 @@ export default function RecipeDetailScreen() {
   const [suggestingSwaps, setSuggestingSwaps] = useState(false);
   const [diaryRecipes, setDiaryRecipes] = useState<Array<{ id: string; title: string }>>([]);
   const [openingDiary, setOpeningDiary] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const insets = useSafeAreaInsets();
 
@@ -212,6 +213,51 @@ export default function RecipeDetailScreen() {
     }
   }
 
+  function editRecipe() {
+    if (!recipe) return;
+    setActionsOpen(false);
+    setReviewDraft(recipe, recipe.id, `/(app)/recipe/${recipe.id}`);
+    router.push("/(app)/review");
+  }
+
+  function useForDiary() {
+    if (!recipe || openingDiary) return;
+    setActionsOpen(false);
+    setOpeningDiary(true);
+    void (async () => {
+      try {
+        const linked = await listNutritionRecipesForCookbook(recipe.id);
+        const savedIds = new Set(linked.foods.map((food) => food.nutritionRecipeId));
+        const draft = linked.recipes.find((row) => !savedIds.has(row.id));
+        if (draft) {
+          router.push(`/(app)/diary/nutrition-recipe/${draft.id}` as Href);
+          return;
+        }
+        const created = await createNutritionRecipeFromCookbook(recipe.id);
+        router.push(`/(app)/diary/nutrition-recipe/${created.id}` as Href);
+      } catch (err) {
+        setError(err instanceof ApiRequestError ? err.message : "Could not open diary copy.");
+      } finally {
+        setOpeningDiary(false);
+      }
+    })();
+  }
+
+  function copyThisRecipe() {
+    if (!recipe || copyingRecipe) return;
+    setActionsOpen(false);
+    setCopyingRecipe(true);
+    setError(null);
+    void copyRecipe(recipe.id)
+      .then((saved) => {
+        router.push(`/(app)/recipe/${saved.recipe.id}` as Href);
+      })
+      .catch((err: unknown) => {
+        setError(err instanceof ApiRequestError ? err.message : "Could not copy that recipe.");
+      })
+      .finally(() => setCopyingRecipe(false));
+  }
+
   function confirmDelete() {
     confirmDestructive(
       "Delete recipe?",
@@ -281,20 +327,17 @@ export default function RecipeDetailScreen() {
     <>
     <Screen padded={false} edges={[]} safeBottom={false} onRefresh={() => void onRefresh()} refreshing={refreshing}>
       <View style={styles.heroWrap}>
-        <Image source={imageForCategory(recipe.category)} style={styles.hero} />
+        <Image source={imageForCategory(recipe.category, recipe.id)} style={styles.hero} />
         <View style={styles.heroScrim} />
+        <Pressable
+          onPress={() => setActionsOpen(true)}
+          style={[styles.stepperBtn, styles.heroMenu, { top: insets.top }]}
+          accessibilityRole="button"
+          accessibilityLabel="Recipe menu"
+        >
+          <DotsThreeVertical size={18} color={tokens.text} weight="bold" />
+        </Pressable>
         <View style={[styles.heroTools, { top: insets.top, left: tokens.space[7] + tokens.space.sm }]}>
-          <Pressable
-            onPress={() => {
-              setReviewDraft(recipe, recipe.id, `/(app)/recipe/${recipe.id}`);
-              router.push("/(app)/review");
-            }}
-            style={styles.stepperBtn}
-            accessibilityRole="button"
-            accessibilityLabel="Edit"
-          >
-            <PencilSimple size={18} color={tokens.text} />
-          </Pressable>
           <Pressable
             onPress={() => {
               setSelectedCookbookIds(savedCookbookIds);
@@ -481,60 +524,33 @@ export default function RecipeDetailScreen() {
             ))}
           </View>
         ) : null}
-        <Button
-          label="Use for diary"
-          variant="secondary"
-          loading={openingDiary}
-          onPress={() => {
-            if (!recipe) return;
-            setOpeningDiary(true);
-            void (async () => {
-              try {
-                const linked = await listNutritionRecipesForCookbook(recipe.id);
-                const savedIds = new Set(linked.foods.map((food) => food.nutritionRecipeId));
-                const draft = linked.recipes.find((row) => !savedIds.has(row.id));
-                if (draft) {
-                  router.push(`/(app)/diary/nutrition-recipe/${draft.id}` as Href);
-                  return;
-                }
-                const created = await createNutritionRecipeFromCookbook(recipe.id);
-                router.push(`/(app)/diary/nutrition-recipe/${created.id}` as Href);
-              } catch (err) {
-                setError(err instanceof ApiRequestError ? err.message : "Could not open diary copy.");
-              } finally {
-                setOpeningDiary(false);
-              }
-            })();
-          }}
-        />
-        <View style={styles.recipeActions}>
-          <Button
-            label="Copy recipe"
-            variant="secondary"
-            loading={copyingRecipe}
-            onPress={() => {
-              if (!recipe) return;
-              setCopyingRecipe(true);
-              setError(null);
-              void copyRecipe(recipe.id)
-                .then((saved) => {
-                  router.push(`/(app)/recipe/${saved.recipe.id}` as Href);
-                })
-                .catch((err: unknown) => {
-                  setError(err instanceof ApiRequestError ? err.message : "Could not copy that recipe.");
-                })
-                .finally(() => setCopyingRecipe(false));
-            }}
-          />
-        </View>
         {error ? (
           <AppText variant="body" color="danger">
             {error}
           </AppText>
         ) : null}
-        <Button label="Delete recipe" variant="ghost" onPress={confirmDelete} loading={deleting} disabled={deleting} />
       </View>
     </Screen>
+      <Pressable
+        onPress={() => router.push({ pathname: "/(app)/recipe-chat", params: { id: recipe.id } } as Href)}
+        style={[styles.askButton, { bottom: insets.bottom + tokens.space.md, right: tokens.space.md }]}
+        accessibilityRole="button"
+        accessibilityLabel="Ask about this recipe"
+      >
+        <Sparkle size={24} color={tokens.bg} weight="fill" />
+      </Pressable>
+      <Modal visible={actionsOpen} transparent animationType="fade" onRequestClose={() => setActionsOpen(false)}>
+        <Pressable style={styles.menuBackdrop} onPress={() => setActionsOpen(false)} accessibilityLabel="Close">
+          <Pressable style={styles.menuSheet} onPress={() => undefined}>
+            <AppText variant="title">Recipe</AppText>
+            <Button size="compact" label="Use for diary" variant="secondary" loading={openingDiary} onPress={useForDiary} />
+            <Button size="compact" label="Copy recipe" variant="secondary" loading={copyingRecipe} onPress={copyThisRecipe} />
+            <Button size="compact" label="Delete recipe" variant="secondary" loading={deleting} onPress={() => { setActionsOpen(false); confirmDelete(); }} />
+            <Button size="compact" label="Edit recipe" variant="secondary" onPress={editRecipe} />
+            <Button size="compact" label="Close" variant="ghost" onPress={() => setActionsOpen(false)} />
+          </Pressable>
+        </Pressable>
+      </Modal>
       <CookbookPickerSheet
         visible={pickerOpen}
         cookbooks={cookbooks}
@@ -607,6 +623,33 @@ const styles = StyleSheet.create({
     position: "absolute",
     zIndex: 2,
     flexDirection: "row",
+    gap: tokens.space.sm,
+  },
+  heroMenu: {
+    position: "absolute",
+    zIndex: 2,
+    right: tokens.space.md,
+  },
+  askButton: {
+    position: "absolute",
+    zIndex: 3,
+    width: 56,
+    height: 56,
+    borderRadius: tokens.radius.full,
+    backgroundColor: tokens.accent,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  menuBackdrop: {
+    flex: 1,
+    backgroundColor: tokens.scrim,
+    justifyContent: "center",
+    padding: tokens.space.lg,
+  },
+  menuSheet: {
+    backgroundColor: tokens.surface,
+    borderRadius: tokens.radius.lg,
+    padding: tokens.space.lg,
     gap: tokens.space.sm,
   },
   heroScrim: {

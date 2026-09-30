@@ -64,9 +64,9 @@ export default function DiaryFoodsScreen() {
         ]}
       />
       <View style={styles.actions}>
+      {!staplesImported ? (
       <Button size="compact"
-        label={staplesImported ? "Staples added" : "Add my staples"}
-        disabled={staplesImported}
+        label="Add my staples"
         loading={importingStaples}
         onPress={() => {
           setImportingStaples(true);
@@ -79,6 +79,7 @@ export default function DiaryFoodsScreen() {
             .finally(() => setImportingStaples(false));
         }}
       />
+      ) : null}
       <Button size="compact" label="Search NEVO" variant="secondary" onPress={() => router.push("/(app)/diary/nevo-search" as Href)} />
       <Button size="compact" label="Search USDA" variant="secondary" onPress={() => router.push("/(app)/diary/usda-search" as Href)} />
       <Button size="compact" label="Add manually" variant="secondary" onPress={() => router.push("/(app)/diary/food-form" as Href)} />
@@ -99,6 +100,10 @@ export default function DiaryFoodsScreen() {
           style={styles.row}
           onPress={() => {
             setCachedFood(food);
+            if (food.source === "recipe" && food.nutritionRecipeId) {
+              router.push(`/(app)/diary/nutrition-recipe/${food.nutritionRecipeId}` as Href);
+              return;
+            }
             router.push(`/(app)/diary/food/${food.id}` as Href);
           }}
           accessibilityRole="button"
