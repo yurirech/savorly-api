@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { ZodError } from "zod";
 import { z } from "zod";
-import { FOOD_CATEGORIES, type GeneratedRecipe, type RecipeGenerateRequest } from "@savorly/shared";
+import { FOOD_CATEGORIES, OPTIONAL_NUTRIENT_KEYS, type GeneratedRecipe, type RecipeGenerateRequest } from "@savorly/shared";
 import type { Env } from "./config";
 import type { Database } from "./db/client";
 import { createAuthApp, requireUser } from "./auth/auth";
@@ -61,6 +61,7 @@ import {
   addNutritionRecipeItem,
   createNutritionRecipe,
   createNutritionRecipeFromCookbook,
+  createNutritionRecipeFromIngredients,
   deleteNutritionRecipe,
   deleteNutritionRecipeItem,
   getNutritionRecipe,
@@ -70,6 +71,7 @@ import {
   updateNutritionRecipeItem,
 } from "./nutrition/nutritionRecipeStore";
 import { listNevoSnapshot, requireNevoFood, searchNevoFoods, nevoFoodsReady } from "./nutrition/nevoStore";
+import { draftFoodFromText, draftRecipeFromText } from "./nutrition/pasteFill";
 import { fetchUsdaFood, searchUsdaFoods } from "./nutrition/usdaClient";
 import { NEVO_ATTRIBUTION } from "@savorly/shared";
 
@@ -242,12 +244,7 @@ const nutrientVectorSchema = z.object({
   proteinG: z.number().finite().nonnegative(),
   carbsG: z.number().finite().nonnegative(),
   fatG: z.number().finite().nonnegative(),
-  fiberG: z.number().finite().nonnegative().nullable().optional(),
-  sodiumMg: z.number().finite().nonnegative().nullable().optional(),
-  saturatedFatG: z.number().finite().nonnegative().nullable().optional(),
-  ironMg: z.number().finite().nonnegative().nullable().optional(),
-  calciumMg: z.number().finite().nonnegative().nullable().optional(),
-  vitaminDMcg: z.number().finite().nonnegative().nullable().optional(),
+  ...Object.fromEntries(OPTIONAL_NUTRIENT_KEYS.map((key) => [key, z.number().finite().nonnegative().nullable().optional()])),
 });
 
 const nutritionProfileSchema = z.object({
@@ -641,6 +638,13 @@ export function createApp(db: Database, env: Env) {
     return c.json(await createNutritionRecipeFromCookbook(db, user.id, body.recipeId), 201);
   });
 
+  app.post("/nutrition/recipes/from-text", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = z.object({ text: z.string().trim().min(8).max(8000) }).parse(await c.req.json());
+    const draft = await draftRecipeFromText(env, body.text);
+    return c.json(await createNutritionRecipeFromIngredients(db, user.id, draft), 201);
+  });
+
   app.get("/nutrition/recipes/:id", async (c) => {
     const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
     return c.json(await getNutritionRecipe(db, user.id, c.req.param("id")));
@@ -717,6 +721,12 @@ export function createApp(db: Database, env: Env) {
     const body = manualFoodSchema.parse(await c.req.json());
     const food = await createManualFood(db, user.id, body.name, body.per100g, body.id);
     return c.json({ food }, 201);
+  });
+
+  app.post("/nutrition/foods/from-text", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = z.object({ text: z.string().trim().min(8).max(8000) }).parse(await c.req.json());
+    return c.json(await draftFoodFromText(env, body.text));
   });
 
   app.post("/nutrition/foods/import", async (c) => {

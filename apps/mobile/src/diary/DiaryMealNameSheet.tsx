@@ -17,6 +17,13 @@ interface DiaryMealNameSheetProps {
   onClose: () => void;
   onConfirm: (name: string) => void | Promise<void>;
   loading?: boolean;
+  paste?: {
+    value: string;
+    onChangeText: (value: string) => void;
+    onFill: () => void;
+    filling?: boolean;
+    error?: string | null;
+  };
 }
 
 function DiaryMealNameSheet(props: DiaryMealNameSheetProps) {
@@ -31,6 +38,7 @@ function DiaryMealNameSheet(props: DiaryMealNameSheetProps) {
     onClose,
     onConfirm,
     loading,
+    paste,
   } = props;
   const [name, setName] = useState(initialName);
 
@@ -46,6 +54,23 @@ function DiaryMealNameSheet(props: DiaryMealNameSheetProps) {
         <Pressable style={styles.sheet} onPress={() => undefined}>
           <AppText variant="title">{title}</AppText>
           <Field label={fieldLabel} value={name} onChangeText={setName} placeholder={placeholder} />
+          {paste ? (
+            <>
+              <Field
+                label="Paste recipe"
+                value={paste.value}
+                onChangeText={paste.onChangeText}
+                placeholder="Ingredients and amounts"
+                multiline
+              />
+              <Button size="compact" label="Fill from text" variant="secondary" onPress={paste.onFill} loading={paste.filling} />
+              {paste.error ? (
+                <AppText variant="body" color="danger">
+                  {paste.error}
+                </AppText>
+              ) : null}
+            </>
+          ) : null}
           {suggestions.length > 0 ? (
           <View style={styles.chips}>
             {suggestions.map((suggestion) => (

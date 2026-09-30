@@ -2,8 +2,10 @@ import { type Href, router, useFocusEffect } from "expo-router";
 import { Globe, InstagramLogo, NotePencil, User } from "phosphor-react-native";
 import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import type { SavedRecipe } from "@savorly/shared";
-import { listRecipes } from "../../../src/api/client";
+import type { DiaryDayResponse, SavedRecipe } from "@savorly/shared";
+import { fetchDiaryDay, fetchNutritionProfile, listRecipes } from "../../../src/api/client";
+import RemainingBanner from "../../../src/diary/RemainingBanner";
+import { todayIsoDate } from "../../../src/utils/isoDate";
 import { AppText } from "../../../src/components/AppText";
 import { Button } from "../../../src/components/Button";
 import { RecipeCard } from "../../../src/components/RecipeCard";
@@ -16,6 +18,7 @@ import { tokens } from "../../../src/theme/tokens";
 
 export default function HomeScreen() {
   const [recipes, setRecipes] = useState<SavedRecipe[]>([]);
+  const [day, setDay] = useState<DiaryDayResponse | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadRecent = useCallback(async (isActive: () => boolean = () => true) => {
@@ -23,8 +26,14 @@ export default function HomeScreen() {
       if (isActive()) setRecipes(cached.slice(0, 4));
     });
     try {
-      const live = await listRecipes();
-      if (isActive()) setRecipes(live.recipes.slice(0, 4));
+      const [live, diary] = await Promise.all([
+        listRecipes(),
+        fetchDiaryDay(todayIsoDate()).catch(() => null),
+        fetchNutritionProfile().catch(() => null),
+      ]);
+      if (!isActive()) return;
+      setRecipes(live.recipes.slice(0, 4));
+      if (diary) setDay(diary);
     } catch {
       // Offline: cached recipes remain.
     }
@@ -67,8 +76,15 @@ export default function HomeScreen() {
         </Pressable>
       </View>
 
+      {day ? (
+        <RemainingBanner
+          remaining={day.remaining}
+          totalsKcal={day.totals.kcal}
+          targetKcal={day.targets?.kcal ?? null}
+          onPress={() => router.push("/(app)/(tabs)/diary" as Href)}
+        />
+      ) : null}
       <Button label="Suggest meal" onPress={() => router.push("/(app)/suggest-meal" as Href)} />
-      <Button label="Diary" variant="secondary" onPress={() => router.push("/(app)/diary" as Href)} />
 
       <SectionHeader title="Recently saved" actionLabel="See all" onAction={() => router.push("/(app)/(tabs)/recipes" as Href)} />
       {recipes.length === 0 ? (

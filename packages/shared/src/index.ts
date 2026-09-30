@@ -155,6 +155,8 @@ export {
   listPresentNutrients,
   NUTRIENT_DISPLAY_GROUPS,
 } from "./nutrition/nutrientDisplay";
+export { FOOD_LABEL_NUTRIENT_KEYS, foodFromLabelDraft } from "./nutrition/foodLabel";
+export type { FoodLabelDraft, FoodLabelFill, FoodLabelNutrientKey } from "./nutrition/foodLabel";
 export type {
   DayIntakeTargets,
   HealthGroup,

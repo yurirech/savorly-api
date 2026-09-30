@@ -3,6 +3,7 @@ import {
   computeNutritionRecipe,
   diaryLinesFromCookbook,
   isNutritionRecipeComplete,
+  type Ingredient,
   type NutrientVector,
   type NutritionRecipeItemInput,
   type UserFood,
@@ -165,6 +166,41 @@ export async function createNutritionRecipeFromCookbook(db: Database, userId: st
       lines.map((line, index) => ({
         nutritionRecipeId: created.id,
         sourceLine: line.sourceLine,
+        foodId: line.foodId,
+        grams: line.grams,
+        sortOrder: index,
+      })),
+    );
+  }
+  return loadDetail(db, userId, created.id);
+}
+
+export async function createNutritionRecipeFromIngredients(
+  db: Database,
+  userId: string,
+  input: { title: string; servings: number; ingredients: Ingredient[] },
+) {
+  const foods = await listUserFoods(db, userId);
+  const title = input.title.trim().slice(0, 120) || "Recipe";
+  const servings = Number.isInteger(input.servings) && input.servings >= 1 ? input.servings : 1;
+  const [created] = await db
+    .insert(nutritionRecipes)
+    .values({
+      userId,
+      sourceRecipeId: null,
+      title,
+      servings,
+    })
+    .returning();
+  if (!created) {
+    throw new AppError("internal_error", "Could not create recipe.", 500);
+  }
+  const lines = diaryLinesFromCookbook(input.ingredients, foods);
+  if (lines.length > 0) {
+    await db.insert(nutritionRecipeItems).values(
+      lines.map((line, index) => ({
+        nutritionRecipeId: created.id,
+        sourceLine: line.sourceLine.slice(0, 200),
         foodId: line.foodId,
         grams: line.grams,
         sortOrder: index,

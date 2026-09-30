@@ -95,10 +95,14 @@ function DiaryMealSection(props: DiaryMealSectionProps) {
           <View style={styles.actions}>
             <Button size="compact" label="Add food" variant="secondary" onPress={onAddFood} />
             {meal.entries.length === 0 && onCopyPrevious ? (
-              <Button size="compact" label="↩ Copy last time" variant="secondary" onPress={onCopyPrevious} />
+              <Pressable onPress={onCopyPrevious} hitSlop={8} accessibilityRole="button" accessibilityLabel="Copy last time">
+                <AppText variant="body">↩</AppText>
+              </Pressable>
             ) : null}
             {meal.entries.length === 0 && onAddStaples ? (
-              <Button size="compact" label="🥣 Add staples" variant="secondary" onPress={onAddStaples} />
+              <Pressable onPress={onAddStaples} hitSlop={8} accessibilityRole="button" accessibilityLabel="Add staples">
+                <AppText variant="body">🥣</AppText>
+              </Pressable>
             ) : null}
             <Pressable
               onPress={() => setNutrientsOpen((open) => !open)}

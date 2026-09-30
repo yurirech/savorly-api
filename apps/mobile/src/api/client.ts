@@ -4,6 +4,7 @@ import type {
   CookbookDetail,
   CookbookSummary,
   DiaryDayResponse,
+  FoodLabelFill,
   DiaryEntry,
   GeneratedRecipe,
   MealSuggestionResponse,
@@ -574,6 +575,13 @@ export async function fetchNutritionFood(id: string): Promise<{ food: UserFood; 
       return { food };
     });
   }
+}
+
+export function parseFoodLabel(text: string) {
+  return request<FoodLabelFill>("/nutrition/foods/from-text", {
+    method: "POST",
+    body: JSON.stringify({ text }),
+  });
 }
 
 export async function createNutritionFood(name: string, per100g: NutrientVector) {
@@ -1270,6 +1278,15 @@ export async function createNutritionRecipe(title: string) {
       return detail;
     });
   }
+}
+
+export async function createNutritionRecipeFromText(text: string) {
+  return rememberRecipe(
+    await request<NutritionRecipeDetail>("/nutrition/recipes/from-text", {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
+  );
 }
 
 export async function createNutritionRecipeFromCookbook(recipeId: string) {

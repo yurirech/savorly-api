@@ -1,6 +1,6 @@
 import { type Href, router, useFocusEffect } from "expo-router";
 
-import { Plus } from "phosphor-react-native";
+import { Jar, Plus } from "phosphor-react-native";
 
 import { useCallback, useEffect, useState } from "react";
 
@@ -218,23 +218,41 @@ export default function RecipesScreen() {
 
         <AppText variant="display">Recipes</AppText>
 
-        {segment === "cookbooks" ? (
+        <View style={styles.headerActions}>
 
           <Pressable
 
-            onPress={() => router.push("/(app)/new-cookbook" as Href)}
+            onPress={() => router.push("/(app)/(tabs)/pantry" as Href)}
 
             style={styles.add}
 
-            accessibilityLabel="Create cookbook"
+            accessibilityLabel="Pantry"
 
           >
 
-            <Plus size={22} color={tokens.accent} weight="bold" />
+            <Jar size={22} color={tokens.accent} weight="regular" />
 
           </Pressable>
 
-        ) : null}
+          {segment === "cookbooks" ? (
+
+            <Pressable
+
+              onPress={() => router.push("/(app)/new-cookbook" as Href)}
+
+              style={styles.add}
+
+              accessibilityLabel="Create cookbook"
+
+            >
+
+              <Plus size={22} color={tokens.accent} weight="bold" />
+
+            </Pressable>
+
+          ) : null}
+
+        </View>
 
       </View>
 
@@ -381,6 +399,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
 
     justifyContent: "space-between",
+
+  },
+
+  headerActions: {
+
+    flexDirection: "row",
+
+    alignItems: "center",
+
+    gap: tokens.space.sm,
 
   },
 

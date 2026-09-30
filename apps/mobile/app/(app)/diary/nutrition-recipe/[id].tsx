@@ -65,7 +65,8 @@ export default function NutritionRecipeScreen() {
     }
   }
 
-  function commitGrams(itemId: string, currentGrams: number | null, text: string) {
+  function commitGrams(itemId: string, currentGrams: number | null, text: string | undefined) {
+    if (typeof text !== "string") return;
     const grams = Number(text.replace(",", "."));
     setGramDrafts((current) => {
       const next = { ...current };
@@ -105,15 +106,10 @@ export default function NutritionRecipeScreen() {
                 accessibilityLabel="Servings"
                 onChangeText={setServingsDraft}
                 onEndEditing={(event) => {
+                  const text = event.nativeEvent.text;
                   setServingsDraft(null);
-                  const servings = Number(event.nativeEvent.text);
-                  if (Number.isInteger(servings) && servings >= 1 && servings !== detail.servings) {
-                    void run(() => updateNutritionRecipe(detail.id, { servings }));
-                  }
-                }}
-                onBlur={(event) => {
-                  setServingsDraft(null);
-                  const servings = Number(event.nativeEvent.text);
+                  if (typeof text !== "string") return;
+                  const servings = Number(text);
                   if (Number.isInteger(servings) && servings >= 1 && servings !== detail.servings) {
                     void run(() => updateNutritionRecipe(detail.id, { servings }));
                   }
@@ -131,16 +127,10 @@ export default function NutritionRecipeScreen() {
                 accessibilityLabel="Cooked weight g"
                 onChangeText={setCookedDraft}
                 onEndEditing={(event) => {
+                  const text = event.nativeEvent.text;
                   setCookedDraft(null);
-                  const trimmed = event.nativeEvent.text.trim();
-                  const cookedWeightG = trimmed ? Number(trimmed.replace(",", ".")) : null;
-                  if ((cookedWeightG == null || cookedWeightG > 0) && cookedWeightG !== detail.cookedWeightG) {
-                    void run(() => updateNutritionRecipe(detail.id, { cookedWeightG }));
-                  }
-                }}
-                onBlur={(event) => {
-                  setCookedDraft(null);
-                  const trimmed = event.nativeEvent.text.trim();
+                  if (typeof text !== "string") return;
+                  const trimmed = text.trim();
                   const cookedWeightG = trimmed ? Number(trimmed.replace(",", ".")) : null;
                   if ((cookedWeightG == null || cookedWeightG > 0) && cookedWeightG !== detail.cookedWeightG) {
                     void run(() => updateNutritionRecipe(detail.id, { cookedWeightG }));
@@ -226,7 +216,6 @@ export default function NutritionRecipeScreen() {
                   accessibilityLabel={`Grams for ${item.foodName || item.sourceLine}`}
                   onChangeText={(value) => setGramDrafts((current) => ({ ...current, [item.id]: value }))}
                   onEndEditing={(event) => commitGrams(item.id, item.grams, event.nativeEvent.text)}
-                  onBlur={(event) => commitGrams(item.id, item.grams, event.nativeEvent.text)}
                   style={styles.grams}
                 />
                 <Pressable

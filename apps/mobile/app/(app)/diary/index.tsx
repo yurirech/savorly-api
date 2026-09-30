@@ -1,4 +1,4 @@
-import { type Href, router, useFocusEffect } from "expo-router";
+import { type Href, router, useFocusEffect, useSegments } from "expo-router";
 import { CaretLeft, CaretRight, ChartPie } from "phosphor-react-native";
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
@@ -10,6 +10,7 @@ import {
   copyPreviousDiaryMeal,
   createDiaryMeal,
   createNutritionRecipe,
+  createNutritionRecipeFromText,
   deleteDiaryEntry,
   deleteDiaryMeal,
   fetchDiaryDay,
@@ -22,6 +23,7 @@ import { Button } from "../../../src/components/Button";
 import NutrientDetailList from "../../../src/components/NutrientDetailList";
 import { Screen } from "../../../src/components/Screen";
 import DiaryConfirmSheet from "../../../src/diary/DiaryConfirmSheet";
+import RemainingBanner from "../../../src/diary/RemainingBanner";
 import DiaryDayNutrition from "../../../src/diary/DiaryDayNutrition";
 import DiaryMealNameSheet from "../../../src/diary/DiaryMealNameSheet";
 import DiaryMealPickerSheet from "../../../src/diary/DiaryMealPickerSheet";
@@ -39,6 +41,7 @@ type NameSheetMode =
 type CopyRequest = { entryIds: string[]; mealId: string };
 
 export default function DiaryScreen() {
+  const inTabs = (useSegments() as string[]).includes("(tabs)");
   const [date, setDate] = useState(todayIsoDate);
   const [day, setDay] = useState<DiaryDayResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +57,9 @@ export default function DiaryScreen() {
   const [copyRequest, setCopyRequest] = useState<CopyRequest | null>(null);
   const [copying, setCopying] = useState(false);
   const [sex, setSex] = useState<NutritionSex | null>(null);
+  const [pasteText, setPasteText] = useState("");
+  const [fillingPaste, setFillingPaste] = useState(false);
+  const [fillError, setFillError] = useState<string | null>(null);
 
   const dayMicroGroups = useMemo(() => (day?.totals ? listPresentNutrients(day.totals) : []), [day?.totals]);
 
@@ -104,6 +110,25 @@ export default function DiaryScreen() {
       }
       return next;
     });
+  }
+
+  async function onFillRecipe() {
+    if (pasteText.trim().length < 8) {
+      setFillError("Paste a bit more of the recipe.");
+      return;
+    }
+    setFillingPaste(true);
+    setFillError(null);
+    try {
+      const recipe = await createNutritionRecipeFromText(pasteText.trim());
+      setNameSheet(null);
+      setPasteText("");
+      router.push(`/(app)/diary/nutrition-recipe/${recipe.id}` as Href);
+    } catch (err) {
+      setFillError(err instanceof ApiRequestError ? err.message : "Filling this in needs a connection.");
+    } finally {
+      setFillingPaste(false);
+    }
   }
 
   async function onConfirmMealName(name: string) {
@@ -220,6 +245,7 @@ export default function DiaryScreen() {
 
   return (
     <Screen
+      safeBottom={!inTabs}
       onRefresh={() => void onRefresh()}
       refreshing={refreshing}
       footer={
@@ -240,28 +266,11 @@ export default function DiaryScreen() {
         </Pressable>
       </View>
 
-      {day?.targets ? (
-        <View style={styles.card}>
-          <AppText variant="label" color="muted">
-            Remaining
-          </AppText>
-          <AppText variant="display">{remaining ? `${remaining.kcal} kcal` : "—"}</AppText>
-          <AppText variant="caption" color="muted">
-            {remaining
-              ? `${remaining.proteinG}g protein · ${remaining.carbsG}g carbs · ${remaining.fatG}g fat`
-              : "Set a profile to see targets."}
-          </AppText>
-          {totals ? (
-            <AppText variant="caption" color="muted">
-              Logged {totals.kcal} / {day.targets.kcal} kcal
-            </AppText>
-          ) : null}
-        </View>
-      ) : (
-        <AppText variant="body" color="muted">
-          Set your height, weight, and goal so remaining calories have something to chase.
-        </AppText>
-      )}
+      <RemainingBanner
+        remaining={remaining ?? null}
+        totalsKcal={totals?.kcal ?? null}
+        targetKcal={day?.targets?.kcal ?? null}
+      />
 
       {error ? (
         <AppText variant="body" color="danger">
@@ -361,9 +370,24 @@ export default function DiaryScreen() {
                 ? "Save name"
                 : "Add group"
         }
-        onClose={() => setNameSheet(null)}
+        onClose={() => {
+          setNameSheet(null);
+          setPasteText("");
+          setFillError(null);
+        }}
         onConfirm={onConfirmMealName}
         loading={nameSaving}
+        paste={
+          nameSheet?.kind === "recipe"
+            ? {
+                value: pasteText,
+                onChangeText: setPasteText,
+                onFill: () => void onFillRecipe(),
+                filling: fillingPaste,
+                error: fillError,
+              }
+            : undefined
+        }
       />
       <DiaryConfirmSheet
         visible={pendingDelete != null}
@@ -404,14 +428,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-  },
-  card: {
-    backgroundColor: tokens.surface,
-    borderRadius: tokens.radius.md,
-    borderWidth: 1,
-    borderColor: tokens.border,
-    padding: tokens.space.md,
-    gap: tokens.space.xs,
   },
   microSection: {
     gap: tokens.space.sm,
