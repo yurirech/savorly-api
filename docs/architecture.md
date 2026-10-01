@@ -7,10 +7,11 @@ Savorly is a small monorepo: Expo app, Hono API, shared DTOs.
 The mobile app sends a provider-neutral `RecipeImportRequest`. Adapters live only on the API:
 
 - `InstagramRecipeImporter` — Apify caption + transcript
+- `YouTubeRecipeImporter` — Apify description + captions (watch, Shorts, youtu.be)
 - `WebsiteRecipeImporter` — SSRF-safe fetch, JSON-LD Recipe first, readable extract otherwise
 - `TextRecipeImporter` — pasted text
 
-All three become `ImportedRecipeSource`, then Gemini (or the mock normalizer) returns `GeneratedRecipe`. The app never sees Apify, Cheerio, or Gemini payloads.
+The Import tab has one video URL field. The app detects Instagram vs YouTube and sends `type: "instagram"` or `type: "youtube"`. All four become `ImportedRecipeSource`, then Gemini (or the mock normalizer) returns `GeneratedRecipe`. The app never sees Apify, Cheerio, or Gemini payloads.
 
 ## Persistence
 

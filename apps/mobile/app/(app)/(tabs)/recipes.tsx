@@ -222,7 +222,7 @@ export default function RecipesScreen() {
 
           <Pressable
 
-            onPress={() => router.push("/(app)/(tabs)/pantry" as Href)}
+            onPress={() => router.push("/(app)/pantry" as Href)}
 
             style={styles.add}
 

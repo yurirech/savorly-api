@@ -1,5 +1,5 @@
 export type ImportedRecipeSource = {
-  sourceType: "instagram" | "website" | "text";
+  sourceType: "instagram" | "youtube" | "website" | "text";
   originalUrl?: string;
   sourceName?: string;
   author?: string;

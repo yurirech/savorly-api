@@ -46,4 +46,4 @@ EAS uploads the project (still no GitHub). When the build finishes, download the
 
 ## 4. Open the app
 
-Sign in with **admin** and the API `ADMIN_PASSWORD`. Imports work against the hosted API. With `USE_MOCK_IMPORTS=true` on the server, imports return fixtures until Gemini/Apify keys are set.
+Sign in with **admin** and the API `ADMIN_PASSWORD`. Imports work against the hosted API. With `USE_MOCK_IMPORTS=true` on the server, imports return fixtures until Gemini/Apify keys are set. Live Instagram and YouTube imports need `APIFY_TOKEN` and `GEMINI_API_KEY` on the API; YouTube uses `APIFY_YOUTUBE_ACTOR` (default `autofacts/youtube-subtitle-transcript-scraper`).

@@ -31,6 +31,7 @@
     },
     "android": {
       "package": "app.savorly.mobile",
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#0E1116",
         "foregroundImage": "./assets/android-icon-foreground.png",

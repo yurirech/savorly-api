@@ -1,5 +1,12 @@
-import type { PropsWithChildren, ReactNode } from "react";
-import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import type { PropsWithChildren, ReactNode, RefObject } from "react";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { tokens } from "../theme/tokens";
 
@@ -11,10 +18,21 @@ type ScreenProps = PropsWithChildren<{
   onRefresh?: () => void | Promise<void>;
   refreshing?: boolean;
   footer?: ReactNode;
+  scrollRef?: RefObject<ScrollView | null>;
 }>;
 
 export function Screen(props: ScreenProps) {
-  const { children, scroll = true, padded = true, safeBottom = true, edges, onRefresh, refreshing = false, footer } = props;
+  const {
+    children,
+    scroll = true,
+    padded = true,
+    safeBottom = true,
+    edges,
+    onRefresh,
+    refreshing = false,
+    footer,
+    scrollRef,
+  } = props;
   const insets = useSafeAreaInsets();
   const bottomInset = safeBottom && !footer ? insets.bottom : 0;
   const bodyStyle = [
@@ -33,30 +51,42 @@ export function Screen(props: ScreenProps) {
       {footer}
     </View>
   ) : null;
-  if (!scroll) {
-    return (
-      <SafeAreaView style={styles.safe} edges={edges ?? ["top", "left", "right"]}>
-        <View style={bodyStyle}>{children}</View>
-        {footerNode}
-      </SafeAreaView>
-    );
-  }
+  const scrollNode = scroll ? (
+    <ScrollView
+      ref={scrollRef}
+      style={styles.scroll}
+      contentContainerStyle={bodyStyle}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="interactive"
+      automaticallyAdjustKeyboardInsets={!footer}
+      refreshControl={
+        onRefresh ? (
+          <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={tokens.accent} />
+        ) : undefined
+      }
+    >
+      {children}
+    </ScrollView>
+  ) : (
+    <View style={bodyStyle}>{children}</View>
+  );
+
+  const layout = (
+    <>
+      {scrollNode}
+      {footerNode}
+    </>
+  );
 
   return (
     <SafeAreaView style={styles.safe} edges={edges ?? ["top", "left", "right"]}>
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={bodyStyle}
-        keyboardShouldPersistTaps="handled"
-        refreshControl={
-          onRefresh ? (
-            <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={tokens.accent} />
-          ) : undefined
-        }
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={0}
       >
-        {children}
-      </ScrollView>
-      {footerNode}
+        {layout}
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -65,6 +95,9 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: tokens.bg,
+  },
+  flex: {
+    flex: 1,
   },
   scroll: {
     flex: 1,

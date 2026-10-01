@@ -1,6 +1,6 @@
 import { type Href, router, useFocusEffect, useSegments } from "expo-router";
 import { CaretLeft, CaretRight, ChartPie, DotsThreeVertical } from "phosphor-react-native";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { hasExtendedNutrients, listPresentNutrients, type DiaryDayResponse, type NutritionSex } from "@savorly/shared";
 import type { DiaryEntry } from "@savorly/shared";
@@ -22,11 +22,14 @@ import {
 } from "../../../src/api/client";
 import { AppText } from "../../../src/components/AppText";
 import { Button } from "../../../src/components/Button";
+import ContextMenu, {
+  measureContextMenuAnchor,
+  type ContextMenuAnchor,
+} from "../../../src/components/ContextMenu";
 import NutrientDetailList from "../../../src/components/NutrientDetailList";
 import { Screen } from "../../../src/components/Screen";
 import DiaryConfirmSheet from "../../../src/diary/DiaryConfirmSheet";
 import DiaryDayTargetSheet from "../../../src/diary/DiaryDayTargetSheet";
-import DiaryOptionsSheet from "../../../src/diary/DiaryOptionsSheet";
 import RemainingBanner from "../../../src/diary/RemainingBanner";
 import DiaryDayNutrition from "../../../src/diary/DiaryDayNutrition";
 import DiaryMealNameSheet from "../../../src/diary/DiaryMealNameSheet";
@@ -66,12 +69,26 @@ export default function DiaryScreen() {
   const [fillError, setFillError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState<ContextMenuAnchor | null>(null);
+  const menuButtonRef = useRef<View>(null);
   const [selectedIds, setSelectedIds] = useState<string[] | null>(null);
   const [selectionDeleting, setSelectionDeleting] = useState(false);
   const [targetOpen, setTargetOpen] = useState(false);
   const [targetSaving, setTargetSaving] = useState(false);
   const [targetError, setTargetError] = useState<string | null>(null);
   const [profileKcal, setProfileKcal] = useState<number | null>(null);
+
+  const closeDiaryMenu = useCallback(() => {
+    setMenuOpen(false);
+    setMenuAnchor(null);
+  }, []);
+
+  const openDiaryMenu = useCallback(() => {
+    measureContextMenuAnchor(menuButtonRef, (anchor) => {
+      setMenuAnchor(anchor);
+      setMenuOpen(true);
+    });
+  }, []);
 
   const dayMicroGroups = useMemo(() => (day?.totals ? listPresentNutrients(day.totals) : []), [day?.totals]);
 
@@ -365,7 +382,8 @@ export default function DiaryScreen() {
           <CaretRight size={22} color={tokens.text} />
         </Pressable>
         <Pressable
-          onPress={() => setMenuOpen(true)}
+          ref={menuButtonRef}
+          onPress={openDiaryMenu}
           style={styles.menuButton}
           accessibilityRole="button"
           accessibilityLabel="Diary menu"
@@ -524,23 +542,31 @@ export default function DiaryScreen() {
         onConfirm={() => void confirmDeleteEntry()}
         loading={entryDeleting}
       />
-      <DiaryOptionsSheet
+      <ContextMenu
         visible={menuOpen}
-        editing={editing}
-        onClose={() => setMenuOpen(false)}
-        onToggleEditing={() => {
-          setEditing((current) => !current);
-          setMenuOpen(false);
-        }}
-        onCalorieTarget={() => {
-          setTargetError(null);
-          setMenuOpen(false);
-          setTargetOpen(true);
-        }}
-        onWeek={() => {
-          setMenuOpen(false);
-          router.push({ pathname: "/(app)/diary/week", params: { date } } as Href);
-        }}
+        anchor={menuAnchor}
+        onClose={closeDiaryMenu}
+        items={[
+          {
+            label: editing ? "Done editing" : "Edit diary",
+            onPress: () => {
+              setEditing((current) => !current);
+            },
+          },
+          {
+            label: "Calorie target",
+            onPress: () => {
+              setTargetError(null);
+              setTargetOpen(true);
+            },
+          },
+          {
+            label: "Week overview",
+            onPress: () => {
+              router.push({ pathname: "/(app)/diary/week", params: { date } } as Href);
+            },
+          },
+        ]}
       />
       <DiaryDayTargetSheet
         visible={targetOpen}

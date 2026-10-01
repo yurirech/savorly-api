@@ -1,6 +1,6 @@
 # Savorly
 
-Personal recipe inbox. Import a public Instagram Reel, a recipe webpage, or pasted text. Review once. Save. Search later.
+Personal recipe inbox. Import a public Instagram Reel or YouTube / Shorts video, a recipe webpage, or pasted text. Review once. Save. Search later.
 
 This repo is standalone. It is not part of KidsKonnect, Ovivio, or staff-planner.
 
@@ -40,7 +40,7 @@ npm run db:migrate
 npm run dev:api
 ```
 
-`USE_MOCK_IMPORTS=true` (default in `.env.example`) returns fixture recipes so the app works without Gemini or Apify. Set it to `false` and add `GEMINI_API_KEY` / `APIFY_TOKEN` for live imports. Diary USDA search uses a local staple list unless `USDA_FDC_API_KEY` is set.
+`USE_MOCK_IMPORTS=true` (default in `.env.example`) returns fixture recipes so the app works without Gemini or Apify. Set it to `false` and add `GEMINI_API_KEY` / `APIFY_TOKEN` for live imports. The same Apify token covers Instagram Reels and YouTube / Shorts. Optional: `APIFY_YOUTUBE_ACTOR` (default `autofacts/youtube-subtitle-transcript-scraper`) and `APIFY_YOUTUBE_LANGUAGES=en,nl`. YouTube actors often use residential proxies, so check Apify usage after the first live Short. Diary USDA search uses a local staple list unless `USDA_FDC_API_KEY` is set.
 
 5. Mobile (from `apps/mobile`, or `npm run dev:mobile`):
 
@@ -56,7 +56,7 @@ Sign in with **admin** and the `ADMIN_PASSWORD` from `apps/api/.env` (seeded/rot
 
 ## What is stored
 
-Recipe text, category, tags, and source attribution. No Instagram videos, no downloaded webpage images, no thumbnail blobs. Library cards use bundled category artwork.
+Recipe text, category, tags, and source attribution. No Instagram or YouTube videos, no downloaded webpage images, no thumbnail blobs. Library cards use bundled category artwork.
 
 ## Tests
 

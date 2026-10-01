@@ -30,7 +30,7 @@ export default function AppLayout() {
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="account" options={{ title: "Account" }} />
-      <Stack.Screen name="import/instagram" options={{ title: "Instagram" }} />
+      <Stack.Screen name="import/instagram" options={{ title: "Video link" }} />
       <Stack.Screen name="import/website" options={{ title: "Website" }} />
       <Stack.Screen name="import/text" options={{ title: "Paste text" }} />
       <Stack.Screen name="review" options={{ title: "Review recipe" }} />
@@ -39,6 +39,7 @@ export default function AppLayout() {
       <Stack.Screen name="new-cookbook" options={{ title: "New cookbook" }} />
       <Stack.Screen name="cookbook/[id]" options={{ title: "Cookbook" }} />
       <Stack.Screen name="suggest-meal" options={{ title: "Suggest meal" }} />
+      <Stack.Screen name="pantry" options={{ title: "My pantry" }} />
       <Stack.Screen name="diary/index" options={{ title: "Diary" }} />
       <Stack.Screen name="diary/week" options={{ title: "Week" }} />
       <Stack.Screen name="diary/foods" options={{ title: "My foods" }} />

@@ -40,6 +40,7 @@ export {
   promoteIngredientSections,
   recipeNotesText,
 } from "./recipe";
+export { detectVideoImportType, normalizeVideoImportUrl, type VideoImportType } from "./videoImport";
 export { resolveCreamiSweetenerName } from "./creamiSweetener";
 export { CHEF_SERVING_WEIGHT_G, chefServingWeightG, chefServingWeightHint } from "./chefConstraints";
 export {

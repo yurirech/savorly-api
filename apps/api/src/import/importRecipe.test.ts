@@ -8,23 +8,27 @@ const env: Env = {
   jwtSecret: "test-secret",
   geminiModel: "gemini-3.5-flash-lite",
   apifyInstagramActor: "apify/instagram-reel-scraper",
+  apifyYoutubeActor: "autofacts/youtube-subtitle-transcript-scraper",
+  apifyYoutubeLanguages: ["en", "nl"],
   useMockImports: true,
 };
 
 describe("mocked imports", () => {
   it("returns the same GeneratedRecipe shape for all three sources", async () => {
     const instagram = await importRecipe({ type: "instagram", url: "https://www.instagram.com/reel/x/" }, env);
+    const youtube = await importRecipe({ type: "youtube", url: "https://www.youtube.com/shorts/x" }, env);
     const website = await importRecipe({ type: "website", url: "https://example.com/recipe" }, env);
     const text = await importRecipe({ type: "text", text: "A long enough pasted recipe for pancakes this weekend." }, env);
 
-    for (const recipe of [instagram, website, text]) {
+    for (const recipe of [instagram, youtube, website, text]) {
       expect(recipe.title).toBeTruthy();
       expect(recipe.category).toBeTruthy();
       expect(Array.isArray(recipe.ingredients)).toBe(true);
       expect(Array.isArray(recipe.steps)).toBe(true);
       expect(Array.isArray(recipe.uncertainties)).toBe(true);
-      expect(recipe.source.type).toMatch(/instagram|website|text/);
+      expect(recipe.source.type).toMatch(/instagram|youtube|website|text/);
     }
+    expect(youtube.source.type).toBe("youtube");
     expect(instagram.ingredients.find((item) => item.name === "flour")?.canonicalKey).toBe("all_purpose_flour");
     expect(instagram.ingredients.find((item) => item.name === "flour")?.unit).toBe("g");
   });

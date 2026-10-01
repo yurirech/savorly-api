@@ -1,5 +1,5 @@
 import { type Href, router, useFocusEffect } from "expo-router";
-import { Globe, InstagramLogo, NotePencil, User } from "phosphor-react-native";
+import { User } from "phosphor-react-native";
 import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import type { DiaryDayResponse, SavedRecipe } from "@savorly/shared";
@@ -11,9 +11,7 @@ import { Button } from "../../../src/components/Button";
 import { RecipeCard } from "../../../src/components/RecipeCard";
 import { Screen } from "../../../src/components/Screen";
 import { SectionHeader } from "../../../src/components/SectionHeader";
-import { SourceCard } from "../../../src/components/SourceCard";
 import { searchCachedRecipes } from "../../../src/db/cache";
-import { setImportReturnTo } from "../../../src/store/reviewDraft";
 import { tokens } from "../../../src/theme/tokens";
 
 export default function HomeScreen() {
@@ -103,35 +101,6 @@ export default function HomeScreen() {
           ))}
         </View>
       )}
-
-      <SectionHeader title="Save from" />
-      <SourceCard
-        title="Instagram"
-        subtitle="Public Reel URL"
-        icon={<InstagramLogo size={22} color={tokens.accent} weight="fill" />}
-        onPress={() => {
-          setImportReturnTo("/(app)/(tabs)");
-          router.push("/(app)/import/instagram");
-        }}
-      />
-      <SourceCard
-        title="Website"
-        subtitle="Recipe page URL"
-        icon={<Globe size={22} color={tokens.accent} weight="regular" />}
-        onPress={() => {
-          setImportReturnTo("/(app)/(tabs)");
-          router.push("/(app)/import/website");
-        }}
-      />
-      <SourceCard
-        title="Paste text"
-        subtitle="Notes, caption, or a full recipe"
-        icon={<NotePencil size={22} color={tokens.accent} weight="regular" />}
-        onPress={() => {
-          setImportReturnTo("/(app)/(tabs)");
-          router.push("/(app)/import/text");
-        }}
-      />
     </Screen>
   );
 }

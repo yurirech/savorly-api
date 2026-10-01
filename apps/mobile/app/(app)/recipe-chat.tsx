@@ -1,6 +1,6 @@
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useCallback, useState } from "react";
-import { StyleSheet, TextInput, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Keyboard, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import type { GeneratedRecipe } from "@savorly/shared";
 import { ApiRequestError, chatAboutRecipe, getRecipe } from "../../src/api/client";
 import { AppText } from "../../src/components/AppText";
@@ -24,6 +24,24 @@ export default function RecipeChatScreen() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+
+  const scrollChatToEnd = useCallback(() => {
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    });
+  }, []);
+
+  useEffect(() => {
+    scrollChatToEnd();
+  }, [messages, scrollChatToEnd]);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener("keyboardDidShow", scrollChatToEnd);
+    return () => {
+      showSub.remove();
+    };
+  }, [scrollChatToEnd]);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -74,6 +92,7 @@ export default function RecipeChatScreen() {
 
   return (
     <Screen
+      scrollRef={scrollRef}
       onRefresh={() => void load()}
       footer={
         <View style={styles.composer}>
@@ -84,6 +103,7 @@ export default function RecipeChatScreen() {
             placeholderTextColor={tokens.textMuted}
             accessibilityLabel="Ask about this recipe"
             editable={!sending}
+            onFocus={scrollChatToEnd}
             style={styles.input}
           />
           <Button size="compact" label="Send" onPress={() => void send()} loading={sending} disabled={!input.trim()} />

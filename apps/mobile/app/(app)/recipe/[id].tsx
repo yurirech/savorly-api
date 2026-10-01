@@ -1,8 +1,8 @@
-import { router, type Href, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { router, type Href, useFocusEffect, useLocalSearchParams, useNavigation } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import { Books, Check, Copy, DotsThreeVertical, Minus, Plus, Sparkle } from "phosphor-react-native";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Image, Modal, Pressable, StyleSheet, View } from "react-native";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Image, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { CookbookSummary, DisplayUnit, PantrySubstitutionResponse, SavedRecipe } from "@savorly/shared";
 import {
@@ -18,6 +18,10 @@ import { copyRecipe, createNutritionRecipeFromCookbook, deleteRecipe, getRecipe,
 import { imageForCategory } from "../../../src/assets/categoryImages";
 import { AppText } from "../../../src/components/AppText";
 import { Button } from "../../../src/components/Button";
+import ContextMenu, {
+  measureContextMenuAnchor,
+  type ContextMenuAnchor,
+} from "../../../src/components/ContextMenu";
 import { CookbookPickerSheet } from "../../../src/components/CookbookPickerSheet";
 import { Field } from "../../../src/components/Field";
 import { RecipeIngredientLine } from "../../../src/components/RecipeIngredientLine";
@@ -37,6 +41,7 @@ import { confirmDestructive } from "../../../src/utils/confirmDestructive";
 
 export default function RecipeDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const navigation = useNavigation();
   const [recipe, setRecipe] = useState<SavedRecipe | null>(null);
   const [cookbooks, setCookbooks] = useState<CookbookSummary[]>([]);
   const [savedCookbookIds, setSavedCookbookIds] = useState<string[]>([]);
@@ -61,6 +66,8 @@ export default function RecipeDetailScreen() {
   const [diaryRecipes, setDiaryRecipes] = useState<Array<{ id: string; title: string }>>([]);
   const [openingDiary, setOpeningDiary] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState<ContextMenuAnchor | null>(null);
+  const menuTriggerRef = useRef<View>(null);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const insets = useSafeAreaInsets();
 
@@ -75,6 +82,18 @@ export default function RecipeDetailScreen() {
   } = useRecipePantry(recipe);
 
   const recipeId = Array.isArray(id) ? id[0] : id;
+
+  const closeActionsMenu = useCallback(() => {
+    setActionsOpen(false);
+    setMenuAnchor(null);
+  }, []);
+
+  const openActionsMenu = useCallback(() => {
+    measureContextMenuAnchor(menuTriggerRef, (anchor) => {
+      setMenuAnchor(anchor);
+      setActionsOpen(true);
+    });
+  }, []);
 
   const reloadRecipe = useCallback(async () => {
     if (!recipeId) return;
@@ -119,6 +138,26 @@ export default function RecipeDetailScreen() {
         .catch(() => setDiaryRecipes([]));
     }, [recipeId, reloadRecipe, reloadCookbooks, reloadPantry]),
   );
+
+  useLayoutEffect(() => {
+    if (!recipe) {
+      navigation.setOptions({ headerRight: undefined });
+      return;
+    }
+    navigation.setOptions({
+      headerRight: () => (
+        <Pressable
+          ref={menuTriggerRef}
+          onPress={openActionsMenu}
+          style={styles.headerMenuButton}
+          accessibilityRole="button"
+          accessibilityLabel="Recipe menu"
+        >
+          <DotsThreeVertical size={22} color={tokens.text} weight="bold" />
+        </Pressable>
+      ),
+    });
+  }, [navigation, recipe, openActionsMenu]);
 
   async function onRefresh() {
     setRefreshing(true);
@@ -215,14 +254,12 @@ export default function RecipeDetailScreen() {
 
   function editRecipe() {
     if (!recipe) return;
-    setActionsOpen(false);
     setReviewDraft(recipe, recipe.id, `/(app)/recipe/${recipe.id}`);
     router.push("/(app)/review");
   }
 
   function useForDiary() {
     if (!recipe || openingDiary) return;
-    setActionsOpen(false);
     setOpeningDiary(true);
     void (async () => {
       try {
@@ -245,7 +282,6 @@ export default function RecipeDetailScreen() {
 
   function copyThisRecipe() {
     if (!recipe || copyingRecipe) return;
-    setActionsOpen(false);
     setCopyingRecipe(true);
     setError(null);
     void copyRecipe(recipe.id)
@@ -329,14 +365,6 @@ export default function RecipeDetailScreen() {
       <View style={styles.heroWrap}>
         <Image source={imageForCategory(recipe.category, recipe.id)} style={styles.hero} />
         <View style={styles.heroScrim} />
-        <Pressable
-          onPress={() => setActionsOpen(true)}
-          style={[styles.stepperBtn, styles.heroMenu, { top: insets.top }]}
-          accessibilityRole="button"
-          accessibilityLabel="Recipe menu"
-        >
-          <DotsThreeVertical size={18} color={tokens.text} weight="bold" />
-        </Pressable>
         <View style={[styles.heroTools, { top: insets.top, left: tokens.space[7] + tokens.space.sm }]}>
           <Pressable
             onPress={() => {
@@ -539,18 +567,17 @@ export default function RecipeDetailScreen() {
       >
         <Sparkle size={24} color={tokens.bg} weight="fill" />
       </Pressable>
-      <Modal visible={actionsOpen} transparent animationType="fade" onRequestClose={() => setActionsOpen(false)}>
-        <Pressable style={styles.menuBackdrop} onPress={() => setActionsOpen(false)} accessibilityLabel="Close">
-          <Pressable style={styles.menuSheet} onPress={() => undefined}>
-            <AppText variant="title">Recipe</AppText>
-            <Button size="compact" label="Use for diary" variant="secondary" loading={openingDiary} onPress={useForDiary} />
-            <Button size="compact" label="Copy recipe" variant="secondary" loading={copyingRecipe} onPress={copyThisRecipe} />
-            <Button size="compact" label="Delete recipe" variant="secondary" loading={deleting} onPress={() => { setActionsOpen(false); confirmDelete(); }} />
-            <Button size="compact" label="Edit recipe" variant="secondary" onPress={editRecipe} />
-            <Button size="compact" label="Close" variant="ghost" onPress={() => setActionsOpen(false)} />
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <ContextMenu
+        visible={actionsOpen}
+        anchor={menuAnchor}
+        onClose={closeActionsMenu}
+        items={[
+          { label: "Use for diary", onPress: useForDiary, disabled: openingDiary },
+          { label: "Copy recipe", onPress: copyThisRecipe, disabled: copyingRecipe },
+          { label: "Delete recipe", onPress: confirmDelete, destructive: true, disabled: deleting },
+          { label: "Edit recipe", onPress: editRecipe },
+        ]}
+      />
       <CookbookPickerSheet
         visible={pickerOpen}
         cookbooks={cookbooks}
@@ -625,10 +652,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: tokens.space.sm,
   },
-  heroMenu: {
-    position: "absolute",
-    zIndex: 2,
-    right: tokens.space.md,
+  headerMenuButton: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: tokens.space.xs,
   },
   askButton: {
     position: "absolute",
@@ -639,18 +668,6 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.accent,
     alignItems: "center",
     justifyContent: "center",
-  },
-  menuBackdrop: {
-    flex: 1,
-    backgroundColor: tokens.scrim,
-    justifyContent: "center",
-    padding: tokens.space.lg,
-  },
-  menuSheet: {
-    backgroundColor: tokens.surface,
-    borderRadius: tokens.radius.lg,
-    padding: tokens.space.lg,
-    gap: tokens.space.sm,
   },
   heroScrim: {
     position: "absolute",

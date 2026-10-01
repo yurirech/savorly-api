@@ -34,7 +34,8 @@ export function ImportForm(props: ImportFormProps) {
     setError(null);
     setOfferPaste(false);
     try {
-      const result = await importRecipe(buildRequest(value.trim()));
+      const request = buildRequest(value.trim());
+      const result = await importRecipe(request);
       setReviewDraft(result.recipe);
       router.push("/(app)/review");
     } catch (err) {
@@ -44,6 +45,8 @@ export function ImportForm(props: ImportFormProps) {
       } else if (err instanceof ApiRequestError) {
         setError(err.message);
         setOfferPaste(err.offerTextPaste);
+      } else if (err instanceof Error && err.message) {
+        setError(err.message);
       } else {
         setError("Import failed.");
       }

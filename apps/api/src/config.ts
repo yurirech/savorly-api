@@ -6,6 +6,8 @@ export type Env = {
   geminiModel: string;
   apifyToken?: string;
   apifyInstagramActor: string;
+  apifyYoutubeActor: string;
+  apifyYoutubeLanguages: string[];
   useMockImports: boolean;
   adminPassword?: string;
   usdaFdcApiKey?: string;
@@ -29,8 +31,18 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     geminiModel: source.GEMINI_MODEL ?? "gemini-3.5-flash-lite",
     apifyToken: source.APIFY_TOKEN || undefined,
     apifyInstagramActor: source.APIFY_INSTAGRAM_ACTOR ?? "apify/instagram-reel-scraper",
+    apifyYoutubeActor: source.APIFY_YOUTUBE_ACTOR ?? "autofacts/youtube-subtitle-transcript-scraper",
+    apifyYoutubeLanguages: parseCsvList(source.APIFY_YOUTUBE_LANGUAGES, ["en", "nl"]),
     useMockImports: source.USE_MOCK_IMPORTS === "true",
     adminPassword: source.ADMIN_PASSWORD || undefined,
     usdaFdcApiKey: source.USDA_FDC_API_KEY || undefined,
   };
+}
+
+function parseCsvList(value: string | undefined, fallback: string[]): string[] {
+  const parsed = (value ?? "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return parsed.length > 0 ? parsed : fallback;
 }

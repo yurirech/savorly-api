@@ -8,6 +8,7 @@ import { mockGeneratedRecipe, mockImportedSource } from "../importers/mockImport
 import { TextRecipeImporter } from "../importers/TextRecipeImporter";
 import type { ImportedRecipeSource } from "../importers/types";
 import { WebsiteRecipeImporter } from "../importers/WebsiteRecipeImporter";
+import { YouTubeRecipeImporter } from "../importers/YouTubeRecipeImporter";
 import { normalizeImportedSource } from "../normalize/geminiNormalizer";
 
 export async function importRecipe(
@@ -44,7 +45,12 @@ async function runImporter(request: RecipeImportRequest, env: Env): Promise<Impo
   }
 
   if (!env.apifyToken) {
-    throw new AppError("import_blocked", "Instagram import is not configured.", 500, true);
+    const label = request.type === "youtube" ? "YouTube" : "Instagram";
+    throw new AppError("import_blocked", `${label} import is not configured.`, 500, true);
+  }
+
+  if (request.type === "youtube") {
+    return new YouTubeRecipeImporter(env.apifyToken, env.apifyYoutubeActor, env.apifyYoutubeLanguages).import(request);
   }
 
   return new InstagramRecipeImporter(env.apifyToken, env.apifyInstagramActor).import(request);

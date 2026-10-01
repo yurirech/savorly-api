@@ -14,7 +14,6 @@ export default function TabsLayout() {
       <Tabs.Screen name="diary" options={{ title: "Diary" }} />
       <Tabs.Screen name="save" options={{ title: "Import" }} />
       <Tabs.Screen name="create" options={{ title: "Create" }} />
-      <Tabs.Screen name="pantry" options={{ title: "Pantry", href: null }} />
     </Tabs>
   );
 }

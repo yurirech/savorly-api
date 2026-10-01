@@ -118,7 +118,7 @@ export default function SuggestMealScreen() {
                 {error}
               </AppText>
               {error.includes("pantry") ? (
-                <Button label="Open pantry" variant="secondary" onPress={() => router.push("/(app)/(tabs)/pantry" as Href)} />
+                <Button label="Open pantry" variant="secondary" onPress={() => router.push("/(app)/pantry" as Href)} />
               ) : null}
             </View>
           ) : null}

@@ -10,12 +10,12 @@ import {
   fetchPantry,
   setStarterInPantry,
   updatePantryItem,
-} from "../../../src/api/client";
-import { AppText } from "../../../src/components/AppText";
-import { Button } from "../../../src/components/Button";
-import { Field } from "../../../src/components/Field";
-import { Screen } from "../../../src/components/Screen";
-import { tokens } from "../../../src/theme/tokens";
+} from "../../src/api/client";
+import { AppText } from "../../src/components/AppText";
+import { Button } from "../../src/components/Button";
+import { Field } from "../../src/components/Field";
+import { Screen } from "../../src/components/Screen";
+import { tokens } from "../../src/theme/tokens";
 
 function parseAliasInput(value: string): string[] {
   return value

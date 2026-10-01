@@ -4,6 +4,10 @@ export type RecipeImportRequest =
       url: string;
     }
   | {
+      type: "youtube";
+      url: string;
+    }
+  | {
       type: "website";
       url: string;
     }
@@ -13,7 +17,7 @@ export type RecipeImportRequest =
       sourceName?: string;
     };
 
-export type RecipeSourceType = "instagram" | "website" | "text" | "manual";
+export type RecipeSourceType = "instagram" | "youtube" | "website" | "text" | "manual";
 
 export type RecipeSource = {
   type: RecipeSourceType;

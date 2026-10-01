@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { Globe, InstagramLogo, NotePencil } from "phosphor-react-native";
+import { Globe, NotePencil, Video } from "phosphor-react-native";
 import { AppText } from "../../../src/components/AppText";
 import { Screen } from "../../../src/components/Screen";
 import { SourceCard } from "../../../src/components/SourceCard";
@@ -17,9 +17,9 @@ export default function ImportHubScreen() {
         Caption and transcript only. No videos or webpage images are stored.
       </AppText>
       <SourceCard
-        title="Instagram Reel"
-        subtitle="Public Reel URL"
-        icon={<InstagramLogo size={22} color={tokens.accent} weight="fill" />}
+        title="Instagram or YouTube"
+        subtitle="Reel, video, or Shorts URL"
+        icon={<Video size={22} color={tokens.accent} weight="fill" />}
         onPress={() => {
           setImportReturnTo("/(app)/(tabs)/save");
           router.push("/(app)/import/instagram");

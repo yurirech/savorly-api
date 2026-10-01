@@ -9,6 +9,8 @@ const env: Env = {
   jwtSecret: "test-secret",
   geminiModel: "gemini-3.5-flash-lite",
   apifyInstagramActor: "apify/instagram-reel-scraper",
+  apifyYoutubeActor: "autofacts/youtube-subtitle-transcript-scraper",
+  apifyYoutubeLanguages: ["en", "nl"],
   useMockImports: true,
 };
 

@@ -81,6 +81,7 @@ import { NEVO_ATTRIBUTION } from "@savorly/shared";
 
 const importSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("instagram"), url: z.string().url() }),
+  z.object({ type: z.literal("youtube"), url: z.string().url() }),
   z.object({ type: z.literal("website"), url: z.string().url() }),
   z.object({ type: z.literal("text"), text: z.string().min(20), sourceName: z.string().optional() }),
 ]);
@@ -135,7 +136,7 @@ const generatedRecipeSchema = z.object({
     .nullable()
     .optional(),
   source: z.object({
-    type: z.enum(["instagram", "website", "text", "manual"]),
+    type: z.enum(["instagram", "youtube", "website", "text", "manual"]),
     originalUrl: z.string().optional(),
     sourceName: z.string().optional(),
     author: z.string().optional(),
