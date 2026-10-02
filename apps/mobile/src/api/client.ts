@@ -144,9 +144,9 @@ export async function listRecipes(q?: string) {
 export async function createRecipe(recipe: GeneratedRecipe) {
   try {
     const saved = await request<{ recipe: SavedRecipe }>("/recipes", {
-      method: "POST",
-      body: JSON.stringify(recipe),
-    });
+    method: "POST",
+    body: JSON.stringify(recipe),
+  });
     const { upsertCachedRecipe } = await import("../db/cache");
     await upsertCachedRecipe(saved.recipe);
     return saved;
@@ -599,11 +599,11 @@ export function parseFoodLabel(text: string) {
   });
 }
 
-export async function createNutritionFood(name: string, per100g: NutrientVector) {
+export async function createNutritionFood(name: string, per100g: NutrientVector, servingWeightG?: number | null) {
   try {
     const live = await request<{ food: UserFood }>("/nutrition/foods", {
       method: "POST",
-      body: JSON.stringify({ name, per100g }),
+      body: JSON.stringify({ name, per100g, servingWeightG }),
     });
     const { saveFood } = await import("../offline/store");
     await saveFood(live.food);
@@ -612,9 +612,9 @@ export async function createNutritionFood(name: string, per100g: NutrientVector)
     return offline(err, async () => {
       const { localFood, newId, saveFood } = await import("../offline/store");
       const { enqueue, flushOutbox } = await import("../offline/sync");
-      const food = localFood({ id: newId(), name: name.trim(), per100g, source: "manual" });
+      const food = localFood({ id: newId(), name: name.trim(), per100g, source: "manual", servingWeightG });
       await saveFood(food);
-      await enqueue("POST", "/nutrition/foods", { id: food.id, name: food.name, per100g });
+      await enqueue("POST", "/nutrition/foods", { id: food.id, name: food.name, per100g, servingWeightG });
       void flushOutbox();
       return { food };
     });
@@ -667,6 +667,10 @@ export function importStapleFoods() {
   return request<{ imported: true; added: number }>("/nutrition/foods/staples", { method: "POST" });
 }
 
+export function replaceStapleFoods() {
+  return request<{ renamed: number; added: number }>("/nutrition/foods/staples/replace", { method: "POST" });
+}
+
 export async function importNevoFood(nevoCode: number, name?: string) {
   try {
     const live = await request<{ food: UserFood; attribution: string }>("/nutrition/foods/import/nevo", {
@@ -684,7 +688,7 @@ export async function importNevoFood(nevoCode: number, name?: string) {
       if (!reference) throw err;
       const food = localFood({
         id: newId(),
-        name: name?.trim() || reference.name,
+        name: name?.trim() || reference.nameEn.trim() || reference.name,
         per100g: reference.per100g,
         source: "nevo",
         nevoCode,
@@ -698,10 +702,14 @@ export async function importNevoFood(nevoCode: number, name?: string) {
 }
 
 export async function renameNutritionFood(id: string, name: string) {
+  return patchNutritionFood(id, { name });
+}
+
+export async function patchNutritionFood(id: string, body: { name?: string; servingWeightG?: number | null }) {
   try {
     const live = await request<{ food: UserFood }>(`/nutrition/foods/${id}`, {
       method: "PATCH",
-      body: JSON.stringify({ name }),
+      body: JSON.stringify(body),
     });
     const { saveFood } = await import("../offline/store");
     await saveFood(live.food);
@@ -712,9 +720,14 @@ export async function renameNutritionFood(id: string, name: string) {
       const { enqueue, flushOutbox } = await import("../offline/sync");
       const current = await readFood(id);
       if (!current) throw err;
-      const food = { ...current, name: name.trim(), updatedAt: new Date().toISOString() };
+      const food = {
+        ...current,
+        name: body.name?.trim() || current.name,
+        servingWeightG: body.servingWeightG === undefined ? current.servingWeightG : body.servingWeightG,
+        updatedAt: new Date().toISOString(),
+      };
       await saveFood(food);
-      await enqueue("PATCH", `/nutrition/foods/${id}`, { name: food.name });
+      await enqueue("PATCH", `/nutrition/foods/${id}`, body);
       void flushOutbox();
       return { food };
     });
@@ -757,6 +770,7 @@ export type DiaryWeekDay = {
   date: string;
   eatenKcal: number;
   targetKcal: number | null;
+  complete: boolean;
 };
 
 export type DiaryWeek = {
@@ -1455,7 +1469,14 @@ export async function publishNutritionRecipe(id: string) {
       if (!current?.complete || !current.per100g) {
         throw new Error("Saving this recipe to My foods needs a connection.");
       }
-      const food = localFood({ id: current.libraryFood?.id ?? newId(), name: current.title, per100g: current.per100g, source: "recipe" });
+      const food = localFood({
+        id: current.libraryFood?.id ?? newId(),
+        name: current.title,
+        per100g: current.per100g,
+        source: "recipe",
+        servingWeightG:
+          current.servings >= 1 && current.recipeWeightG > 0 ? current.recipeWeightG / current.servings : null,
+      });
       food.nutritionRecipeId = id;
       await saveFood(food);
       const next = { ...current, libraryFood: food };

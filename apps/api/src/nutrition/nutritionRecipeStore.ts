@@ -3,6 +3,7 @@ import {
   computeNutritionRecipe,
   diaryLinesFromCookbook,
   isNutritionRecipeComplete,
+  recipeServingWeightG,
   type Ingredient,
   type NutrientVector,
   type NutritionRecipeItemInput,
@@ -91,7 +92,12 @@ async function syncPublishedRecipe(db: Database, userId: string, recipeId: strin
   if (!detail.libraryFood || !isNutritionRecipeComplete(detail)) return detail;
   await db
     .update(userFoods)
-    .set({ name: detail.title, per100g: detail.per100g, updatedAt: new Date() })
+    .set({
+      name: detail.title,
+      per100g: detail.per100g,
+      servingWeightG: recipeServingWeightG(detail.recipeWeightG, detail.servings),
+      updatedAt: new Date(),
+    })
     .where(eq(userFoods.id, detail.libraryFood.id));
   if (fromDate) {
     await rewriteFoodLogsFromDate(db, userId, detail.libraryFood.id, detail.per100g, fromDate);
@@ -372,6 +378,7 @@ export async function publishNutritionRecipe(db: Database, userId: string, id: s
       .set({
         name: detail.title,
         per100g: detail.per100g,
+        servingWeightG: recipeServingWeightG(detail.recipeWeightG, detail.servings),
         updatedAt: new Date(),
       })
       .where(eq(userFoods.id, existing.id));
@@ -384,6 +391,7 @@ export async function publishNutritionRecipe(db: Database, userId: string, id: s
       fdcId: null,
       nevoCode: null,
       nutritionRecipeId: id,
+      servingWeightG: recipeServingWeightG(detail.recipeWeightG, detail.servings),
       per100g: detail.per100g,
     });
   }

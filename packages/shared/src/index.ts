@@ -158,6 +158,22 @@ export {
 } from "./nutrition/nutrientDisplay";
 export { FOOD_LABEL_NUTRIENT_KEYS, foodFromLabelDraft } from "./nutrition/foodLabel";
 export type { FoodLabelDraft, FoodLabelFill, FoodLabelNutrientKey } from "./nutrition/foodLabel";
+export { foodMatchesQuery } from "./nutrition/foodSearch";
+export {
+  convertFoodAmount,
+  gramsFromServingAmount,
+  recipeServingWeightG,
+  resolveFoodGrams,
+  servingsFromGrams,
+} from "./nutrition/foodServing";
+export type { FoodAmountUnit } from "./nutrition/foodServing";
+export {
+  defaultSelectedWeekDays,
+  isCountableWeekDay,
+  mealsMakeCompleteDay,
+  weekCountedStats,
+} from "./nutrition/weekDiaryStats";
+export type { WeekStatDay } from "./nutrition/weekDiaryStats";
 export type {
   DayIntakeTargets,
   HealthGroup,

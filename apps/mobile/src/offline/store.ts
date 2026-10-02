@@ -214,7 +214,9 @@ export async function listFoodsLocal(query?: string): Promise<UserFood[]> {
       ).map((row) => JSON.parse(row.payload) as UserFood)
     : [...memory.foods.values()].sort((a, b) => a.name.localeCompare(b.name));
   if (!term) return foods;
-  return foods.filter((food) => food.name.toLowerCase().includes(term));
+  return foods.filter(
+    (food) => food.name.toLowerCase().includes(term) || food.originalName.toLowerCase().includes(term),
+  );
 }
 
 export async function readFood(id: string): Promise<UserFood | null> {
@@ -381,13 +383,13 @@ export async function searchNevoLocal(query: string): Promise<NevoFoodHit[]> {
   const rows = useSqlite
     ? (
         await (await openDb()).getAllAsync<{ payload: string }>(
-          "SELECT payload FROM nevo_foods WHERE name_nl LIKE ? OR name_en LIKE ? ORDER BY name_nl LIMIT 20",
+          "SELECT payload FROM nevo_foods WHERE name_nl LIKE ? OR name_en LIKE ? ORDER BY name_nl LIMIT 100",
           [`%${term}%`, `%${term}%`],
         )
       ).map((row) => JSON.parse(row.payload) as NevoRow)
     : [...memory.nevo.values()]
         .filter((row) => row.name.toLowerCase().includes(term) || row.nameEn.toLowerCase().includes(term))
-        .slice(0, 20);
+        .slice(0, 100);
   return rows.map(({ per100g: _per100g, ...hit }) => hit);
 }
 
@@ -446,6 +448,7 @@ export function localFood(input: {
   per100g: NutrientVector;
   source: UserFood["source"];
   nevoCode?: number | null;
+  servingWeightG?: number | null;
 }): UserFood {
   const now = nowIso();
   return {
@@ -456,6 +459,7 @@ export function localFood(input: {
     fdcId: null,
     nevoCode: input.nevoCode ?? null,
     nutritionRecipeId: null,
+    servingWeightG: input.servingWeightG ?? null,
     per100g: input.per100g,
     createdAt: now,
     updatedAt: now,

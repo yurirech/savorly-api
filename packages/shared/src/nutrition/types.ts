@@ -20,6 +20,7 @@ export type UserFood = {
   fdcId: number | null;
   nevoCode: number | null;
   nutritionRecipeId: string | null;
+  servingWeightG: number | null;
   per100g: NutrientVector;
   createdAt: string;
   updatedAt: string;

@@ -1,7 +1,7 @@
 import { type Href, router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
-import type { UserFood } from "@savorly/shared";
+import { foodMatchesQuery, type UserFood } from "@savorly/shared";
 import {
   addNutritionRecipeItem,
   ApiRequestError,
@@ -303,7 +303,7 @@ export default function NutritionRecipeScreen() {
               />
               {foodQuery.trim()
                 ? libraryFoods
-                    .filter((food) => food.name.toLowerCase().includes(foodQuery.trim().toLowerCase()))
+                    .filter((food) => foodMatchesQuery(food, foodQuery))
                     .map((food) => (
                       <Pressable
                         key={food.id}
@@ -320,7 +320,7 @@ export default function NutritionRecipeScreen() {
                 : null}
               {pickingItemId &&
               foodQuery.trim() &&
-              !libraryFoods.some((food) => food.name.toLowerCase().includes(foodQuery.trim().toLowerCase())) ? (
+              !libraryFoods.some((food) => foodMatchesQuery(food, foodQuery)) ? (
                 <View style={styles.database}>
                   <AppText variant="caption" color="muted">
                     Nothing in My foods matches that name.

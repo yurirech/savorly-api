@@ -53,14 +53,16 @@ import {
   importUsdaFood,
   importNevoFood,
   importStapleFoods,
+  replaceStapleFoods,
   stapleFoodsImported,
   getOwnedUserFood,
   listUserFoods,
-  renameUserFood,
+  updateUserFood,
   updateDiaryEntry,
   updateDiaryMeal,
   upsertNutritionProfile,
 } from "./nutrition/nutritionStore";
+import { nevoDisplayName } from "./nutrition/nevoNames";
 import {
   addNutritionRecipeItem,
   createNutritionRecipe,
@@ -266,6 +268,12 @@ const manualFoodSchema = z.object({
   id: z.string().uuid().optional(),
   name: z.string().trim().min(1).max(80),
   per100g: nutrientVectorSchema,
+  servingWeightG: z.number().positive().max(5000).nullable().optional(),
+});
+
+const foodPatchSchema = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  servingWeightG: z.number().positive().max(5000).nullable().optional(),
 });
 
 const importFoodSchema = z.object({
@@ -636,12 +644,6 @@ export function createApp(db: Database, env: Env) {
     return c.json({ grams });
   });
 
-  app.patch("/nutrition/foods/:id", async (c) => {
-    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
-    const body = z.object({ name: z.string().trim().min(1).max(120) }).parse(await c.req.json());
-    return c.json({ food: await renameUserFood(db, user.id, c.req.param("id"), body.name) });
-  });
-
   app.get("/nutrition/recipes", async (c) => {
     const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
     const sourceRecipeId = c.req.query("sourceRecipeId");
@@ -748,8 +750,14 @@ export function createApp(db: Database, env: Env) {
   app.post("/nutrition/foods", async (c) => {
     const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
     const body = manualFoodSchema.parse(await c.req.json());
-    const food = await createManualFood(db, user.id, body.name, body.per100g, body.id);
+    const food = await createManualFood(db, user.id, body.name, body.per100g, body.id, body.servingWeightG);
     return c.json({ food }, 201);
+  });
+
+  app.patch("/nutrition/foods/:id", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = foodPatchSchema.parse(await c.req.json());
+    return c.json({ food: await updateUserFood(db, user.id, c.req.param("id"), body) });
   });
 
   app.post("/nutrition/foods/from-text", async (c) => {
@@ -771,6 +779,11 @@ export function createApp(db: Database, env: Env) {
     return c.json(await importStapleFoods(db, user.id));
   });
 
+  app.post("/nutrition/foods/staples/replace", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    return c.json(await replaceStapleFoods(db, user.id));
+  });
+
   app.post("/nutrition/foods/import/nevo", async (c) => {
     const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
     const body = importNevoFoodSchema.parse(await c.req.json());
@@ -778,7 +791,7 @@ export function createApp(db: Database, env: Env) {
     const food = await importNevoFood(db, user.id, {
       id: body.id,
       nevoCode: reference.nevoCode,
-      name: body.name ?? reference.nameNl,
+      name: body.name ?? nevoDisplayName(reference.nameEn, reference.nameNl),
       per100g: reference.per100g,
     });
     return c.json({ food, attribution: NEVO_ATTRIBUTION }, 201);

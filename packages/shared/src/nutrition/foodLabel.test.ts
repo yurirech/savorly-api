@@ -12,19 +12,20 @@ describe("foodFromLabelDraft", () => {
     ).toEqual({
       name: "Vitamin D",
       per100g: { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0, vitaminDMcg: 25 },
+      servingWeightG: null,
       basisNote: null,
     });
   });
 
   it("scales a serving that states a gram weight", () => {
-    expect(
-      foodFromLabelDraft({
-        name: "Capsule",
-        basis: "per_serving",
-        servingWeightG: 50,
-        nutrients: { kcal: 10, vitaminCMg: 40 },
-      }).per100g,
-    ).toEqual({ kcal: 20, vitaminCMg: 80 });
+    const fill = foodFromLabelDraft({
+      name: "Capsule",
+      basis: "per_serving",
+      servingWeightG: 50,
+      nutrients: { kcal: 10, vitaminCMg: 40 },
+    });
+    expect(fill.per100g).toEqual({ kcal: 20, vitaminCMg: 80 });
+    expect(fill.servingWeightG).toBe(50);
   });
 
   it("keeps printed numbers and notes a serving with no weight", () => {
@@ -34,6 +35,7 @@ describe("foodFromLabelDraft", () => {
       nutrients: { vitaminB12Mcg: 2.4 },
     });
     expect(fill.per100g).toEqual({ vitaminB12Mcg: 2.4 });
+    expect(fill.servingWeightG).toBeNull();
     expect(fill.basisNote).toBe("These numbers are per serving, not per 100 g.");
     expect(fill.name).toBeNull();
   });

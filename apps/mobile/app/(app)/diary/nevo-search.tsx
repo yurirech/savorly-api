@@ -66,7 +66,7 @@ export default function NevoSearchScreen() {
     setImportingId(hit.nevoCode);
     setError(null);
     try {
-      const saved = await importNevoFood(hit.nevoCode, hit.name);
+      const saved = await importNevoFood(hit.nevoCode, hit.nameEn || hit.name);
       if (recipeId && itemId) {
         await updateNutritionRecipeItem(recipeId, itemId, { foodId: saved.food.id });
       }

@@ -1,10 +1,12 @@
 import { type Href, router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import {
   hasExtendedNutrients,
   listPresentNutrients,
+  resolveFoodGrams,
   scaleNutrition,
+  type FoodAmountUnit,
   type UserFood,
 } from "@savorly/shared";
 import {
@@ -18,17 +20,12 @@ import {
 } from "../../../src/api/client";
 import { AppText } from "../../../src/components/AppText";
 import { Button } from "../../../src/components/Button";
-import { Field } from "../../../src/components/Field";
 import NutrientDetailList from "../../../src/components/NutrientDetailList";
 import { Screen } from "../../../src/components/Screen";
+import FoodAmountFields, { parseFoodAmount } from "../../../src/diary/FoodAmountFields";
 import { writeLastDiaryMeal } from "../../../src/diary/lastDiaryMealStorage";
 import { tokens } from "../../../src/theme/tokens";
 import { todayIsoDate } from "../../../src/utils/isoDate";
-
-function parseGrams(value: string): number | null {
-  const amount = Number(value.replace(",", "."));
-  return Number.isFinite(amount) && amount >= 0 ? amount : null;
-}
 
 function sourceLabel(source: UserFood["source"]): string {
   if (source === "nevo") return "NEVO";
@@ -50,6 +47,7 @@ export default function DiaryLogFoodScreen() {
 
   const [food, setFood] = useState<UserFood | null>(null);
   const [grams, setGrams] = useState("");
+  const [unit, setUnit] = useState<FoodAmountUnit>("grams");
   const [frequentGrams, setFrequentGrams] = useState<number[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -121,7 +119,9 @@ export default function DiaryLogFoodScreen() {
     }, [date, entryId, foodIdParam, mealId]),
   );
 
-  const amountGrams = parseGrams(grams);
+  const parsedAmount = parseFoodAmount(grams);
+  const amountGrams =
+    parsedAmount == null ? null : resolveFoodGrams(unit, parsedAmount, food?.servingWeightG ?? null);
   const scaled = useMemo(
     () => (food && amountGrams != null ? scaleNutrition(food.per100g, amountGrams) : null),
     [amountGrams, food],
@@ -130,9 +130,10 @@ export default function DiaryLogFoodScreen() {
 
   async function onSave() {
     if (!food || !mealId) return;
-    const amount = parseGrams(grams);
+    const amount =
+      parsedAmount == null ? null : resolveFoodGrams(unit, parsedAmount, food.servingWeightG);
     if (amount == null) {
-      setError("Enter grams eaten.");
+      setError(unit === "servings" ? "Enter servings eaten." : "Enter grams eaten.");
       return;
     }
     setSaving(true);
@@ -188,7 +189,14 @@ export default function DiaryLogFoodScreen() {
           <AppText variant="caption" color="muted">
             {sourceLabel(food.source)} · {date}
           </AppText>
-          <Field label="Grams" value={grams} onChangeText={setGrams} keyboardType="numeric" placeholder="100" />
+          <FoodAmountFields
+            unit={unit}
+            amount={grams}
+            servingWeightG={food.servingWeightG}
+            frequentGrams={frequentGrams}
+            onUnitChange={setUnit}
+            onAmountChange={setGrams}
+          />
           {isEdit ? (
             <Button
               label="Delete entry"
@@ -197,26 +205,6 @@ export default function DiaryLogFoodScreen() {
               onPress={() => void onDeleteEntry()}
               loading={saving}
             />
-          ) : null}
-          {frequentGrams.length > 0 ? (
-            <View style={styles.quickRow}>
-              <AppText variant="label" color="muted">
-                Often logged
-              </AppText>
-              <View style={styles.chips}>
-                {frequentGrams.map((value) => (
-                  <Pressable
-                    key={value}
-                    onPress={() => setGrams(String(value))}
-                    style={styles.chip}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${value} grams`}
-                  >
-                    <AppText variant="caption">{value} g</AppText>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
           ) : null}
           {scaled ? (
             <>
@@ -272,21 +260,6 @@ const styles = StyleSheet.create({
   },
   foodName: {
     flex: 1,
-  },
-  quickRow: {
-    gap: tokens.space.sm,
-  },
-  chips: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: tokens.space.sm,
-  },
-  chip: {
-    borderWidth: 1,
-    borderColor: tokens.border,
-    borderRadius: tokens.radius.full,
-    paddingHorizontal: tokens.space.md,
-    paddingVertical: tokens.space.xs,
   },
   macros: {
     flexDirection: "row",

@@ -137,6 +137,7 @@ export const userFoods = pgTable(
     fdcId: integer("fdc_id"),
     nevoCode: integer("nevo_code"),
     nutritionRecipeId: uuid("nutrition_recipe_id"),
+    servingWeightG: real("serving_weight_g"),
     per100g: jsonb("per_100g").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

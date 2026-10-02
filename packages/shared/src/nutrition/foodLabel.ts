@@ -14,6 +14,7 @@ export type FoodLabelDraft = {
 export type FoodLabelFill = {
   name: string | null;
   per100g: Partial<NutrientVector>;
+  servingWeightG: number | null;
   basisNote: string | null;
 };
 
@@ -35,6 +36,7 @@ export function foodFromLabelDraft(input: FoodLabelDraft): FoodLabelFill {
   return {
     name,
     per100g,
+    servingWeightG: typeof weight === "number" && Number.isFinite(weight) && weight > 0 ? weight : null,
     basisNote: perServing && !canScale ? "These numbers are per serving, not per 100 g." : null,
   };
 }

@@ -54,7 +54,7 @@ export async function listNevoSnapshot(db: Database): Promise<NevoReferenceRow[]
   }));
 }
 
-export async function searchNevoFoods(db: Database, query: string, limit = 20): Promise<NevoFoodHit[]> {
+export async function searchNevoFoods(db: Database, query: string, limit = 100): Promise<NevoFoodHit[]> {
   const trimmed = query.trim();
   if (trimmed.length < 2) {
     return [];

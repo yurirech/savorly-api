@@ -1,7 +1,7 @@
 import { type Href, router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import type { UserFood } from "@savorly/shared";
+import { foodMatchesQuery, type UserFood } from "@savorly/shared";
 import { ApiRequestError, fetchDiaryDay, listNutritionFoods } from "../../../src/api/client";
 import { AppText } from "../../../src/components/AppText";
 import { Button } from "../../../src/components/Button";
@@ -53,9 +53,24 @@ export default function DiaryPickFoodScreen() {
     }, [date, mealId]),
   );
 
-  const searched = query.trim()
-    ? foods.filter((food) => food.name.toLowerCase().includes(query.trim().toLowerCase()))
-    : foods;
+  useEffect(() => {
+    const term = query.trim();
+    if (!term) return;
+    const handle = setTimeout(() => {
+      void listNutritionFoods(term)
+        .then((live) => {
+          setFoods((current) => {
+            const byId = new Map(current.map((food) => [food.id, food]));
+            for (const food of live.foods) byId.set(food.id, food);
+            return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+          });
+        })
+        .catch(() => undefined);
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [query]);
+
+  const searched = foods.filter((food) => foodMatchesQuery(food, query));
   const visible = tab === "recipes" ? searched.filter((food) => food.source === "recipe") : searched;
 
   function onPick(foodId: string) {

@@ -36,6 +36,7 @@ export default function DiaryFoodFormScreen() {
   const [fat, setFat] = useState("");
   const [fiber, setFiber] = useState("");
   const [micros, setMicros] = useState<Partial<Record<FoodLabelNutrientKey, string>>>({});
+  const [servingWeight, setServingWeight] = useState("");
   const [paste, setPaste] = useState("");
   const [basisNote, setBasisNote] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -66,6 +67,7 @@ export default function DiaryFoodFormScreen() {
         }
         return next;
       });
+      setServingWeight(fill.servingWeightG != null ? String(fill.servingWeightG) : "");
       setBasisNote(fill.basisNote);
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : "Filling this in needs a connection.");
@@ -86,6 +88,11 @@ export default function DiaryFoodFormScreen() {
       return;
     }
     const fiberG = optionalAmount(fiber);
+    const servingWeightG = optionalAmount(servingWeight);
+    if (servingWeightG === "invalid") {
+      setError("Enter grams per serving as a number, or leave it blank.");
+      return;
+    }
     if (fiberG === "invalid") {
       setError("Enter fiber as a number, or leave it blank.");
       return;
@@ -104,7 +111,7 @@ export default function DiaryFoodFormScreen() {
     setSaving(true);
     setError(null);
     try {
-      await createNutritionFood(name, per100g);
+      await createNutritionFood(name, per100g, servingWeightG);
       router.back();
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : "Could not save food.");
@@ -127,6 +134,13 @@ export default function DiaryFoodFormScreen() {
         </AppText>
       ) : null}
       <Field label="Name" value={name} onChangeText={setName} placeholder="Peanut butter" />
+      <Field
+        label="Grams per serving (optional)"
+        value={servingWeight}
+        onChangeText={setServingWeight}
+        keyboardType="numeric"
+        placeholder="32"
+      />
       <Field label="kcal / 100 g" value={kcal} onChangeText={setKcal} keyboardType="numeric" />
       <Field label="Protein g / 100 g" value={protein} onChangeText={setProtein} keyboardType="numeric" />
       <Field label="Carbs g / 100 g" value={carbs} onChangeText={setCarbs} keyboardType="numeric" />

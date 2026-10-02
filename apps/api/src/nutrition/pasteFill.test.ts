@@ -18,6 +18,7 @@ describe("paste fill", () => {
     ).toEqual({
       name: "Magnesium",
       per100g: { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0, magnesiumMg: 400 },
+      servingWeightG: 25,
       basisNote: null,
     });
   });

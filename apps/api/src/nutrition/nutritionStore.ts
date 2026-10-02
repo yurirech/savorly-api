@@ -1,10 +1,11 @@
-import { and, asc, desc, eq, gte, gt, ilike, inArray, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, gt, ilike, inArray, lt, or, sql } from "drizzle-orm";
 import {
   buildDiaryMeals,
   buildQuickDiaryNutrients,
   computeNutritionTargets,
   dayTotalsFromMeals,
   DIARY_MEAL_NAME_MAX_LENGTH,
+  mealsMakeCompleteDay,
   parseQuickDiaryLabel,
   QUICK_DIARY_ENTRY_GRAMS,
   QUICK_DIARY_LABEL_MAX_LENGTH,
@@ -25,6 +26,7 @@ import {
 import type { Database } from "../db/client";
 import { diaryDayTargets, diaryEntries, diaryMealTemplates, diaryMeals, mealStaples, nevoFoods, nutritionProfiles, userFoods, users } from "../db/schema";
 import { nevoFoodsReady } from "./nevoStore";
+import { nevoDisplayName, nevoEnglishRenames } from "./nevoNames";
 import { STAPLE_NEVO_CODES } from "./stapleNevoCodes";
 import { AppError } from "../errors";
 
@@ -90,6 +92,7 @@ export function foodFromRow(row: FoodRow): UserFood {
     fdcId: row.fdcId,
     nevoCode: row.nevoCode,
     nutritionRecipeId: row.nutritionRecipeId,
+    servingWeightG: row.servingWeightG ?? null,
     per100g: requireNutrientVector(row.per100g, "Food nutrition"),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -253,11 +256,17 @@ export async function upsertNutritionProfile(
 
 export async function listUserFoods(db: Database, userId: string, query?: string): Promise<UserFood[]> {
   const trimmed = query?.trim();
+  const pattern = trimmed ? `%${trimmed.replaceAll("%", "").replaceAll("_", "")}%` : "";
   const rows = trimmed
     ? await db
         .select()
         .from(userFoods)
-        .where(and(eq(userFoods.userId, userId), ilike(userFoods.name, `%${trimmed}%`)))
+        .where(
+          and(
+            eq(userFoods.userId, userId),
+            or(ilike(userFoods.name, pattern), ilike(userFoods.originalName, pattern)),
+          ),
+        )
         .orderBy(userFoods.name)
     : await db.select().from(userFoods).where(eq(userFoods.userId, userId)).orderBy(userFoods.name);
   return rows.map(foodFromRow);
@@ -269,6 +278,7 @@ export async function createManualFood(
   name: string,
   per100g: NutrientVector,
   id?: string,
+  servingWeightG?: number | null,
 ): Promise<UserFood> {
   const trimmed = name.trim();
   if (!trimmed) {
@@ -281,6 +291,7 @@ export async function createManualFood(
     source: "manual" as const,
     fdcId: null,
     nevoCode: null,
+    servingWeightG: servingWeightG ?? null,
     per100g: requireNutrientVector(per100g, "Food nutrition"),
     ...(id ? { id } : {}),
   };
@@ -363,18 +374,37 @@ export async function importNevoFood(
 }
 
 export async function renameUserFood(db: Database, userId: string, foodId: string, name: string): Promise<UserFood> {
+  return updateUserFood(db, userId, foodId, { name });
+}
+
+export async function updateUserFood(
+  db: Database,
+  userId: string,
+  foodId: string,
+  patch: { name?: string; servingWeightG?: number | null },
+): Promise<UserFood> {
   const food = await getOwnedUserFood(db, userId, foodId);
-  const trimmed = name.trim();
-  if (!trimmed || trimmed.length > 120) {
-    throw new AppError("validation_error", "Name must be 1–120 characters.", 400);
+  const next: { name?: string; servingWeightG?: number | null; updatedAt: Date } = { updatedAt: new Date() };
+  if (patch.name != null) {
+    const trimmed = patch.name.trim();
+    if (!trimmed || trimmed.length > 120) {
+      throw new AppError("validation_error", "Name must be 1–120 characters.", 400);
+    }
+    next.name = trimmed;
+  }
+  if (patch.servingWeightG !== undefined) {
+    if (patch.servingWeightG != null && (!(patch.servingWeightG > 0) || patch.servingWeightG > 5000)) {
+      throw new AppError("validation_error", "Serving weight must be between 0 and 5000 g.", 400);
+    }
+    next.servingWeightG = patch.servingWeightG;
   }
   const [row] = await db
     .update(userFoods)
-    .set({ name: trimmed, updatedAt: new Date() })
+    .set(next)
     .where(and(eq(userFoods.id, food.id), eq(userFoods.userId, userId)))
     .returning();
   if (!row) {
-    throw new AppError("internal_error", "Could not rename food.", 500);
+    throw new AppError("internal_error", "Could not update food.", 500);
   }
   return foodFromRow(row);
 }
@@ -616,6 +646,7 @@ export type DiaryWeekDay = {
   date: string;
   eatenKcal: number;
   targetKcal: number | null;
+  complete: boolean;
 };
 
 export type DiaryWeek = {
@@ -647,11 +678,39 @@ export async function getDiaryWeek(db: Database, userId: string, start: string):
     const kcal = nutrientKcal(row.nutrients);
     eatenByDate.set(key, (eatenByDate.get(key) ?? 0) + kcal);
   }
-  const days = dates.map((date) => ({
-    date,
-    eatenKcal: Math.round(eatenByDate.get(date) ?? 0),
-    targetKcal: overrideByDate.get(date) ?? profile.targets?.kcal ?? null,
-  }));
+  const meals = await db
+    .select({ id: diaryMeals.id, date: diaryMeals.date })
+    .from(diaryMeals)
+    .where(
+      and(eq(diaryMeals.userId, userId), gte(diaryMeals.date, isoStart), lt(diaryMeals.date, shiftUtcDate(end, 1))),
+    );
+  const mealIds = meals.map((meal) => meal.id);
+  const entryCounts =
+    mealIds.length === 0
+      ? []
+      : await db
+          .select({ mealId: diaryEntries.mealId, count: sql<number>`count(*)` })
+          .from(diaryEntries)
+          .where(inArray(diaryEntries.mealId, mealIds))
+          .groupBy(diaryEntries.mealId);
+  const countByMeal = new Map(entryCounts.map((row) => [row.mealId, Number(row.count)]));
+  const mealsByDate = new Map<string, string[]>();
+  for (const meal of meals) {
+    const key = asIsoDate(meal.date);
+    const list = mealsByDate.get(key) ?? [];
+    list.push(meal.id);
+    mealsByDate.set(key, list);
+  }
+  const days = dates.map((date) => {
+    const dayMeals = mealsByDate.get(date) ?? [];
+    const mealsWithEntries = dayMeals.filter((mealId) => (countByMeal.get(mealId) ?? 0) > 0).length;
+    return {
+      date,
+      eatenKcal: Math.round(eatenByDate.get(date) ?? 0),
+      targetKcal: overrideByDate.get(date) ?? profile.targets?.kcal ?? null,
+      complete: mealsMakeCompleteDay(dayMeals.length, mealsWithEntries),
+    };
+  });
   const eatenKcal = days.reduce((sum, day) => sum + day.eatenKcal, 0);
   const knownTargets = days.every((day) => day.targetKcal != null);
   const targetKcal = knownTargets ? days.reduce((sum, day) => sum + (day.targetKcal ?? 0), 0) : null;
@@ -1125,11 +1184,68 @@ export async function importStapleFoods(db: Database, userId: string): Promise<{
   for (const row of rows) {
     await importNevoFood(db, userId, {
       nevoCode: row.nevoCode,
-      name: row.nameNl,
+      name: nevoDisplayName(row.nameEn, row.nameNl),
       per100g: row.per100g as NutrientVector,
     });
   }
 
   await db.update(users).set({ staplesImportedAt: new Date() }).where(eq(users.id, userId));
   return { imported: true, added: rows.length - already.size };
+}
+
+export async function replaceStapleFoods(
+  db: Database,
+  userId: string,
+): Promise<{ renamed: number; added: number }> {
+  if (!(await nevoFoodsReady(db))) {
+    throw new AppError("internal_error", "NEVO reference data is not loaded on this server yet.", 503);
+  }
+
+  const library = await db
+    .select({ id: userFoods.id, name: userFoods.name, nevoCode: userFoods.nevoCode })
+    .from(userFoods)
+    .where(and(eq(userFoods.userId, userId), eq(userFoods.source, "nevo")));
+  const codes = [...new Set(library.flatMap((food) => (food.nevoCode != null ? [food.nevoCode] : [])))];
+  const references =
+    codes.length === 0
+      ? []
+      : await db
+          .select({ nevoCode: nevoFoods.nevoCode, nameEn: nevoFoods.nameEn })
+          .from(nevoFoods)
+          .where(inArray(nevoFoods.nevoCode, codes));
+  const nameEnByCode = new Map(references.map((row) => [row.nevoCode, row.nameEn]));
+  const changes = nevoEnglishRenames(library, nameEnByCode);
+  for (const change of changes) {
+    await db
+      .update(userFoods)
+      .set({ name: change.name, updatedAt: new Date() })
+      .where(and(eq(userFoods.id, change.id), eq(userFoods.userId, userId)));
+  }
+
+  const stapleCodes = [...STAPLE_NEVO_CODES];
+  const stapleRows = await db.select().from(nevoFoods).where(inArray(nevoFoods.nevoCode, stapleCodes));
+  if (stapleRows.length !== stapleCodes.length) {
+    throw new AppError("not_found", "A staple food is missing from the NEVO reference data.", 404);
+  }
+  const existing = await db
+    .select({ nevoCode: userFoods.nevoCode })
+    .from(userFoods)
+    .where(and(eq(userFoods.userId, userId), inArray(userFoods.nevoCode, stapleCodes)));
+  const already = new Set(existing.map((row) => row.nevoCode));
+  let added = 0;
+  for (const row of stapleRows) {
+    if (already.has(row.nevoCode)) continue;
+    await importNevoFood(db, userId, {
+      nevoCode: row.nevoCode,
+      name: nevoDisplayName(row.nameEn, row.nameNl),
+      per100g: row.per100g as NutrientVector,
+    });
+    added += 1;
+  }
+
+  if (!(await stapleFoodsImported(db, userId))) {
+    await db.update(users).set({ staplesImportedAt: new Date() }).where(eq(users.id, userId));
+  }
+
+  return { renamed: changes.length, added };
 }

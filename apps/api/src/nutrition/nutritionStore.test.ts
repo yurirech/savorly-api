@@ -32,11 +32,13 @@ describe("food and diary mapping", () => {
       fdcId: null,
       nevoCode: null,
       nutritionRecipeId: null,
+      servingWeightG: 32,
       per100g,
       createdAt: now,
       updatedAt: now,
     });
     expect(food.per100g.kcal).toBe(588);
+    expect(food.servingWeightG).toBe(32);
 
     const nutrients = scaleNutrition(food.per100g, 12);
     const entry = diaryFromRow(
