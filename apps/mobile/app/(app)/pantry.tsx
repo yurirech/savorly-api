@@ -1,4 +1,4 @@
-import { type Href, router, useFocusEffect } from "expo-router";
+import { type Href, Redirect, router, useFocusEffect } from "expo-router";
 import { CheckCircle, CircleDashed, Jar, PencilSimple } from "phosphor-react-native";
 import { useCallback, useMemo, useState } from "react";
 import { Modal, Pressable, StyleSheet, View } from "react-native";
@@ -15,6 +15,7 @@ import { AppText } from "../../src/components/AppText";
 import { Button } from "../../src/components/Button";
 import { Field } from "../../src/components/Field";
 import { Screen } from "../../src/components/Screen";
+import { PANTRY_ENABLED } from "../../src/config/features";
 import { tokens } from "../../src/theme/tokens";
 
 function parseAliasInput(value: string): string[] {
@@ -45,7 +46,12 @@ function pantryListRows(pantry: PantryResponse): PantryListRow[] {
   return [...starters, ...custom];
 }
 
-export default function PantryScreen() {
+export default function PantryRoute() {
+  if (!PANTRY_ENABLED) return <Redirect href="/(app)/(tabs)" />;
+  return <PantryScreen />;
+}
+
+function PantryScreen() {
   const [pantry, setPantry] = useState<PantryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);

@@ -11,6 +11,7 @@ import { Button } from "../../../src/components/Button";
 import { RecipeCard } from "../../../src/components/RecipeCard";
 import { Screen } from "../../../src/components/Screen";
 import { SectionHeader } from "../../../src/components/SectionHeader";
+import { PANTRY_ENABLED } from "../../../src/config/features";
 import { searchCachedRecipes } from "../../../src/db/cache";
 import { tokens } from "../../../src/theme/tokens";
 
@@ -82,7 +83,7 @@ export default function HomeScreen() {
           onPress={() => router.push("/(app)/(tabs)/diary" as Href)}
         />
       ) : null}
-      <Button label="Suggest meal" onPress={() => router.push("/(app)/suggest-meal" as Href)} />
+      {PANTRY_ENABLED && <Button label="Suggest meal" onPress={() => router.push("/(app)/suggest-meal" as Href)} />}
 
       <SectionHeader title="Recently saved" actionLabel="See all" onAction={() => router.push("/(app)/(tabs)/recipes" as Href)} />
       {recipes.length === 0 ? (

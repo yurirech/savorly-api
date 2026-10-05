@@ -859,21 +859,24 @@ export async function addDiaryEntry(
   return getDiaryDay(db, userId, isoDate);
 }
 
-export async function copyDiaryEntry(
-  db: Database,
-  userId: string,
-  entryId: string,
-  targetMealId: string,
-): Promise<DiaryDayResponse> {
-  const entry = await getOwnedDiaryEntry(db, userId, entryId);
-  const meal = await getOwnedDiaryMeal(db, userId, targetMealId);
-  if (asIsoDate(meal.date) !== asIsoDate(entry.date)) {
-    throw new AppError("validation_error", "Meal group belongs to a different day.", 400);
-  }
-  if (meal.id === entry.mealId) {
-    throw new AppError("validation_error", "Pick a different meal group.", 400);
-  }
+export type RelocatePair = { entryId: string; mealId: string };
 
+export function buildRelocatePairs(
+  entries: ReadonlyArray<{ id: string; mealId: string }>,
+  meals: ReadonlyArray<{ id: string }>,
+): RelocatePair[] {
+  const pairs: RelocatePair[] = [];
+  for (const entry of entries) {
+    for (const meal of meals) {
+      if (meal.id !== entry.mealId) {
+        pairs.push({ entryId: entry.id, mealId: meal.id });
+      }
+    }
+  }
+  return pairs;
+}
+
+async function insertCopiedDiaryEntry(db: Database, userId: string, entry: DiaryRow, meal: MealRow): Promise<void> {
   if (entry.kind === "quick") {
     await db.insert(diaryEntries).values({
       userId,
@@ -885,7 +888,7 @@ export async function copyDiaryEntry(
       grams: entry.grams,
       nutrients: entry.nutrients,
     });
-    return getDiaryDay(db, userId, asIsoDate(meal.date));
+    return;
   }
 
   if (!entry.foodId) {
@@ -901,7 +904,60 @@ export async function copyDiaryEntry(
     grams: entry.grams,
     nutrients: scaleNutrition(food.per100g, entry.grams),
   });
+}
+
+export async function copyDiaryEntry(
+  db: Database,
+  userId: string,
+  entryId: string,
+  targetMealId: string,
+): Promise<DiaryDayResponse> {
+  const entry = await getOwnedDiaryEntry(db, userId, entryId);
+  const meal = await getOwnedDiaryMeal(db, userId, targetMealId);
+  if (meal.id === entry.mealId) {
+    throw new AppError("validation_error", "Pick a different meal group.", 400);
+  }
+  await insertCopiedDiaryEntry(db, userId, entry, meal);
   return getDiaryDay(db, userId, asIsoDate(meal.date));
+}
+
+export async function relocateDiaryEntries(
+  db: Database,
+  userId: string,
+  input: { entryIds: string[]; mealIds: string[]; mode: "copy" | "move" },
+): Promise<DiaryDayResponse> {
+  const entryIds = [...new Set(input.entryIds)];
+  const mealIds = [...new Set(input.mealIds)];
+  if (entryIds.length === 0) {
+    throw new AppError("validation_error", "Pick a food to copy.", 400);
+  }
+  if (mealIds.length === 0) {
+    throw new AppError("validation_error", "Pick a meal group.", 400);
+  }
+
+  const entries = await Promise.all(entryIds.map((id) => getOwnedDiaryEntry(db, userId, id)));
+  const meals = await Promise.all(mealIds.map((id) => getOwnedDiaryMeal(db, userId, id)));
+  const pairs = buildRelocatePairs(entries, meals);
+  if (pairs.length === 0) {
+    throw new AppError("validation_error", "Pick a different meal group.", 400);
+  }
+
+  const entryById = new Map(entries.map((entry) => [entry.id, entry]));
+  const mealById = new Map(meals.map((meal) => [meal.id, meal]));
+  for (const pair of pairs) {
+    const entry = entryById.get(pair.entryId);
+    const meal = mealById.get(pair.mealId);
+    if (!entry || !meal) continue;
+    await insertCopiedDiaryEntry(db, userId, entry, meal);
+  }
+
+  if (input.mode === "move") {
+    await db
+      .delete(diaryEntries)
+      .where(and(eq(diaryEntries.userId, userId), inArray(diaryEntries.id, entryIds)));
+  }
+
+  return getDiaryDay(db, userId, asIsoDate(entries[0]!.date));
 }
 
 async function assertMealEmpty(db: Database, mealId: string): Promise<void> {

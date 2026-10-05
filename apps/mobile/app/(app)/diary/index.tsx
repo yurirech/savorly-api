@@ -6,7 +6,6 @@ import { hasExtendedNutrients, listPresentNutrients, type DiaryDayResponse, type
 import type { DiaryEntry } from "@savorly/shared";
 import {
   ApiRequestError,
-  copyDiaryEntries,
   copyPreviousDiaryMeal,
   createDiaryMeal,
   createNutritionRecipe,
@@ -14,6 +13,7 @@ import {
   deleteDiaryEntry,
   deleteDiaryMeal,
   fetchDiaryDay,
+  relocateDiaryEntries,
   logMealStaples,
   fetchNutritionProfile,
   setDiaryDayTarget,
@@ -33,7 +33,7 @@ import DiaryDayTargetSheet from "../../../src/diary/DiaryDayTargetSheet";
 import RemainingBanner from "../../../src/diary/RemainingBanner";
 import DiaryDayNutrition from "../../../src/diary/DiaryDayNutrition";
 import DiaryMealNameSheet from "../../../src/diary/DiaryMealNameSheet";
-import DiaryMealPickerSheet from "../../../src/diary/DiaryMealPickerSheet";
+import DiaryMoveSheet from "../../../src/diary/DiaryMoveSheet";
 import DiaryMealSection from "../../../src/diary/DiaryMealSection";
 import { writeLastDiaryMeal } from "../../../src/diary/lastDiaryMealStorage";
 import { tokens } from "../../../src/theme/tokens";
@@ -41,11 +41,11 @@ import { shiftIsoDate, todayIsoDate } from "../../../src/utils/isoDate";
 
 type NameSheetMode =
   | { kind: "create" }
-  | { kind: "create-for-copy" }
+  | { kind: "create-for-relocate"; date: string }
   | { kind: "recipe" }
   | { kind: "rename"; mealId: string; initialName: string };
 
-type CopyRequest = { entryIds: string[]; mealId: string };
+type RelocateRequest = { entryIds: string[] };
 
 export default function DiaryScreen() {
   const inTabs = (useSegments() as string[]).includes("(tabs)");
@@ -61,8 +61,14 @@ export default function DiaryScreen() {
   const [deleting, setDeleting] = useState(false);
   const [pendingEntry, setPendingEntry] = useState<DiaryEntry | null>(null);
   const [entryDeleting, setEntryDeleting] = useState(false);
-  const [copyRequest, setCopyRequest] = useState<CopyRequest | null>(null);
-  const [copying, setCopying] = useState(false);
+  const [relocateRequest, setRelocateRequest] = useState<RelocateRequest | null>(null);
+  const [relocating, setRelocating] = useState(false);
+  const [relocateError, setRelocateError] = useState<string | null>(null);
+  const [createdRelocateMeal, setCreatedRelocateMeal] = useState<{
+    date: string;
+    mealId: string;
+    meals: DiaryDayResponse["meals"];
+  } | null>(null);
   const [sex, setSex] = useState<NutritionSex | null>(null);
   const [pasteText, setPasteText] = useState("");
   const [fillingPaste, setFillingPaste] = useState(false);
@@ -179,17 +185,18 @@ export default function DiaryScreen() {
         router.push(`/(app)/diary/nutrition-recipe/${recipe.id}` as Href);
         return;
       }
-      if (nameSheet.kind === "create" || nameSheet.kind === "create-for-copy") {
-        const live = await createDiaryMeal(date, name);
-        const created = live.meals[live.meals.length - 1];
-        if (nameSheet.kind === "create-for-copy" && copyRequest && created) {
-          setDay(await copyDiaryEntries(copyRequest.entryIds, created.id));
-          setCopyRequest(null);
-        } else {
+      if (nameSheet.kind === "create" || nameSheet.kind === "create-for-relocate") {
+        const targetDate = nameSheet.kind === "create-for-relocate" ? nameSheet.date : date;
+        const live = await createDiaryMeal(targetDate, name);
+        const created = live.meals.find((meal) => meal.name === name.trim()) ?? live.meals[live.meals.length - 1];
+        if (nameSheet.kind === "create-for-relocate" && created) {
+          setCreatedRelocateMeal({ date: targetDate, mealId: created.id, meals: live.meals });
+        }
+        if (targetDate === date) {
           setDay(live);
         }
         if (created) {
-          await writeLastDiaryMeal({ mealId: created.id, mealName: created.name, date });
+          await writeLastDiaryMeal({ mealId: created.id, mealName: created.name, date: targetDate });
         }
       } else {
         const live = await updateDiaryMeal(nameSheet.mealId, { name });
@@ -236,25 +243,23 @@ export default function DiaryScreen() {
     }
   }
 
-  async function copyEntriesToMeal(mealId: string) {
-    if (!copyRequest || copying) {
+  async function confirmRelocate(input: { date: string; mealIds: string[]; mode: "copy" | "move" }) {
+    if (!relocateRequest || relocating) {
       return;
     }
-    setCopying(true);
+    setRelocating(true);
+    setRelocateError(null);
     setError(null);
     try {
-      const live = await copyDiaryEntries(copyRequest.entryIds, mealId);
+      const live = await relocateDiaryEntries(relocateRequest.entryIds, input.mealIds, input.mode);
       setDay(live);
-      setCopyRequest(null);
+      setRelocateRequest(null);
+      setCreatedRelocateMeal(null);
       setSelectedIds(null);
-      const meal = live.meals.find((row) => row.id === mealId);
-      if (meal) {
-        await writeLastDiaryMeal({ mealId: meal.id, mealName: meal.name, date });
-      }
     } catch (err) {
-      setError(err instanceof ApiRequestError ? err.message : "Could not copy that food.");
+      setRelocateError(err instanceof ApiRequestError ? err.message : "Could not copy those foods.");
     } finally {
-      setCopying(false);
+      setRelocating(false);
     }
   }
 
@@ -357,8 +362,12 @@ export default function DiaryScreen() {
               size="compact"
               label="Copy"
               variant="secondary"
-              disabled={selectedIds.length === 0 || copying}
-              onPress={() => setCopyRequest({ entryIds: selectedIds, mealId: "" })}
+              disabled={selectedIds.length === 0 || relocating}
+              onPress={() => {
+                setRelocateError(null);
+                setCreatedRelocateMeal(null);
+                setRelocateRequest({ entryIds: selectedIds });
+              }}
             />
             <Button size="compact" label="Done" variant="ghost" onPress={() => setSelectedIds(null)} />
           </>
@@ -437,25 +446,32 @@ export default function DiaryScreen() {
             meal={meal}
             collapsed={collapsedMeals.has(meal.id)}
             onToggleCollapse={() => toggleMealCollapsed(meal.id)}
-            onPressEntry={(entry) =>
-              entry.kind === "quick"
-                ? router.push({
-                    pathname: "/(app)/diary/quick-cal",
-                    params: { date, mealId: meal.id, entryId: entry.id },
-                  } as Href)
-                : router.push({
-                    pathname: "/(app)/diary/log-food",
-                    params: { date, mealId: meal.id, entryId: entry.id },
-                  } as Href)
-            }
+            onPressEntry={(entry) => {
+              if (entry.kind === "quick") {
+                router.push({
+                  pathname: "/(app)/diary/quick-cal",
+                  params: { date, mealId: meal.id, entryId: entry.id },
+                } as Href);
+                return;
+              }
+              if (!entry.foodId) return;
+              router.push({
+                pathname: `/(app)/diary/food/${entry.foodId}`,
+                params: { date, mealId: meal.id, entryId: entry.id, returnTo: "diary" },
+              } as Href);
+            }}
             onAddFood={() =>
               router.push({
-                pathname: "/(app)/diary/log",
+                pathname: "/(app)/diary/foods",
                 params: { date, mealId: meal.id },
               } as Href)
             }
             onDeleteEntry={(entry) => setPendingEntry(entry)}
-            onCopyEntry={(entryIds) => setCopyRequest({ entryIds, mealId: meal.id })}
+            onCopyEntry={(entryIds) => {
+              setRelocateError(null);
+              setCreatedRelocateMeal(null);
+              setRelocateRequest({ entryIds });
+            }}
             onCopyPrevious={
               date === todayIsoDate() && meal.canCopyPrevious && meal.entries.length === 0
                 ? () => void fillMeal(() => copyPreviousDiaryMeal(meal.id))
@@ -495,8 +511,8 @@ export default function DiaryScreen() {
         confirmLabel={
           nameSheet?.kind === "recipe"
             ? "Create"
-            : nameSheet?.kind === "create-for-copy"
-              ? "Add and copy"
+            : nameSheet?.kind === "create-for-relocate"
+              ? "Add group"
               : nameSheet?.kind === "rename"
                 ? "Save name"
                 : "Add group"
@@ -579,13 +595,20 @@ export default function DiaryScreen() {
         onSave={(kcal) => void saveDayTarget(kcal)}
         onClear={() => void clearDayTarget()}
       />
-      <DiaryMealPickerSheet
-        visible={copyRequest != null && nameSheet == null}
-        title="Copy to which meal?"
-        meals={meals.filter((meal) => meal.id !== copyRequest?.mealId)}
-        onClose={() => setCopyRequest(null)}
-        onSelectMeal={(mealId) => void copyEntriesToMeal(mealId)}
-        onCreateMeal={() => setNameSheet({ kind: "create-for-copy" })}
+      <DiaryMoveSheet
+        visible={relocateRequest != null && nameSheet == null}
+        entryCount={relocateRequest?.entryIds.length ?? 0}
+        sourceDate={date}
+        created={createdRelocateMeal}
+        saving={relocating}
+        error={relocateError}
+        onClose={() => {
+          setRelocateRequest(null);
+          setCreatedRelocateMeal(null);
+          setRelocateError(null);
+        }}
+        onCreateMeal={(targetDate) => setNameSheet({ kind: "create-for-relocate", date: targetDate })}
+        onConfirm={(input) => void confirmRelocate(input)}
       />
     </Screen>
   );

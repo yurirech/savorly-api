@@ -1,279 +1,57 @@
-import { type Href, router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
-import { StyleSheet, View } from "react-native";
-import {
-  hasExtendedNutrients,
-  listPresentNutrients,
-  resolveFoodGrams,
-  scaleNutrition,
-  type FoodAmountUnit,
-  type UserFood,
-} from "@savorly/shared";
-import {
-  ApiRequestError,
-  addDiaryEntry,
-  deleteDiaryEntry,
-  fetchDiaryDay,
-  fetchFrequentGrams,
-  fetchNutritionFood,
-  updateDiaryEntry,
-} from "../../../src/api/client";
-import { AppText } from "../../../src/components/AppText";
-import { Button } from "../../../src/components/Button";
-import NutrientDetailList from "../../../src/components/NutrientDetailList";
-import { Screen } from "../../../src/components/Screen";
-import FoodAmountFields, { parseFoodAmount } from "../../../src/diary/FoodAmountFields";
-import { writeLastDiaryMeal } from "../../../src/diary/lastDiaryMealStorage";
-import { tokens } from "../../../src/theme/tokens";
+import { type Href, Redirect, useLocalSearchParams } from "expo-router";
 import { todayIsoDate } from "../../../src/utils/isoDate";
 
-function sourceLabel(source: UserFood["source"]): string {
-  if (source === "nevo") return "NEVO";
-  if (source === "usda") return "USDA";
-  return "Manual";
+function firstParam(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
 }
 
-export default function DiaryLogFoodScreen() {
+export default function DiaryLogFoodRedirect() {
   const params = useLocalSearchParams<{
     date?: string;
     mealId?: string;
     foodId?: string;
     entryId?: string;
   }>();
-  const date = Array.isArray(params.date) ? params.date[0] : params.date ?? todayIsoDate();
-  const mealId = Array.isArray(params.mealId) ? params.mealId[0] : params.mealId;
-  const foodIdParam = Array.isArray(params.foodId) ? params.foodId[0] : params.foodId;
-  const entryId = Array.isArray(params.entryId) ? params.entryId[0] : params.entryId;
+  const foodId = firstParam(params.foodId);
+  const date = firstParam(params.date) ?? todayIsoDate();
+  const mealId = firstParam(params.mealId);
+  const entryId = firstParam(params.entryId);
 
-  const [food, setFood] = useState<UserFood | null>(null);
-  const [grams, setGrams] = useState("");
-  const [unit, setUnit] = useState<FoodAmountUnit>("grams");
-  const [frequentGrams, setFrequentGrams] = useState<number[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  const isEdit = Boolean(entryId);
-
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-      void (async () => {
-        if (!date || !mealId) {
-          if (active) setError("Missing diary context.");
-          return;
-        }
-        try {
-          if (entryId) {
-            const day = await fetchDiaryDay(date);
-            const entry = day.meals.flatMap((meal) => meal.entries).find((row) => row.id === entryId);
-            if (!entry) {
-              if (active) setError("Diary entry not found.");
-              return;
-            }
-            if (entry.kind === "quick") {
-              if (active) {
-                router.replace({
-                  pathname: "/(app)/diary/quick-cal",
-                  params: { date, mealId, entryId },
-                } as Href);
-              }
-              return;
-            }
-            if (!entry.foodId) {
-              if (active) setError("Diary entry not found.");
-              return;
-            }
-            if (active) setGrams(String(entry.grams));
-            const live = await fetchNutritionFood(entry.foodId);
-            const freq = await fetchFrequentGrams(entry.foodId);
-            if (active) {
-              setFood(live.food);
-              setFrequentGrams(freq.grams);
-              setError(null);
-            }
-            return;
-          }
-          if (!foodIdParam) {
-            if (active) setError("Pick a food first.");
-            return;
-          }
-          const live = await fetchNutritionFood(foodIdParam);
-          const freq = await fetchFrequentGrams(foodIdParam);
-          if (active) {
-            setFood(live.food);
-            setFrequentGrams(freq.grams);
-            if (freq.grams[0] != null) {
-              setGrams((current) => (current.trim() ? current : String(freq.grams[0])));
-            }
-            setError(null);
-          }
-        } catch (err) {
-          if (active) {
-            setError(err instanceof ApiRequestError ? err.message : "Could not load food.");
-          }
-        }
-      })();
-      return () => {
-        active = false;
-      };
-    }, [date, entryId, foodIdParam, mealId]),
-  );
-
-  const parsedAmount = parseFoodAmount(grams);
-  const amountGrams =
-    parsedAmount == null ? null : resolveFoodGrams(unit, parsedAmount, food?.servingWeightG ?? null);
-  const scaled = useMemo(
-    () => (food && amountGrams != null ? scaleNutrition(food.per100g, amountGrams) : null),
-    [amountGrams, food],
-  );
-  const nutrientGroups = useMemo(() => (scaled ? listPresentNutrients(scaled) : []), [scaled]);
-
-  async function onSave() {
-    if (!food || !mealId) return;
-    const amount =
-      parsedAmount == null ? null : resolveFoodGrams(unit, parsedAmount, food.servingWeightG);
-    if (amount == null) {
-      setError(unit === "servings" ? "Enter servings eaten." : "Enter grams eaten.");
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      if (entryId) {
-        await updateDiaryEntry(entryId, amount);
-      } else {
-        await addDiaryEntry(mealId, food.id, amount, date);
-        const day = await fetchDiaryDay(date);
-        const meal = day.meals.find((row) => row.id === mealId);
-        if (meal) {
-          await writeLastDiaryMeal({ mealId: meal.id, mealName: meal.name, date });
-        }
-      }
-      router.back();
-    } catch (err) {
-      setError(err instanceof ApiRequestError ? err.message : "Could not save entry.");
-    } finally {
-      setSaving(false);
-    }
+  if (!foodId && !entryId) {
+    return (
+      <Redirect
+        href={{
+          pathname: "/(app)/diary/foods",
+          params: {
+            date,
+            ...(mealId ? { mealId } : {}),
+          },
+        }}
+      />
+    );
   }
 
-  async function onDeleteEntry() {
-    if (!entryId) return;
-    setSaving(true);
-    setError(null);
-    try {
-      await deleteDiaryEntry(entryId);
-      router.back();
-    } catch (err) {
-      setError(err instanceof ApiRequestError ? err.message : "Could not delete entry.");
-    } finally {
-      setSaving(false);
-    }
+  if (!foodId) {
+    return (
+      <Redirect
+        href={{
+          pathname: "/(app)/diary",
+          params: { date },
+        }}
+      />
+    );
   }
 
   return (
-    <Screen>
-      <AppText variant="display">{isEdit ? "Edit entry" : "Log food"}</AppText>
-      {food ? (
-        <>
-          <View style={styles.titleRow}>
-            <AppText variant="title" style={styles.foodName}>
-              {food.name}
-            </AppText>
-            <Button
-              label={isEdit ? "Update" : "Log"}
-              onPress={() => void onSave()}
-              loading={saving}
-            />
-          </View>
-          <AppText variant="caption" color="muted">
-            {sourceLabel(food.source)} · {date}
-          </AppText>
-          <FoodAmountFields
-            unit={unit}
-            amount={grams}
-            servingWeightG={food.servingWeightG}
-            frequentGrams={frequentGrams}
-            onUnitChange={setUnit}
-            onAmountChange={setGrams}
-          />
-          {isEdit ? (
-            <Button
-              label="Delete entry"
-              size="compact"
-              variant="secondary"
-              onPress={() => void onDeleteEntry()}
-              loading={saving}
-            />
-          ) : null}
-          {scaled ? (
-            <>
-              <AppText variant="title">{amountGrams} g</AppText>
-              <View style={styles.macros}>
-                <MacroCell label="kcal" value={scaled.kcal} />
-                <MacroCell label="Protein" value={`${scaled.proteinG} g`} />
-                <MacroCell label="Carbs" value={`${scaled.carbsG} g`} />
-                <MacroCell label="Fat" value={`${scaled.fatG} g`} />
-              </View>
-              {nutrientGroups.length > 0 ? <NutrientDetailList groups={nutrientGroups} /> : null}
-            </>
-          ) : null}
-          {food.source === "nevo" && !hasExtendedNutrients(food.per100g) ? (
-            <AppText variant="caption" color="muted">
-              Full NEVO nutrients appear after re-importing this food.
-            </AppText>
-          ) : null}
-        </>
-      ) : null}
-      {error ? (
-        <AppText variant="body" color="danger">
-          {error}
-        </AppText>
-      ) : null}
-    </Screen>
+    <Redirect
+      href={{
+        pathname: `/(app)/diary/food/${foodId}`,
+        params: {
+          date,
+          ...(mealId ? { mealId } : {}),
+          ...(entryId ? { entryId, returnTo: "diary" } : { returnTo: "foods" }),
+        },
+      } as Href}
+    />
   );
 }
-
-type MacroCellProps = {
-  label: string;
-  value: string | number;
-};
-
-function MacroCell(props: MacroCellProps) {
-  const { label, value } = props;
-  return (
-    <View style={styles.macro}>
-      <AppText variant="caption" color="muted">
-        {label}
-      </AppText>
-      <AppText variant="title">{value}</AppText>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  titleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: tokens.space.sm,
-  },
-  foodName: {
-    flex: 1,
-  },
-  macros: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: tokens.space.md,
-  },
-  macro: {
-    flexGrow: 1,
-    minWidth: "40%",
-    backgroundColor: tokens.surface,
-    borderRadius: tokens.radius.md,
-    borderWidth: 1,
-    borderColor: tokens.border,
-    padding: tokens.space.md,
-    gap: tokens.space.xs,
-  },
-});

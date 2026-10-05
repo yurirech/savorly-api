@@ -35,6 +35,7 @@ import {
   addDiaryEntry,
   addQuickDiaryEntry,
   copyDiaryEntry,
+  relocateDiaryEntries,
   copyPreviousDiaryMeal,
   listMealStapleNames,
   logMealStaples,
@@ -301,6 +302,12 @@ const diaryEntryPatchSchema = z.object({
 
 const diaryEntryCopySchema = z.object({
   mealId: z.string().uuid(),
+});
+
+const diaryRelocateSchema = z.object({
+  entryIds: z.array(z.string().uuid()).min(1),
+  mealIds: z.array(z.string().uuid()).min(1),
+  mode: z.enum(["copy", "move"]),
 });
 
 const quickDiaryEntrySchema = z.object({
@@ -868,6 +875,12 @@ export function createApp(db: Database, env: Env) {
     const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
     const body = diaryEntryCopySchema.parse(await c.req.json());
     return c.json(await copyDiaryEntry(db, user.id, c.req.param("id"), body.mealId));
+  });
+
+  app.post("/nutrition/diary/relocate", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = diaryRelocateSchema.parse(await c.req.json());
+    return c.json(await relocateDiaryEntries(db, user.id, body));
   });
 
   app.post("/nutrition/diary/meals", async (c) => {

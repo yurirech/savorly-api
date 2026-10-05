@@ -1,11 +1,12 @@
 import { CaretDown, CaretUp, ChartPie, Check, PencilSimple, Trash } from "phosphor-react-native";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { PanResponder, Pressable, StyleSheet, View } from "react-native";
-import { listPresentNutrients, type DiaryEntry, type DiaryMealGroup } from "@savorly/shared";
+import { foodEmoji, listPresentNutrients, type DiaryEntry, type DiaryMealGroup } from "@savorly/shared";
 import { AppText } from "../components/AppText";
 import { Button } from "../components/Button";
 import NutrientDetailList from "../components/NutrientDetailList";
 import { tokens } from "../theme/tokens";
+import FoodEmojiBadge from "./FoodEmojiBadge";
 
 interface DiaryMealSectionProps {
   meal: DiaryMealGroup;
@@ -106,7 +107,9 @@ function DiaryMealSection(props: DiaryMealSectionProps) {
             />
           ))}
           <View style={styles.actions}>
-            <Button size="compact" label="Add food" variant="secondary" onPress={onAddFood} />
+            <View style={styles.addFoodSlot}>
+              <Button size="compact" label="Add food" variant="secondary" onPress={onAddFood} />
+            </View>
             {meal.entries.length === 0 && onCopyPrevious ? (
               <IconButton label="Copy last time" onPress={onCopyPrevious}>
                 <AppText variant="body">↩</AppText>
@@ -248,6 +251,7 @@ function DiaryEntryRow(props: DiaryEntryRowProps) {
             {selected ? <Check size={16} color={tokens.bg} weight="bold" /> : null}
           </View>
         ) : null}
+        <FoodEmojiBadge emoji={entry.kind === "quick" ? "⚡" : foodEmoji({ name: entry.foodName })} />
         <View style={styles.entryCopy}>
           <AppText variant="body">{entry.foodName}</AppText>
           <AppText variant="caption" color="muted">
@@ -283,6 +287,10 @@ const styles = StyleSheet.create({
     gap: tokens.space.sm,
     borderTopWidth: 1,
     borderTopColor: tokens.border,
+  },
+  addFoodSlot: {
+    height: 44,
+    justifyContent: "center",
   },
   iconButton: {
     width: 44,

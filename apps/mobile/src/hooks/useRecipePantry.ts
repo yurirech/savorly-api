@@ -14,6 +14,7 @@ import {
   fetchPantry,
   setStarterInPantry,
 } from "../api/client";
+import { PANTRY_ENABLED } from "../config/features";
 
 export function useRecipePantry(recipe: SavedRecipe | null) {
   const [pantry, setPantry] = useState<PantryResponse | null>(null);
@@ -22,6 +23,7 @@ export function useRecipePantry(recipe: SavedRecipe | null) {
   const [addingIndex, setAddingIndex] = useState<number | null>(null);
 
   const reloadPantry = useCallback(async () => {
+    if (!PANTRY_ENABLED) return;
     setLoading(true);
     setPantryError(null);
     try {
@@ -85,6 +87,7 @@ export function usePantryMatchForRecipes(recipes: SavedRecipe[]) {
   const [loading, setLoading] = useState(false);
 
   const reloadPantry = useCallback(async () => {
+    if (!PANTRY_ENABLED) return;
     setLoading(true);
     try {
       setPantry(await fetchPantry());

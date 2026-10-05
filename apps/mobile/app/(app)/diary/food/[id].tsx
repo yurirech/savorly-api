@@ -1,6 +1,7 @@
 import { type Href, router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   hasExtendedNutrients,
   listPresentNutrients,
@@ -15,13 +16,13 @@ import {
   ApiRequestError,
   addDiaryEntry,
   createDiaryMeal,
-  deleteNutritionFood,
   fetchDiaryDay,
   fetchFrequentGrams,
   fetchNutritionFood,
   listNutritionFoods,
   patchNutritionFood,
   renameNutritionFood,
+  updateDiaryEntry,
 } from "../../../../src/api/client";
 import { AppText } from "../../../../src/components/AppText";
 import { Button } from "../../../../src/components/Button";
@@ -31,7 +32,7 @@ import { Screen } from "../../../../src/components/Screen";
 import DiaryMealNameSheet from "../../../../src/diary/DiaryMealNameSheet";
 import DiaryMealPickerSheet from "../../../../src/diary/DiaryMealPickerSheet";
 import FoodAmountFields, { parseFoodAmount } from "../../../../src/diary/FoodAmountFields";
-import { clearCachedFood, getCachedFood } from "../../../../src/diary/foodDetailCache";
+import { getCachedFood } from "../../../../src/diary/foodDetailCache";
 import { resolveMealForDate, writeLastDiaryMeal } from "../../../../src/diary/lastDiaryMealStorage";
 import MealStaplesSection from "../../../../src/diary/MealStaplesSection";
 import { tokens } from "../../../../src/theme/tokens";
@@ -44,18 +45,32 @@ function sourceLabel(source: UserFood["source"]): string {
   return "Manual";
 }
 
+function firstParam(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
 async function loadFoodFromList(id: string): Promise<UserFood | null> {
   const live = await listNutritionFoods();
   return live.foods.find((item) => item.id === id) ?? null;
 }
 
 export default function DiaryFoodDetailScreen() {
-  const params = useLocalSearchParams<{ id?: string }>();
-  const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const params = useLocalSearchParams<{
+    id?: string;
+    date?: string;
+    mealId?: string;
+    entryId?: string;
+    returnTo?: string;
+  }>();
+  const id = firstParam(params.id);
+  const date = firstParam(params.date) ?? todayIsoDate();
+  const mealIdParam = firstParam(params.mealId);
+  const entryId = firstParam(params.entryId);
+  const returnTo = firstParam(params.returnTo);
+
   const [food, setFood] = useState<UserFood | null>(null);
   const [attribution, setAttribution] = useState<string | undefined>();
   const [error, setError] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
   const [mealPickerVisible, setMealPickerVisible] = useState(false);
   const [createMealVisible, setCreateMealVisible] = useState(false);
   const [todayMeals, setTodayMeals] = useState<DiaryMealGroup[]>([]);
@@ -66,15 +81,19 @@ export default function DiaryFoodDetailScreen() {
   const [defaultMeal, setDefaultMeal] = useState<{ id: string; name: string } | null>(null);
   const [logging, setLogging] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
+  const [editingName, setEditingName] = useState(false);
   const [servingDraft, setServingDraft] = useState("");
+  const [addingServing, setAddingServing] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [savingServing, setSavingServing] = useState(false);
+  const insets = useSafeAreaInsets();
 
-  const logDate = todayIsoDate();
   const parsedAmount = parseFoodAmount(grams);
   const amountGrams =
     parsedAmount == null ? null : resolveFoodGrams(unit, parsedAmount, food?.servingWeightG ?? null);
   const previewGrams = amountGrams ?? 100;
+  const nameDirty = Boolean(food && nameDraft.trim() && nameDraft.trim() !== food.name);
+  const hasServing = food != null && food.servingWeightG != null && food.servingWeightG > 0;
 
   const scaled = useMemo(
     () => (food ? scaleNutrition(food.per100g, previewGrams) : null),
@@ -87,21 +106,28 @@ export default function DiaryFoodDetailScreen() {
     if (!food) return;
     try {
       const [day, freq, meal] = await Promise.all([
-        fetchDiaryDay(logDate),
+        fetchDiaryDay(date),
         fetchFrequentGrams(food.id),
-        resolveMealForDate(logDate),
+        resolveMealForDate(date),
       ]);
       setTodayMeals(day.meals);
       setFrequentGrams(freq.grams);
-      setDefaultMeal(meal);
-      if (!grams && freq.grams[0] != null) {
+      const bound = mealIdParam ? (day.meals.find((row) => row.id === mealIdParam) ?? null) : meal;
+      setDefaultMeal(bound ? { id: bound.id, name: bound.name } : meal);
+      if (entryId) {
+        const entry = day.meals.flatMap((row) => row.entries).find((row) => row.id === entryId);
+        if (entry && entry.kind !== "quick") {
+          setGrams(String(entry.grams));
+          setUnit("grams");
+        }
+      } else if (!grams && freq.grams[0] != null) {
         setGrams(String(freq.grams[0]));
       }
       setError(null);
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : "Could not load today's diary.");
     }
-  }, [food, logDate]);
+  }, [date, entryId, food, mealIdParam]);
 
   useFocusEffect(
     useCallback(() => {
@@ -114,7 +140,7 @@ export default function DiaryFoodDetailScreen() {
   async function openLogFlow() {
     if (!food) return;
     try {
-      const day = await fetchDiaryDay(logDate);
+      const day = await fetchDiaryDay(date);
       setTodayMeals(day.meals);
       setMealPickerVisible(true);
       setError(null);
@@ -123,45 +149,39 @@ export default function DiaryFoodDetailScreen() {
     }
   }
 
-  async function rememberMeal(mealId: string) {
-    const meal = todayMeals.find((row) => row.id === mealId);
+  async function rememberMeal(nextMealId: string) {
+    const meal = todayMeals.find((row) => row.id === nextMealId);
     if (meal) {
-      await writeLastDiaryMeal({ mealId: meal.id, mealName: meal.name, date: logDate });
+      await writeLastDiaryMeal({ mealId: meal.id, mealName: meal.name, date });
       setDefaultMeal({ id: meal.id, name: meal.name });
     }
   }
 
-  function goLogFood(mealId: string) {
-    if (!food) return;
-    setMealPickerVisible(false);
-    void rememberMeal(mealId);
-    router.push({
-      pathname: "/(app)/diary/log-food",
-      params: { date: logDate, mealId, foodId: food.id },
-    } as Href);
+  function leaveAfterLog() {
+    router.back();
   }
 
   function resolvedLogGrams(): number | null {
     return parsedAmount == null ? null : resolveFoodGrams(unit, parsedAmount, food?.servingWeightG ?? null);
   }
 
-  async function onQuickLog() {
+  async function logToMeal(targetMealId: string) {
     if (!food) return;
     const amount = resolvedLogGrams();
     if (amount == null) {
       setError(unit === "servings" ? "Enter servings eaten." : "Enter grams eaten.");
       return;
     }
-    if (!defaultMeal) {
-      await openLogFlow();
-      return;
-    }
     setLogging(true);
     setError(null);
     try {
-      await addDiaryEntry(defaultMeal.id, food.id, amount, logDate);
-      await writeLastDiaryMeal({ mealId: defaultMeal.id, mealName: defaultMeal.name, date: logDate });
-      router.back();
+      if (entryId) {
+        await updateDiaryEntry(entryId, amount);
+      } else {
+        await addDiaryEntry(targetMealId, food.id, amount, date);
+        await rememberMeal(targetMealId);
+      }
+      leaveAfterLog();
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : "Could not log food.");
     } finally {
@@ -169,18 +189,40 @@ export default function DiaryFoodDetailScreen() {
     }
   }
 
+  async function onLog() {
+    if (!food) return;
+    const amount = resolvedLogGrams();
+    if (amount == null) {
+      setError(unit === "servings" ? "Enter servings eaten." : "Enter grams eaten.");
+      return;
+    }
+    if (entryId) {
+      await logToMeal(mealIdParam ?? defaultMeal?.id ?? "");
+      return;
+    }
+    if (mealIdParam) {
+      await logToMeal(mealIdParam);
+      return;
+    }
+    if (defaultMeal) {
+      await logToMeal(defaultMeal.id);
+      return;
+    }
+    await openLogFlow();
+  }
+
   async function onCreateMealAndLog(name: string) {
     if (!food || !name.trim()) return;
     setMealSaving(true);
     try {
-      const day = await createDiaryMeal(logDate, name);
-      const meal = day.meals[day.meals.length - 1];
+      const day = await createDiaryMeal(date, name);
+      const meal = day.meals.find((row) => row.name === name.trim()) ?? day.meals[day.meals.length - 1];
       setCreateMealVisible(false);
       setTodayMeals(day.meals);
       if (meal) {
-        await writeLastDiaryMeal({ mealId: meal.id, mealName: meal.name, date: logDate });
+        await writeLastDiaryMeal({ mealId: meal.id, mealName: meal.name, date });
         setDefaultMeal({ id: meal.id, name: meal.name });
-        goLogFood(meal.id);
+        await logToMeal(meal.id);
       }
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : "Could not create meal group.");
@@ -201,6 +243,7 @@ export default function DiaryFoodDetailScreen() {
         setFood(cached);
         setNameDraft(cached.name);
         setServingDraft(cached.servingWeightG != null ? String(cached.servingWeightG) : "");
+        setAddingServing(false);
         setError(null);
       }
 
@@ -236,87 +279,91 @@ export default function DiaryFoodDetailScreen() {
     }, [id]),
   );
 
-  async function onDelete() {
+  async function onSaveName() {
     if (!food) return;
-    setDeleting(true);
+    const next = nameDraft.trim();
+    if (!next || next === food.name) {
+      setEditingName(false);
+      return;
+    }
+    setRenaming(true);
     setError(null);
     try {
-      await deleteNutritionFood(food.id);
-      clearCachedFood(food.id);
-      router.back();
+      const saved = await renameNutritionFood(food.id, next);
+      setFood(saved.food);
+      setNameDraft(saved.food.name);
+      setEditingName(false);
     } catch (err) {
-      setError(err instanceof ApiRequestError ? err.message : "Could not delete that food.");
+      setError(err instanceof ApiRequestError ? err.message : "Could not rename food.");
     } finally {
-      setDeleting(false);
+      setRenaming(false);
     }
   }
 
-  const quickLogLabel = defaultMeal ? `Log to ${defaultMeal.name}` : "Choose meal group";
+  async function onSaveServing() {
+    if (!food) return;
+    const trimmed = servingDraft.trim();
+    const next = trimmed ? Number(trimmed.replace(",", ".")) : null;
+    if (!trimmed || !(next != null && next > 0) || next > 5000) {
+      setError("Serving weight must be between 0 and 5000 g.");
+      return;
+    }
+    setSavingServing(true);
+    setError(null);
+    try {
+      const saved = await patchNutritionFood(food.id, { servingWeightG: next });
+      setFood(saved.food);
+      setServingDraft(saved.food.servingWeightG != null ? String(saved.food.servingWeightG) : "");
+      setAddingServing(false);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : "Could not save serving.");
+    } finally {
+      setSavingServing(false);
+    }
+  }
 
   return (
-    <Screen>
-      <AppText variant="display">{food?.name ?? "Food"}</AppText>
-      {food ? (
-        <>
-          <Field label="Name" value={nameDraft} onChangeText={setNameDraft} />
-          <Button
-            size="compact"
-            label="Save name"
-            variant="secondary"
-            loading={renaming}
-            onPress={() => {
-              void (async () => {
-                const next = nameDraft.trim();
-                if (!next || next === food.name) return;
-                setRenaming(true);
-                setError(null);
-                try {
-                  const saved = await renameNutritionFood(food.id, next);
-                  setFood(saved.food);
-                  setNameDraft(saved.food.name);
-                } catch (err) {
-                  setError(err instanceof ApiRequestError ? err.message : "Could not rename food.");
-                } finally {
-                  setRenaming(false);
-                }
-              })();
-            }}
-          />
-          <Field
-            label="Grams per serving"
-            value={servingDraft}
-            onChangeText={setServingDraft}
-            keyboardType="numeric"
-            placeholder="Optional"
-          />
-          <Button
-            size="compact"
-            label="Save serving"
-            variant="secondary"
-            loading={savingServing}
-            onPress={() => {
-              void (async () => {
-                const trimmed = servingDraft.trim();
-                const next = trimmed ? Number(trimmed.replace(",", ".")) : null;
-                if (trimmed && (!(next != null && next > 0) || next > 5000)) {
-                  setError("Serving weight must be between 0 and 5000 g.");
-                  return;
-                }
-                setSavingServing(true);
-                setError(null);
-                try {
-                  const saved = await patchNutritionFood(food.id, { servingWeightG: next });
-                  setFood(saved.food);
-                  setServingDraft(saved.food.servingWeightG != null ? String(saved.food.servingWeightG) : "");
-                } catch (err) {
-                  setError(err instanceof ApiRequestError ? err.message : "Could not save serving.");
-                } finally {
-                  setSavingServing(false);
-                }
-              })();
-            }}
-          />
-        </>
+    <Screen
+      overlay={
+        food ? (
+          <Pressable
+            onPress={() => void onLog()}
+            disabled={logging}
+            style={({ pressed }) => [
+              styles.fab,
+              { bottom: tokens.space.lg + insets.bottom },
+              pressed && styles.fabPressed,
+              logging && styles.fabDisabled,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="LOG"
+          >
+            {logging ? (
+              <ActivityIndicator color={tokens.bg} />
+            ) : (
+              <AppText variant="body" style={styles.fabLabel}>
+                LOG
+              </AppText>
+            )}
+          </Pressable>
+        ) : null
+      }
+    >
+      {food && editingName ? (
+        <Field label="Name" value={nameDraft} onChangeText={setNameDraft} />
+      ) : (
+        <Pressable
+          onPress={() => food && setEditingName(true)}
+          accessibilityRole="button"
+          accessibilityLabel={food ? `Edit ${food.name}` : "Food"}
+        >
+          <AppText variant="display">{food?.name ?? "Food"}</AppText>
+        </Pressable>
+      )}
+      {food && nameDirty ? (
+        <View style={styles.nameActions}>
+          <Button size="compact" label="Save" variant="secondary" loading={renaming} onPress={() => void onSaveName()} />
+        </View>
       ) : null}
 
       {food ? <MealStaplesSection foodId={food.id} /> : null}
@@ -327,39 +374,32 @@ export default function DiaryFoodDetailScreen() {
             {sourceLabel(food.source)}
             {food.nevoCode != null ? ` · NEVO ${food.nevoCode}` : ""}
             {food.fdcId != null ? ` · FDC ${food.fdcId}` : ""}
+            {returnTo === "diary" || entryId ? ` · ${date}` : ""}
           </AppText>
 
-          <View style={styles.quickLog}>
-            <AppText variant="title">Quick log</AppText>
-            <FoodAmountFields
-              unit={unit}
-              amount={grams}
-              servingWeightG={food.servingWeightG}
-              frequentGrams={frequentGrams}
-              onUnitChange={setUnit}
-              onAmountChange={setGrams}
-            />
+          <FoodAmountFields
+            unit={unit}
+            amount={grams}
+            servingWeightG={food.servingWeightG}
+            frequentGrams={frequentGrams}
+            onUnitChange={setUnit}
+            onAmountChange={setGrams}
+          />
+          {defaultMeal && !entryId && !mealIdParam ? (
+            <View style={styles.actions}>
+              <Button size="compact" label="Choose meal…" variant="ghost" onPress={() => void openLogFlow()} />
+            </View>
+          ) : null}
+          {food.nutritionRecipeId ? (
             <View style={styles.actions}>
               <Button
                 size="compact"
-                label={defaultMeal ? quickLogLabel : "Choose meal group to log"}
-                onPress={() => void (defaultMeal ? onQuickLog() : openLogFlow())}
-                loading={logging}
+                label="Edit recipe"
+                variant="secondary"
+                onPress={() => router.push(`/(app)/diary/nutrition-recipe/${food.nutritionRecipeId}` as Href)}
               />
-              {defaultMeal ? (
-                <Button size="compact" label="Choose meal…" variant="ghost" onPress={() => void openLogFlow()} />
-              ) : null}
-              <Button size="compact" label="Delete" variant="secondary" onPress={() => void onDelete()} loading={deleting} />
-              {food.nutritionRecipeId ? (
-                <Button
-                  size="compact"
-                  label="Edit recipe"
-                  variant="secondary"
-                  onPress={() => router.push(`/(app)/diary/nutrition-recipe/${food.nutritionRecipeId}` as Href)}
-                />
-              ) : null}
             </View>
-          </View>
+          ) : null}
 
           <AppText variant="title">{previewGrams} g</AppText>
           <View style={styles.macros}>
@@ -368,6 +408,21 @@ export default function DiaryFoodDetailScreen() {
             <MacroCell label="Carbs" value={`${scaled?.carbsG ?? 0} g`} />
             <MacroCell label="Fat" value={`${scaled?.fatG ?? 0} g`} />
           </View>
+          {!hasServing && !addingServing ? (
+            <Button size="compact" label="Add serving" variant="secondary" onPress={() => setAddingServing(true)} />
+          ) : null}
+          {addingServing ? (
+            <>
+              <Field
+                label="Grams per serving"
+                value={servingDraft}
+                onChangeText={setServingDraft}
+                keyboardType="numeric"
+                placeholder="e.g. 30"
+              />
+              <Button size="compact" label="Save serving" variant="secondary" loading={savingServing} onPress={() => void onSaveServing()} />
+            </>
+          ) : null}
           {nutrientGroups.length > 0 ? <NutrientDetailList groups={nutrientGroups} /> : null}
           {food.source === "nevo" && !hasExtendedNutrients(food.per100g) ? (
             <AppText variant="caption" color="muted">
@@ -381,27 +436,9 @@ export default function DiaryFoodDetailScreen() {
         visible={mealPickerVisible}
         meals={todayMeals}
         onClose={() => setMealPickerVisible(false)}
-        onSelectMeal={(mealId) => {
-          const amount = resolvedLogGrams();
-          if (amount == null) {
-            goLogFood(mealId);
-            return;
-          }
-          void (async () => {
-            if (!food) return;
-            setLogging(true);
-            setError(null);
-            try {
-              await addDiaryEntry(mealId, food.id, amount, logDate);
-              await rememberMeal(mealId);
-              setMealPickerVisible(false);
-              router.back();
-            } catch (err) {
-              setError(err instanceof ApiRequestError ? err.message : "Could not log food.");
-            } finally {
-              setLogging(false);
-            }
-          })();
+        onSelectMeal={(nextMealId) => {
+          setMealPickerVisible(false);
+          void logToMeal(nextMealId);
         }}
         onCreateMeal={() => {
           setMealPickerVisible(false);
@@ -426,6 +463,7 @@ export default function DiaryFoodDetailScreen() {
           {attribution ?? NEVO_ATTRIBUTION}
         </AppText>
       )}
+      {food ? <View style={styles.fabClearance} /> : null}
     </Screen>
   );
 }
@@ -448,13 +486,11 @@ function MacroCell(props: MacroCellProps) {
 }
 
 const styles = StyleSheet.create({
-  quickLog: {
+  nameActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
     gap: tokens.space.sm,
-    padding: tokens.space.md,
-    borderRadius: tokens.radius.md,
-    borderWidth: 1,
-    borderColor: tokens.border,
-    backgroundColor: tokens.surface,
   },
   actions: {
     flexDirection: "row",
@@ -476,5 +512,30 @@ const styles = StyleSheet.create({
     borderColor: tokens.border,
     padding: tokens.space.md,
     gap: tokens.space.xs,
+  },
+  fab: {
+    position: "absolute",
+    right: tokens.space.lg,
+    minHeight: 56,
+    paddingHorizontal: tokens.space.lg,
+    borderRadius: tokens.radius.full,
+    backgroundColor: tokens.accent,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 20,
+    ...tokens.shadow.card,
+  },
+  fabPressed: {
+    transform: [{ scale: 0.98 }],
+  },
+  fabDisabled: {
+    opacity: 0.45,
+  },
+  fabLabel: {
+    color: tokens.bg,
+    fontFamily: tokens.font.bodyBold,
+  },
+  fabClearance: {
+    height: 72,
   },
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { scaleNutrition } from "@savorly/shared";
-import { asIsoDate, diaryFromRow, foodFromRow, parseIsoDate, profileResponse } from "./nutritionStore";
+import { asIsoDate, buildRelocatePairs, diaryFromRow, foodFromRow, parseIsoDate, profileResponse } from "./nutritionStore";
 
 describe("parseIsoDate", () => {
   it("accepts YYYY-MM-DD", () => {
@@ -98,5 +98,44 @@ describe("profileResponse", () => {
 
   it("returns null targets without a profile", () => {
     expect(profileResponse(null).targets).toBeNull();
+  });
+});
+
+describe("buildRelocatePairs", () => {
+  it("copies one food to two groups on another date", () => {
+    expect(
+      buildRelocatePairs([{ id: "banana", mealId: "today-breakfast" }], [
+        { id: "tomorrow-lunch" },
+        { id: "tomorrow-dinner" },
+      ]),
+    ).toEqual([
+      { entryId: "banana", mealId: "tomorrow-lunch" },
+      { entryId: "banana", mealId: "tomorrow-dinner" },
+    ]);
+  });
+
+  it("moves several foods onto one group", () => {
+    expect(
+      buildRelocatePairs(
+        [
+          { id: "milk", mealId: "today-breakfast" },
+          { id: "oats", mealId: "today-breakfast" },
+        ],
+        [{ id: "tomorrow-lunch" }],
+      ),
+    ).toEqual([
+      { entryId: "milk", mealId: "tomorrow-lunch" },
+      { entryId: "oats", mealId: "tomorrow-lunch" },
+    ]);
+  });
+
+  it("returns no pairs when every target is the source meal", () => {
+    expect(buildRelocatePairs([{ id: "banana", mealId: "breakfast" }], [{ id: "breakfast" }])).toEqual([]);
+  });
+
+  it("skips the source meal and keeps the other group on the same day", () => {
+    expect(
+      buildRelocatePairs([{ id: "banana", mealId: "breakfast" }], [{ id: "breakfast" }, { id: "lunch" }]),
+    ).toEqual([{ entryId: "banana", mealId: "lunch" }]);
   });
 });

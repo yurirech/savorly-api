@@ -1,4 +1,4 @@
-import { type Href, router } from "expo-router";
+import { type Href, Redirect, router } from "expo-router";
 import { useCallback, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import type { FoodCategory, MealSuggestion } from "@savorly/shared";
@@ -9,13 +9,19 @@ import { Button } from "../../src/components/Button";
 import { CategoryPicker } from "../../src/components/CategoryPicker";
 import { RecipeCard } from "../../src/components/RecipeCard";
 import { Screen } from "../../src/components/Screen";
+import { PANTRY_ENABLED } from "../../src/config/features";
 import { tokens } from "../../src/theme/tokens";
 
 const MISSING_PREVIEW_LIMIT = 8;
 
 type SuggestPhase = "category" | "result";
 
-export default function SuggestMealScreen() {
+export default function SuggestMealRoute() {
+  if (!PANTRY_ENABLED) return <Redirect href="/(app)/(tabs)" />;
+  return <SuggestMealScreen />;
+}
+
+function SuggestMealScreen() {
   const [phase, setPhase] = useState<SuggestPhase>("category");
   const [category, setCategory] = useState<FoodCategory | null>(null);
   const [loading, setLoading] = useState(false);

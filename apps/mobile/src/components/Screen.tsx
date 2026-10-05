@@ -18,6 +18,8 @@ type ScreenProps = PropsWithChildren<{
   onRefresh?: () => void | Promise<void>;
   refreshing?: boolean;
   footer?: ReactNode;
+  header?: ReactNode;
+  overlay?: ReactNode;
   scrollRef?: RefObject<ScrollView | null>;
 }>;
 
@@ -31,13 +33,15 @@ export function Screen(props: ScreenProps) {
     onRefresh,
     refreshing = false,
     footer,
+    header,
+    overlay,
     scrollRef,
   } = props;
   const insets = useSafeAreaInsets();
   const bottomInset = safeBottom && !footer ? insets.bottom : 0;
   const bodyStyle = [
     styles.body,
-    padded ? styles.padded : styles.flush,
+    padded ? [styles.padded, header ? styles.paddedAfterHeader : null] : styles.flush,
     { paddingBottom: (padded ? tokens.space.lg : 0) + bottomInset },
   ];
   const footerNode = footer ? (
@@ -71,10 +75,22 @@ export function Screen(props: ScreenProps) {
     <View style={bodyStyle}>{children}</View>
   );
 
+  const headerNode = header ? (
+    <View style={[styles.header, padded && styles.headerPadded]}>{header}</View>
+  ) : null;
+
+  const overlayNode = overlay ? (
+    <View style={styles.overlay} pointerEvents="box-none">
+      {overlay}
+    </View>
+  ) : null;
+
   const layout = (
     <>
+      {headerNode}
       {scrollNode}
       {footerNode}
+      {overlayNode}
     </>
   );
 
@@ -109,6 +125,9 @@ const styles = StyleSheet.create({
     padding: tokens.space.lg,
     gap: tokens.space.md,
   },
+  paddedAfterHeader: {
+    paddingTop: tokens.space.sm,
+  },
   flush: {
     padding: 0,
     gap: 0,
@@ -125,5 +144,17 @@ const styles = StyleSheet.create({
   },
   footerPadded: {
     paddingHorizontal: tokens.space.lg,
+  },
+  header: {
+    gap: tokens.space.sm,
+    backgroundColor: tokens.bg,
+    paddingBottom: tokens.space.sm,
+  },
+  headerPadded: {
+    paddingHorizontal: tokens.space.lg,
+    paddingTop: tokens.space.lg,
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
   },
 });

@@ -3,6 +3,7 @@ import {
   computeNutritionRecipe,
   diaryLinesFromCookbook,
   isNutritionRecipeComplete,
+  matchCopyFoodId,
   recipeServingWeightG,
   type Ingredient,
   type NutrientVector,
@@ -128,7 +129,24 @@ export async function listNutritionRecipesForSource(db: Database, userId: string
 }
 
 export async function getNutritionRecipe(db: Database, userId: string, id: string) {
-  return loadDetail(db, userId, id);
+  const detail = await loadDetail(db, userId, id);
+  const unmatched = detail.items.filter((item) => item.foodId == null);
+  if (unmatched.length === 0) return detail;
+
+  const foods = await listUserFoods(db, userId);
+  let matched = 0;
+  for (const item of unmatched) {
+    const foodId = matchCopyFoodId(item.sourceLine, foods);
+    if (!foodId) continue;
+    await db
+      .update(nutritionRecipeItems)
+      .set({ foodId })
+      .where(and(eq(nutritionRecipeItems.id, item.id), eq(nutritionRecipeItems.nutritionRecipeId, id)));
+    matched += 1;
+  }
+  if (matched === 0) return detail;
+  await touch(db, id);
+  return syncPublishedRecipe(db, userId, id);
 }
 
 export async function createNutritionRecipe(db: Database, userId: string, title: string, id?: string) {

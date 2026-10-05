@@ -46,9 +46,11 @@ function ContextMenu(props: ContextMenuProps) {
 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.root}>
-        <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close menu" />
-        <View style={[styles.panel, tokens.shadow.card, { top: panelTop, right: panelRight }]}>
+      <Pressable style={styles.root} onPress={onClose} accessibilityLabel="Close menu">
+        <Pressable
+          style={[styles.panel, tokens.shadow.card, { top: panelTop, right: panelRight }]}
+          onPress={() => undefined}
+        >
           {items.map((item, index) => (
             <View key={item.label}>
               {index > 0 ? <View style={styles.divider} /> : null}
@@ -71,8 +73,8 @@ function ContextMenu(props: ContextMenuProps) {
               </Pressable>
             </View>
           ))}
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }
@@ -80,9 +82,6 @@ function ContextMenu(props: ContextMenuProps) {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
   },
   panel: {
     position: "absolute",

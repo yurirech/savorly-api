@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { diaryLinesFromCookbook } from "./diaryCopyLines";
+import { diaryLinesFromCookbook, matchCopyFoodId } from "./diaryCopyLines";
 
 const flour = { id: "flour", name: "Flour", source: "manual" };
 
@@ -44,5 +44,47 @@ describe("diaryLinesFromCookbook", () => {
       [],
     );
     expect(lines).toEqual([{ sourceLine: "Salt", foodId: null, grams: null }]);
+  });
+
+  it("keeps the cookbook text as the line label when a food matches", () => {
+    const lines = diaryLinesFromCookbook(
+      [{ name: "Semi-skimmed milk", quantity: 200, unit: "g" }],
+      [{ id: "milk", name: "Milk semi-skimmed", originalName: "Melk halfvolle", source: "nevo" }],
+    );
+    expect(lines).toEqual([{ sourceLine: "Semi-skimmed milk", foodId: "milk", grams: 200 }]);
+  });
+});
+
+describe("matchCopyFoodId", () => {
+  const milk = { id: "milk", name: "Milk semi-skimmed", originalName: "Melk halfvolle", source: "nevo" };
+  const wholeMilk = { id: "whole", name: "Milk whole", originalName: "Melk volle", source: "nevo" };
+  const oats = { id: "oats", name: "Oats", originalName: "Havermout", source: "nevo" };
+  const porridge = { id: "porridge", name: "Porridge", originalName: "Porridge", source: "recipe" };
+
+  it("matches the exact name, case and accents ignored", () => {
+    expect(matchCopyFoodId("oats", [oats, milk])).toBe("oats");
+  });
+
+  it("matches the original Dutch name", () => {
+    expect(matchCopyFoodId("Havermout", [oats, milk])).toBe("oats");
+  });
+
+  it("matches the same words in another order", () => {
+    expect(matchCopyFoodId("semi-skimmed milk", [milk, oats])).toBe("milk");
+  });
+
+  it("matches when exactly one food contains the words", () => {
+    expect(matchCopyFoodId("rolled oats", [oats, milk])).toBe("oats");
+    expect(matchCopyFoodId("milk", [milk, oats])).toBe("milk");
+  });
+
+  it("leaves ambiguous and empty names unmatched", () => {
+    expect(matchCopyFoodId("milk", [milk, wholeMilk])).toBeNull();
+    expect(matchCopyFoodId("   ", [milk])).toBeNull();
+    expect(matchCopyFoodId("butter", [milk, oats])).toBeNull();
+  });
+
+  it("never matches a published recipe food", () => {
+    expect(matchCopyFoodId("porridge", [porridge])).toBeNull();
   });
 });

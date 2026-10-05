@@ -24,6 +24,8 @@ import { SegmentedControl } from "../../../src/components/SegmentedControl";
 
 import { searchCachedRecipes } from "../../../src/db/cache";
 
+import { PANTRY_ENABLED } from "../../../src/config/features";
+
 import { usePantryMatchForRecipes } from "../../../src/hooks/useRecipePantry";
 
 import { tokens } from "../../../src/theme/tokens";
@@ -220,19 +222,23 @@ export default function RecipesScreen() {
 
         <View style={styles.headerActions}>
 
-          <Pressable
+          {PANTRY_ENABLED && (
 
-            onPress={() => router.push("/(app)/pantry" as Href)}
+            <Pressable
 
-            style={styles.add}
+              onPress={() => router.push("/(app)/pantry" as Href)}
 
-            accessibilityLabel="Pantry"
+              style={styles.add}
 
-          >
+              accessibilityLabel="Pantry"
 
-            <Jar size={22} color={tokens.accent} weight="regular" />
+            >
 
-          </Pressable>
+              <Jar size={22} color={tokens.accent} weight="regular" />
+
+            </Pressable>
+
+          )}
 
           {segment === "cookbooks" ? (
 

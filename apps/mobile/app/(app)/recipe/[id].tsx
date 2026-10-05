@@ -34,6 +34,7 @@ import { Screen } from "../../../src/components/Screen";
 import { SegmentedControl } from "../../../src/components/SegmentedControl";
 import { softWrapText } from "../../../src/utils/textWrap";
 import { getCachedRecipe, removeCachedRecipe, upsertCachedRecipe } from "../../../src/db/cache";
+import { PANTRY_ENABLED } from "../../../src/config/features";
 import { useRecipePantry } from "../../../src/hooks/useRecipePantry";
 import { setReviewDraft } from "../../../src/store/reviewDraft";
 import { tokens } from "../../../src/theme/tokens";
@@ -386,12 +387,14 @@ export default function RecipeDetailScreen() {
             <AppText variant="display" style={styles.heroTitle}>
               {recipe.title}
             </AppText>
-            <RecipePantryStatus
-              match={pantryMatch}
-              loading={pantryLoading}
-              hasStaples={activeStapleCount > 0}
-              onPressMissing={() => setMissingSheetOpen(true)}
-            />
+            {PANTRY_ENABLED && (
+              <RecipePantryStatus
+                match={pantryMatch}
+                loading={pantryLoading}
+                hasStaples={activeStapleCount > 0}
+                onPressMissing={() => setMissingSheetOpen(true)}
+              />
+            )}
           </View>
           <AppText variant="caption" color="muted">
             {recipe.source.author || recipe.source.sourceName || recipe.source.type}
@@ -455,9 +458,9 @@ export default function RecipeDetailScreen() {
               {copied ? <Check size={18} color={tokens.accent} /> : <Copy size={18} color={tokens.textMuted} />}
             </Pressable>
           </View>
-          <RecipePantryStatusHint loading={pantryLoading} hasStaples={activeStapleCount > 0} />
+          {PANTRY_ENABLED && <RecipePantryStatusHint loading={pantryLoading} hasStaples={activeStapleCount > 0} />}
         </View>
-        {pantryLoadError ? (
+        {PANTRY_ENABLED && pantryLoadError ? (
           <AppText variant="caption" color="danger">
             {pantryLoadError}
           </AppText>
@@ -602,26 +605,30 @@ export default function RecipeDetailScreen() {
         }}
         onSave={() => setPickerOpen(false)}
       />
-      <RecipePantryMissingSheet
-        visible={missingSheetOpen}
-        match={pantryMatch}
-        addingIndex={addingIndex}
-        suggesting={suggestingSwaps}
-        onClose={() => setMissingSheetOpen(false)}
-        onQuickAdd={(row) => void quickAddIngredient(row)}
-        onSuggestSwaps={() => void suggestPantrySwaps()}
-      />
-      <RecipePantrySubstitutionsSheet
-        visible={substitutionsSheetOpen}
-        result={substitutionResult}
-        error={substitutionError}
-        applying={false}
-        onClose={() => {
-          setSubstitutionsSheetOpen(false);
-          setSubstitutionError(null);
-        }}
-        onApply={applyPantrySwaps}
-      />
+      {PANTRY_ENABLED && (
+        <>
+          <RecipePantryMissingSheet
+            visible={missingSheetOpen}
+            match={pantryMatch}
+            addingIndex={addingIndex}
+            suggesting={suggestingSwaps}
+            onClose={() => setMissingSheetOpen(false)}
+            onQuickAdd={(row) => void quickAddIngredient(row)}
+            onSuggestSwaps={() => void suggestPantrySwaps()}
+          />
+          <RecipePantrySubstitutionsSheet
+            visible={substitutionsSheetOpen}
+            result={substitutionResult}
+            error={substitutionError}
+            applying={false}
+            onClose={() => {
+              setSubstitutionsSheetOpen(false);
+              setSubstitutionError(null);
+            }}
+            onApply={applyPantrySwaps}
+          />
+        </>
+      )}
     </>
   );
 }

@@ -1,6 +1,5 @@
 import type { ComponentProps } from "react";
-import { useEffect, useRef } from "react";
-import { Animated, Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { Tabs } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BookOpen, House, Notebook, Plus, Sparkle } from "phosphor-react-native";
@@ -16,8 +15,6 @@ const ICONS = {
   save: Plus,
   create: Sparkle,
 } as const;
-
-const LIFT = 18;
 
 function tabLabel(routeName: string): string {
   if (routeName === "index") return "Home";
@@ -37,17 +34,6 @@ interface TabButtonProps {
 
 function TabButton(props: TabButtonProps) {
   const { label, focused, icon: Icon, onPress } = props;
-  const lift = useRef(new Animated.Value(focused ? 1 : 0)).current;
-
-  useEffect(() => {
-    Animated.timing(lift, {
-      toValue: focused ? 1 : 0,
-      duration: 180,
-      useNativeDriver: false,
-    }).start();
-  }, [focused, lift]);
-
-  const marginTop = lift.interpolate({ inputRange: [0, 1], outputRange: [0, -LIFT] });
 
   return (
     <Pressable
@@ -57,19 +43,13 @@ function TabButton(props: TabButtonProps) {
       accessibilityState={{ selected: focused }}
       accessibilityLabel={label}
     >
-      <Animated.View
-        style={[
-          styles.iconWrap,
-          { marginTop },
-          focused && styles.raised,
-        ]}
-      >
+      <View style={[styles.iconWrap, focused && styles.raised]}>
         <Icon
           size={focused ? 26 : 24}
           color={focused ? tokens.bg : tokens.textMuted}
           weight={focused ? "fill" : "regular"}
         />
-      </Animated.View>
+      </View>
       <AppText variant="caption" color={focused ? "accent" : "muted"} style={styles.label}>
         {label}
       </AppText>

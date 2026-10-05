@@ -1213,6 +1213,17 @@ export async function copyDiaryEntries(entryIds: string[], mealId: string): Prom
   return day;
 }
 
+export function relocateDiaryEntries(
+  entryIds: string[],
+  mealIds: string[],
+  mode: "copy" | "move",
+): Promise<DiaryDayResponse> {
+  return persistDay("/nutrition/diary/relocate", {
+    method: "POST",
+    body: JSON.stringify({ entryIds, mealIds, mode }),
+  });
+}
+
 export async function fetchFrequentGrams(foodId: string) {
   try {
     return await request<{ grams: number[] }>(`/nutrition/foods/${foodId}/frequent-grams`);
@@ -1249,6 +1260,7 @@ export type NutritionRecipeDetail = {
     foodId: string | null;
     foodName?: string | null;
     grams: number | null;
+    per100g?: NutrientVector | null;
   }>;
   ingredientGramsTotal: number;
   recipeWeightG: number;

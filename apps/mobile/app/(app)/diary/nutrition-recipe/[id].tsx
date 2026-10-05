@@ -1,7 +1,7 @@
 import { type Href, router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
-import { foodMatchesQuery, type UserFood } from "@savorly/shared";
+import { foodEmoji, foodMatchesQuery, type UserFood } from "@savorly/shared";
 import {
   addNutritionRecipeItem,
   ApiRequestError,
@@ -18,7 +18,15 @@ import { AppText } from "../../../../src/components/AppText";
 import { Button } from "../../../../src/components/Button";
 import { Field } from "../../../../src/components/Field";
 import { Screen } from "../../../../src/components/Screen";
+import FoodEmojiBadge from "../../../../src/diary/FoodEmojiBadge";
 import { tokens } from "../../../../src/theme/tokens";
+
+function ingredientCaption(matched: boolean, grams: number | null, kcalPer100g: number | undefined): string {
+  if (!matched) return grams != null ? `${grams} g · Not matched yet` : "Not matched yet";
+  if (grams == null) return "Add grams";
+  if (kcalPer100g == null) return `${grams} g`;
+  return `${grams} g · ${Math.round((kcalPer100g * grams) / 100)} kcal`;
+}
 
 export default function NutritionRecipeScreen() {
   const params = useLocalSearchParams<{ id?: string; addFoodId?: string }>();
@@ -224,41 +232,71 @@ export default function NutritionRecipeScreen() {
             </View>
           ) : null}
           <View style={styles.list}>
-            {detail.items.map((item) => (
-              <View key={item.id} style={styles.row}>
-                <AppText variant="body" numberOfLines={1} color={item.foodId ? "text" : "muted"} style={styles.name}>
-                  {item.foodName || item.sourceLine}
-                </AppText>
-                <TextInput
-                  value={gramDrafts[item.id] ?? (item.grams != null ? String(item.grams) : "")}
-                  keyboardType="numeric"
-                  accessibilityLabel={`Grams for ${item.foodName || item.sourceLine}`}
-                  onChangeText={(value) => setGramDrafts((current) => ({ ...current, [item.id]: value }))}
-                  onEndEditing={(event) => commitGrams(item.id, item.grams, event.nativeEvent.text)}
-                  style={styles.grams}
-                />
-                <Pressable
-                  onPress={() => {
-                    setPickedFoodId(null);
-                    setFoodQuery("");
-                    setPickingItemId(item.id);
-                  }}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  style={styles.action}
-                >
-                  <AppText variant="caption">Find</AppText>
-                </Pressable>
-                <Pressable
-                  onPress={() => void run(() => deleteNutritionRecipeItem(detail.id, item.id))}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  style={styles.action}
-                >
-                  <AppText variant="caption" color="danger">Delete</AppText>
-                </Pressable>
-              </View>
-            ))}
+            {detail.items.map((item) => {
+              const label = item.foodName || item.sourceLine;
+              const libraryFood = item.foodId ? foods.find((food) => food.id === item.foodId) : undefined;
+              const kcalPer100g = item.per100g?.kcal ?? libraryFood?.per100g.kcal;
+              return (
+                <View key={item.id} style={styles.row}>
+                  <Pressable
+                    style={styles.rowMain}
+                    disabled={!item.foodId}
+                    onPress={() => router.push(`/(app)/diary/food/${item.foodId}` as Href)}
+                    accessibilityRole={item.foodId ? "button" : undefined}
+                    accessibilityLabel={item.foodId ? `Open ${label}` : label}
+                  >
+                    <FoodEmojiBadge
+                      emoji={libraryFood ? foodEmoji(libraryFood) : foodEmoji({ name: label })}
+                      muted={!item.foodId}
+                    />
+                    <View style={styles.rowCopy}>
+                      <AppText variant="body" numberOfLines={2} color={item.foodId ? "text" : "muted"}>
+                        {label}
+                      </AppText>
+                      <AppText variant="caption" color="muted">
+                        {ingredientCaption(item.foodId != null, item.grams, kcalPer100g)}
+                      </AppText>
+                    </View>
+                  </Pressable>
+                  <View style={styles.rowControls}>
+                    <TextInput
+                      value={gramDrafts[item.id] ?? (item.grams != null ? String(item.grams) : "")}
+                      keyboardType="numeric"
+                      placeholder="g"
+                      placeholderTextColor={tokens.textMuted}
+                      accessibilityLabel={`Grams for ${label}`}
+                      onChangeText={(value) => setGramDrafts((current) => ({ ...current, [item.id]: value }))}
+                      onEndEditing={(event) => commitGrams(item.id, item.grams, event.nativeEvent.text)}
+                      style={styles.grams}
+                    />
+                    <AppText variant="caption" color="muted">g</AppText>
+                    <View style={styles.rowSpacer} />
+                    <Pressable
+                      onPress={() => {
+                        setPickedFoodId(null);
+                        setFoodQuery("");
+                        setPickingItemId(item.id);
+                      }}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Find food for ${label}`}
+                      style={styles.action}
+                    >
+                      <AppText variant="caption">Find</AppText>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => void run(() => deleteNutritionRecipeItem(detail.id, item.id))}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Delete ${label}`}
+                      style={styles.action}
+                    >
+                      <AppText variant="caption" color="danger">Delete</AppText>
+                    </Pressable>
+                  </View>
+                </View>
+              );
+            })}
           </View>
           <Button size="compact"
             label="Add ingredient"
@@ -416,18 +454,31 @@ const styles = StyleSheet.create({
     borderTopColor: tokens.border,
   },
   row: {
-    flexDirection: "row",
-    alignItems: "center",
     gap: tokens.space.sm,
-    paddingVertical: tokens.space.sm,
+    paddingVertical: tokens.space.md,
     borderBottomWidth: 1,
     borderBottomColor: tokens.border,
   },
-  name: {
+  rowMain: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.space.md,
+  },
+  rowCopy: {
+    flex: 1,
+    gap: tokens.space.xs,
+  },
+  rowControls: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.space.sm,
+    paddingLeft: 40 + tokens.space.md,
+  },
+  rowSpacer: {
     flex: 1,
   },
   grams: {
-    width: 64,
+    width: 72,
     color: tokens.text,
     fontSize: tokens.type.body.fontSize,
     fontFamily: tokens.font.body,
