@@ -1,10 +1,12 @@
 import { type Href, router, useFocusEffect, useSegments } from "expo-router";
 import { CaretLeft, CaretRight, ChartPie, DotsThreeVertical } from "phosphor-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { PanResponder, Pressable, StyleSheet, View } from "react-native";
 import { hasExtendedNutrients, listPresentNutrients, type DiaryDayResponse, type NutritionSex } from "@savorly/shared";
 import type { DiaryEntry } from "@savorly/shared";
 import {
+  addDiaryEntry,
+  addQuickDiaryEntry,
   ApiRequestError,
   copyPreviousDiaryMeal,
   createDiaryMeal,
@@ -28,6 +30,8 @@ import ContextMenu, {
 } from "../../../src/components/ContextMenu";
 import NutrientDetailList from "../../../src/components/NutrientDetailList";
 import { Screen } from "../../../src/components/Screen";
+import Skeleton from "../../../src/components/Skeleton";
+import Toast from "../../../src/components/Toast";
 import DiaryConfirmSheet from "../../../src/diary/DiaryConfirmSheet";
 import DiaryDayTargetSheet from "../../../src/diary/DiaryDayTargetSheet";
 import RemainingBanner from "../../../src/diary/RemainingBanner";
@@ -59,8 +63,7 @@ export default function DiaryScreen() {
   const [nameSaving, setNameSaving] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [pendingEntry, setPendingEntry] = useState<DiaryEntry | null>(null);
-  const [entryDeleting, setEntryDeleting] = useState(false);
+  const [toast, setToast] = useState<{ message: string; undo?: () => Promise<void> } | null>(null);
   const [relocateRequest, setRelocateRequest] = useState<RelocateRequest | null>(null);
   const [relocating, setRelocating] = useState(false);
   const [relocateError, setRelocateError] = useState<string | null>(null);
@@ -99,6 +102,15 @@ export default function DiaryScreen() {
   const dayMicroGroups = useMemo(() => (day?.totals ? listPresentNutrients(day.totals) : []), [day?.totals]);
 
   const load = useCallback(async (nextDate: string, isActive: () => boolean = () => true) => {
+    const { readDay } = await import("../../../src/offline/store");
+    const cached = await readDay(nextDate);
+    if (!isActive()) return;
+    if (cached) {
+      setDay(cached);
+      setError(null);
+    } else {
+      setDay(null);
+    }
     try {
       const [live, profile] = await Promise.all([
         fetchDiaryDay(nextDate),
@@ -110,12 +122,29 @@ export default function DiaryScreen() {
         setProfileKcal(profile?.targets?.kcal ?? null);
         setError(null);
       }
-    } catch (err) {
-      if (isActive()) {
-        setError(err instanceof ApiRequestError ? err.message : "Could not load diary.");
+    } catch {
+      if (!isActive()) return;
+      if (cached) {
+        setError(null);
+        return;
       }
+      setError("No day saved on this phone yet.");
     }
   }, []);
+
+  const dateSwipe = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_event, gesture) =>
+        Math.abs(gesture.dx) > 24 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.4,
+      onPanResponderRelease: (_event, gesture) => {
+        if (gesture.dx <= -80) {
+          setDate((current) => shiftIsoDate(current, 1));
+        } else if (gesture.dx >= 80) {
+          setDate((current) => shiftIsoDate(current, -1));
+        }
+      },
+    }),
+  ).current;
 
   useEffect(() => {
     setSelectedIds(null);
@@ -227,19 +256,35 @@ export default function DiaryScreen() {
     }
   }
 
-  async function confirmDeleteEntry() {
-    if (!pendingEntry) {
-      return;
-    }
-    setEntryDeleting(true);
+  async function onSwipeDeleteEntry(entry: DiaryEntry) {
     setError(null);
     try {
-      setDay(await deleteDiaryEntry(pendingEntry.id));
-      setPendingEntry(null);
+      setDay(await deleteDiaryEntry(entry.id));
+      setToast({
+        message: `Removed ${entry.foodName}`,
+        undo: async () => {
+          if (entry.kind === "quick") {
+            setDay(
+              await addQuickDiaryEntry({
+                mealId: entry.mealId,
+                date: entry.date,
+                label: entry.label ?? entry.foodName,
+                kcal: entry.nutrients.kcal,
+                proteinG: entry.nutrients.proteinG,
+                carbsG: entry.nutrients.carbsG,
+                fatG: entry.nutrients.fatG,
+              }),
+            );
+            return;
+          }
+          if (!entry.foodId) {
+            throw new Error("Could not restore that food.");
+          }
+          setDay(await addDiaryEntry(entry.mealId, entry.foodId, entry.grams, entry.date));
+        },
+      });
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : "Could not delete that food.");
-    } finally {
-      setEntryDeleting(false);
     }
   }
 
@@ -348,6 +393,26 @@ export default function DiaryScreen() {
       safeBottom={!inTabs}
       onRefresh={() => void onRefresh()}
       refreshing={refreshing}
+      overlay={
+        <Toast
+          visible={toast != null}
+          message={toast?.message ?? ""}
+          offset={inTabs ? tokens.tabBarHeight : 0}
+          actionLabel={toast?.undo ? "Undo" : undefined}
+          onAction={
+            toast?.undo
+              ? () => {
+                  const undo = toast.undo;
+                  setToast(null);
+                  void undo().catch((err: unknown) => {
+                    setError(err instanceof ApiRequestError ? err.message : "Could not restore that food.");
+                  });
+                }
+              : undefined
+          }
+          onHide={() => setToast(null)}
+        />
+      }
       footer={
         selectedIds ? (
           <>
@@ -382,6 +447,7 @@ export default function DiaryScreen() {
         )
       }
     >
+      <View style={styles.swipePage} {...dateSwipe.panHandlers}>
       <View style={styles.dateRow}>
         <Pressable onPress={() => setDate((current) => shiftIsoDate(current, -1))} accessibilityLabel="Previous day">
           <CaretLeft size={22} color={tokens.text} />
@@ -408,7 +474,7 @@ export default function DiaryScreen() {
       />
 
       {error ? (
-        <AppText variant="body" color="danger">
+        <AppText variant="body" color={error === "No day saved on this phone yet." ? "muted" : "danger"}>
           {error}
         </AppText>
       ) : null}
@@ -432,6 +498,8 @@ export default function DiaryScreen() {
           <NutrientDetailList groups={dayMicroGroups} />
         </View>
       ) : null}
+
+      {!day && !error ? <DiaryDaySkeleton /> : null}
 
       {day && meals.length === 0 ? (
         <AppText variant="body" color="muted">
@@ -466,7 +534,7 @@ export default function DiaryScreen() {
                 params: { date, mealId: meal.id },
               } as Href)
             }
-            onDeleteEntry={(entry) => setPendingEntry(entry)}
+            onDeleteEntry={(entry) => void onSwipeDeleteEntry(entry)}
             onCopyEntry={(entryIds) => {
               setRelocateError(null);
               setCreatedRelocateMeal(null);
@@ -494,6 +562,7 @@ export default function DiaryScreen() {
       </View>
 
       {totals ? <DiaryDayNutrition date={date} totals={totals} targets={day?.targets ?? null} sex={sex} /> : null}
+      </View>
 
       <DiaryMealNameSheet
         visible={nameSheet != null}
@@ -548,15 +617,6 @@ export default function DiaryScreen() {
         onClose={() => setPendingDelete(null)}
         onConfirm={() => void confirmDeleteMeal()}
         loading={deleting}
-      />
-      <DiaryConfirmSheet
-        visible={pendingEntry != null}
-        title="Delete this food?"
-        message={pendingEntry ? `Remove ${pendingEntry.foodName} from this meal group.` : ""}
-        confirmLabel="Delete"
-        onClose={() => setPendingEntry(null)}
-        onConfirm={() => void confirmDeleteEntry()}
-        loading={entryDeleting}
       />
       <ContextMenu
         visible={menuOpen}
@@ -614,7 +674,38 @@ export default function DiaryScreen() {
   );
 }
 
+function DiaryDaySkeleton() {
+  return (
+    <View style={styles.skeleton}>
+      <View style={styles.macros}>
+        <Skeleton height={72} style={styles.macroSkeleton} />
+        <Skeleton height={72} style={styles.macroSkeleton} />
+        <Skeleton height={72} style={styles.macroSkeleton} />
+        <Skeleton height={72} style={styles.macroSkeleton} />
+      </View>
+      <Skeleton height={92} />
+      <Skeleton height={92} />
+      <Skeleton height={92} />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  swipePage: {
+    gap: tokens.space.md,
+  },
+  skeleton: {
+    gap: tokens.space.md,
+  },
+  macros: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: tokens.space.md,
+  },
+  macroSkeleton: {
+    flexGrow: 1,
+    minWidth: "40%",
+  },
   dateRow: {
     flexDirection: "row",
     alignItems: "center",

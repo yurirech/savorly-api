@@ -39,6 +39,24 @@ describe("food and diary mapping", () => {
     });
     expect(food.per100g.kcal).toBe(588);
     expect(food.servingWeightG).toBe(32);
+    expect(food.fatsecretId).toBeNull();
+
+    const fatsecret = foodFromRow({
+      id: "00000000-0000-0000-0000-000000000011",
+      userId: "00000000-0000-0000-0000-000000000002",
+      name: "Banana",
+      originalName: "Banana",
+      source: "fatsecret",
+      fdcId: 9040,
+      nevoCode: null,
+      nutritionRecipeId: null,
+      servingWeightG: null,
+      per100g,
+      createdAt: now,
+      updatedAt: now,
+    });
+    expect(fatsecret.fdcId).toBeNull();
+    expect(fatsecret.fatsecretId).toBe(9040);
 
     const nutrients = scaleNutrition(food.per100g, 12);
     const entry = diaryFromRow(

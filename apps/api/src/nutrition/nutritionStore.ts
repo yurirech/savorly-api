@@ -84,12 +84,14 @@ function profileFromRow(row: ProfileRow): NutritionProfile {
 }
 
 export function foodFromRow(row: FoodRow): UserFood {
+  const source = row.source as UserFoodSource;
   return {
     id: row.id,
     name: row.name,
     originalName: row.originalName,
-    source: row.source as UserFoodSource,
-    fdcId: row.fdcId,
+    source,
+    fdcId: source === "fatsecret" ? null : row.fdcId,
+    fatsecretId: source === "fatsecret" ? row.fdcId : null,
     nevoCode: row.nevoCode,
     nutritionRecipeId: row.nutritionRecipeId,
     servingWeightG: row.servingWeightG ?? null,
@@ -314,7 +316,7 @@ export async function importUsdaFood(
   const [existing] = await db
     .select()
     .from(userFoods)
-    .where(and(eq(userFoods.userId, userId), eq(userFoods.fdcId, input.fdcId)))
+    .where(and(eq(userFoods.userId, userId), eq(userFoods.source, "usda"), eq(userFoods.fdcId, input.fdcId)))
     .limit(1);
   if (existing) {
     return foodFromRow(existing);
@@ -328,6 +330,38 @@ export async function importUsdaFood(
       originalName: input.name.trim(),
       source: "usda",
       fdcId: input.fdcId,
+      nevoCode: null,
+      per100g: input.per100g,
+    })
+    .returning();
+  if (!row) {
+    throw new AppError("internal_error", "Could not import food.", 500);
+  }
+  return foodFromRow(row);
+}
+
+export async function importFatsecretFood(
+  db: Database,
+  userId: string,
+  input: { foodId: number; name: string; per100g: NutrientVector },
+): Promise<UserFood> {
+  const [existing] = await db
+    .select()
+    .from(userFoods)
+    .where(and(eq(userFoods.userId, userId), eq(userFoods.source, "fatsecret"), eq(userFoods.fdcId, input.foodId)))
+    .limit(1);
+  if (existing) {
+    return foodFromRow(existing);
+  }
+
+  const [row] = await db
+    .insert(userFoods)
+    .values({
+      userId,
+      name: input.name.trim(),
+      originalName: input.name.trim(),
+      source: "fatsecret",
+      fdcId: input.foodId,
       nevoCode: null,
       per100g: input.per100g,
     })

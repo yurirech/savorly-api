@@ -26,6 +26,9 @@ services:
       USE_MOCK_IMPORTS: ${USE_MOCK_IMPORTS:-true}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       APIFY_TOKEN: ${APIFY_TOKEN:-}
+      USDA_FDC_API_KEY: ${USDA_FDC_API_KEY:-}
+      FATSECRET_CLIENT_ID: ${FATSECRET_CLIENT_ID:-}
+      FATSECRET_CLIENT_SECRET: ${FATSECRET_CLIENT_SECRET:-}
     depends_on:
       postgres:
         condition: service_healthy

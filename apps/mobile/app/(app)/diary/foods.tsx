@@ -2,7 +2,15 @@ import { type Href, router, useFocusEffect, useLocalSearchParams } from "expo-ro
 import { Check, DotsThreeVertical, FunnelSimple } from "phosphor-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import { foodMatchesQuery, type NevoFoodHit, type UsdaFoodHit, type UserFood } from "@savorly/shared";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  foodMatchesQuery,
+  scaleNutrition,
+  type FatsecretFoodHit,
+  type NevoFoodHit,
+  type UsdaFoodHit,
+  type UserFood,
+} from "@savorly/shared";
 import {
   addDiaryEntry,
   ApiRequestError,
@@ -10,15 +18,18 @@ import {
   deleteNutritionFood,
   fetchDiaryDay,
   fetchFrequentGrams,
+  importFatsecretFood,
   importNevoFood,
   importUsdaFood,
   listNutritionFoods,
+  searchFatsecretFoods,
   searchNevoFoods,
   searchUsdaFoods,
   updateNutritionRecipeItem,
 } from "../../../src/api/client";
 import { AppText } from "../../../src/components/AppText";
 import { Button } from "../../../src/components/Button";
+import Skeleton from "../../../src/components/Skeleton";
 import ContextMenu, {
   measureContextMenuAnchor,
   type ContextMenuAnchor,
@@ -26,6 +37,7 @@ import ContextMenu, {
 import { Field } from "../../../src/components/Field";
 import { Screen } from "../../../src/components/Screen";
 import { setCachedFood } from "../../../src/diary/foodDetailCache";
+import { takeLastLoggedFood } from "../../../src/diary/lastLoggedFood";
 import DiaryMealNameSheet from "../../../src/diary/DiaryMealNameSheet";
 import DiaryMealPickerSheet from "../../../src/diary/DiaryMealPickerSheet";
 import { resolveMealForDate, writeLastDiaryMeal } from "../../../src/diary/lastDiaryMealStorage";
@@ -49,17 +61,19 @@ function firstParam(value: string | string[] | undefined): string | undefined {
 function sourceCaption(source: UserFood["source"]): string {
   if (source === "nevo") return "NEVO";
   if (source === "usda") return "USDA";
+  if (source === "fatsecret") return "FatSecret";
   if (source === "recipe") return "Recipe";
   return "Manual";
 }
 
-type CatalogFilter = "library" | "nevo" | "usda";
+type CatalogFilter = "library" | "nevo" | "usda" | "fatsecret";
 type LibraryTab = "all" | "mine" | "recipes";
 
 const CATALOG_FILTERS: { value: CatalogFilter; label: string }[] = [
   { value: "library", label: "Library" },
   { value: "nevo", label: "NEVO" },
   { value: "usda", label: "USDA" },
+  { value: "fatsecret", label: "FatSecret" },
 ];
 
 const LIBRARY_TABS: { value: LibraryTab; label: string }[] = [
@@ -82,7 +96,10 @@ export default function DiaryFoodsScreen() {
   const [filter, setFilter] = useState<CatalogFilter>("library");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(() => new Set());
+  const [loggedGrams, setLoggedGrams] = useState<Record<string, number>>({});
+  const [libraryReady, setLibraryReady] = useState(false);
   const [loggingId, setLoggingId] = useState<string | null>(null);
+  const insets = useSafeAreaInsets();
   const [meals, setMeals] = useState<DiaryMealGroup[]>([]);
   const [boundMeal, setBoundMeal] = useState<{ id: string; name: string } | null>(null);
   const [pendingFood, setPendingFood] = useState<UserFood | null>(null);
@@ -91,6 +108,7 @@ export default function DiaryFoodsScreen() {
   const [mealSaving, setMealSaving] = useState(false);
   const [nevoHits, setNevoHits] = useState<NevoFoodHit[]>([]);
   const [usdaHits, setUsdaHits] = useState<UsdaFoodHit[]>([]);
+  const [fatsecretHits, setFatsecretHits] = useState<FatsecretFoodHit[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [importingKey, setImportingKey] = useState<string | null>(null);
 
@@ -101,6 +119,8 @@ export default function DiaryFoodsScreen() {
       setError(null);
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : "Could not load foods.");
+    } finally {
+      setLibraryReady(true);
     }
   }, []);
 
@@ -124,6 +144,11 @@ export default function DiaryFoodsScreen() {
     useCallback(() => {
       void loadLibrary();
       void loadMealContext();
+      const logged = takeLastLoggedFood();
+      if (logged) {
+        setCheckedIds((current) => new Set(current).add(logged.foodId));
+        setLoggedGrams((current) => ({ ...current, [logged.foodId]: logged.grams }));
+      }
     }, [loadLibrary, loadMealContext]),
   );
 
@@ -146,21 +171,37 @@ export default function DiaryFoodsScreen() {
     if (!term) {
       setNevoHits([]);
       setUsdaHits([]);
+      setFatsecretHits([]);
       return;
     }
     const handle = setTimeout(() => {
       setCatalogLoading(true);
       setError(null);
-      const search = filter === "nevo" ? searchNevoFoods(term) : searchUsdaFoods(term);
+      setNevoHits([]);
+      setUsdaHits([]);
+      setFatsecretHits([]);
+      const search =
+        filter === "nevo"
+          ? searchNevoFoods(term)
+          : filter === "fatsecret"
+            ? searchFatsecretFoods(term)
+            : searchUsdaFoods(term);
       void search
         .then((live) => {
           if (filter === "nevo") {
             setNevoHits(live.foods as NevoFoodHit[]);
             setUsdaHits([]);
+            setFatsecretHits([]);
             if (live.foods.length === 0) setError('Geen match. Probeer “halfvolle melk” of “havermout”.');
+          } else if (filter === "fatsecret") {
+            setFatsecretHits(live.foods as FatsecretFoodHit[]);
+            setNevoHits([]);
+            setUsdaHits([]);
+            if (live.foods.length === 0) setError("No FatSecret match. Try “banana” or “cheddar cheese”.");
           } else {
             setUsdaHits(live.foods as UsdaFoodHit[]);
             setNevoHits([]);
+            setFatsecretHits([]);
             if (live.foods.length === 0) setError("No generics matched. Try “milk nonfat” or “peanut butter”.");
           }
         })
@@ -219,6 +260,7 @@ export default function DiaryFoodsScreen() {
   async function logFoodToMeal(food: UserFood, targetMealId: string) {
     const grams = await gramsForFood(food.id);
     await addDiaryEntry(targetMealId, food.id, grams, date);
+    setLoggedGrams((current) => ({ ...current, [food.id]: grams }));
     const meal = meals.find((row) => row.id === targetMealId);
     if (meal) {
       await writeLastDiaryMeal({ mealId: meal.id, mealName: meal.name, date });
@@ -231,6 +273,11 @@ export default function DiaryFoodsScreen() {
       setCheckedIds((current) => {
         const next = new Set(current);
         next.delete(food.id);
+        return next;
+      });
+      setLoggedGrams((current) => {
+        const next = { ...current };
+        delete next[food.id];
         return next;
       });
       return;
@@ -320,6 +367,45 @@ export default function DiaryFoodsScreen() {
     }
   }
 
+  async function onImportFatsecret(hit: FatsecretFoodHit) {
+    const existing = foods.find((food) => food.source === "fatsecret" && food.fatsecretId === hit.foodId);
+    if (existing) {
+      openFood(existing);
+      return;
+    }
+    setImportingKey(`fatsecret-${hit.foodId}`);
+    setError(null);
+    try {
+      const saved = await importFatsecretFood(hit.foodId, hit.name);
+      setFoods((current) => mergeFoods(current, [saved.food]));
+      if (nutritionRecipeId && recipeItemId) {
+        await updateNutritionRecipeItem(nutritionRecipeId, recipeItemId, { foodId: saved.food.id });
+        router.back();
+        return;
+      }
+      if (nutritionRecipeId) {
+        router.navigate({
+          pathname: "/(app)/diary/nutrition-recipe/[id]",
+          params: { id: nutritionRecipeId, addFoodId: saved.food.id },
+        });
+        return;
+      }
+      openFood(saved.food);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : "Could not import that food.");
+    } finally {
+      setImportingKey(null);
+    }
+  }
+
+  function foodCaption(food: UserFood): string {
+    const grams = loggedGrams[food.id];
+    if (grams != null) {
+      return `${grams} g · ${scaleNutrition(food.per100g, grams).kcal} kcal · ${sourceCaption(food.source)}`;
+    }
+    return `${food.per100g.kcal} kcal / 100 g · ${sourceCaption(food.source)}`;
+  }
+
   return (
     <Screen
       header={
@@ -337,7 +423,13 @@ export default function DiaryFoodsScreen() {
             <View style={styles.searchField}>
               <Field
                 label={
-                  filter === "nevo" ? "Search NEVO" : filter === "usda" ? "Search USDA" : "Search my foods"
+                  filter === "nevo"
+                    ? "Search NEVO"
+                    : filter === "usda"
+                      ? "Search USDA"
+                      : filter === "fatsecret"
+                        ? "Search FatSecret"
+                        : "Search my foods"
                 }
                 value={query}
                 onChangeText={setQuery}
@@ -404,23 +496,42 @@ export default function DiaryFoodsScreen() {
           ) : null}
         </>
       }
+      overlay={
+        mealIdParam ? (
+          <Pressable
+            onPress={() => router.back()}
+            style={({ pressed }) => [
+              styles.fab,
+              { bottom: tokens.space.lg + insets.bottom },
+              pressed && styles.fabPressed,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="LOG"
+          >
+            <AppText variant="body" style={styles.fabLabel}>
+              LOG
+            </AppText>
+          </Pressable>
+        ) : null
+      }
     >
       {error ? (
         <AppText variant="body" color="danger">
           {error}
         </AppText>
       ) : null}
-      {filter === "library" && visible.length === 0 ? (
+      {filter === "library" && !libraryReady ? <FoodsListSkeleton /> : null}
+      {filter === "library" && libraryReady && visible.length === 0 ? (
         <AppText variant="body" color="muted">
           Nothing saved yet. Import skim milk or add peanut butter by hand.
         </AppText>
       ) : null}
-      {filter === "library"
+      {filter === "library" && libraryReady
         ? visible.map((food) => (
             <FoodRow
               key={food.id}
               food={food}
-              caption={`${food.per100g.kcal} kcal / 100 g · ${sourceCaption(food.source)}`}
+              caption={foodCaption(food)}
               checked={checkedIds.has(food.id)}
               checking={loggingId === food.id}
               showCheck={!nutritionRecipeId}
@@ -440,11 +551,12 @@ export default function DiaryFoodsScreen() {
           Search US staples, then log from the profile.
         </AppText>
       ) : null}
-      {catalogLoading ? (
+      {filter === "fatsecret" && !query.trim() ? (
         <AppText variant="body" color="muted">
-          Searching…
+          Search US branded and generic foods, then log from the profile.
         </AppText>
       ) : null}
+      {catalogLoading ? <FoodsListSkeleton rows={4} /> : null}
       {filter === "nevo"
         ? nevoHits.map((hit) => (
             <CatalogRow
@@ -464,6 +576,17 @@ export default function DiaryFoodsScreen() {
               caption={hit.dataType}
               loading={importingKey === `usda-${hit.fdcId}`}
               onPress={() => void onImportUsda(hit)}
+            />
+          ))
+        : null}
+      {filter === "fatsecret"
+        ? fatsecretHits.map((hit) => (
+            <CatalogRow
+              key={hit.foodId}
+              title={hit.name}
+              caption={hit.brandName ? `${hit.brandName} · ${hit.foodType}` : hit.foodType}
+              loading={importingKey === `fatsecret-${hit.foodId}`}
+              onPress={() => void onImportFatsecret(hit)}
             />
           ))
         : null}
@@ -525,7 +648,25 @@ export default function DiaryFoodsScreen() {
         }}
         loading={mealSaving}
       />
+      {mealIdParam ? <View style={styles.fabClearance} /> : null}
     </Screen>
+  );
+}
+
+function FoodsListSkeleton(props: { rows?: number }) {
+  const { rows = 6 } = props;
+  return (
+    <View style={styles.skeleton}>
+      {Array.from({ length: rows }, (_, index) => (
+        <View key={index} style={styles.skeletonRow}>
+          <Skeleton width={22} height={22} radius={tokens.radius.sm} />
+          <View style={styles.skeletonCopy}>
+            <Skeleton width="55%" height={18} />
+            <Skeleton width="40%" height={12} />
+          </View>
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -716,5 +857,40 @@ const styles = StyleSheet.create({
     height: 44,
     alignItems: "center",
     justifyContent: "center",
+  },
+  skeleton: {
+    gap: tokens.space.sm,
+  },
+  skeletonRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.space.md,
+    paddingVertical: tokens.space.sm,
+  },
+  skeletonCopy: {
+    flex: 1,
+    gap: tokens.space.xs,
+  },
+  fab: {
+    position: "absolute",
+    right: tokens.space.lg,
+    minHeight: 56,
+    paddingHorizontal: tokens.space.lg,
+    borderRadius: tokens.radius.full,
+    backgroundColor: tokens.accent,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 20,
+    ...tokens.shadow.card,
+  },
+  fabPressed: {
+    transform: [{ scale: 0.98 }],
+  },
+  fabLabel: {
+    color: tokens.bg,
+    fontFamily: tokens.font.bodyBold,
+  },
+  fabClearance: {
+    height: 72,
   },
 });

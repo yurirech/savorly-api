@@ -18,13 +18,14 @@ import type {
   RecipeImportRequest,
   SavedRecipe,
   UsdaFoodHit,
+  FatsecretFoodHit,
   NevoFoodHit,
   UserFood,
   UserPantryItem,
 } from "@savorly/shared";
 import { coerceDiaryDayResponse } from "@savorly/shared";
 import { getToken, clearSession } from "../auth/session";
-import { todayIsoDate } from "../utils/isoDate";
+import { shiftIsoDate, todayIsoDate } from "../utils/isoDate";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -625,6 +626,12 @@ export function searchUsdaFoods(q: string) {
   return request<{ foods: UsdaFoodHit[] }>(`/nutrition/foods/usda?q=${encodeURIComponent(q)}`);
 }
 
+export function searchFatsecretFoods(q: string) {
+  return request<{ foods: FatsecretFoodHit[]; attribution: string }>(
+    `/nutrition/foods/fatsecret?q=${encodeURIComponent(q)}`,
+  );
+}
+
 export async function searchNevoFoods(q: string) {
   const { hasNevoSnapshot, NEVO_ATTRIBUTION, searchNevoLocal } = await import("../offline/store");
   if (await hasNevoSnapshot()) {
@@ -652,11 +659,24 @@ export async function ensureNevoSnapshot() {
   await saveNevoFoods(live.foods);
 }
 
-export function importUsdaFood(fdcId: number, name?: string) {
-  return request<{ food: UserFood }>("/nutrition/foods/import", {
+export async function importUsdaFood(fdcId: number, name?: string) {
+  const live = await request<{ food: UserFood }>("/nutrition/foods/import", {
     method: "POST",
     body: JSON.stringify({ fdcId, name }),
   });
+  const { saveFood } = await import("../offline/store");
+  await saveFood(live.food);
+  return live;
+}
+
+export async function importFatsecretFood(foodId: number, name?: string) {
+  const live = await request<{ food: UserFood; attribution: string }>("/nutrition/foods/import/fatsecret", {
+    method: "POST",
+    body: JSON.stringify({ foodId, name }),
+  });
+  const { saveFood } = await import("../offline/store");
+  await saveFood(live.food);
+  return live;
 }
 
 export function stapleFoodsStatus() {
@@ -764,6 +784,12 @@ export async function fetchDiaryDay(date: string) {
       return day;
     });
   }
+}
+
+export async function prefetchDiaryDays(center = todayIsoDate(), radius = 3): Promise<void> {
+  await Promise.allSettled(
+    Array.from({ length: radius * 2 + 1 }, (_, index) => fetchDiaryDay(shiftIsoDate(center, index - radius))),
+  );
 }
 
 export type DiaryWeekDay = {

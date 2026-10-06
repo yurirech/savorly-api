@@ -1,7 +1,7 @@
 import type { NutrientVector } from "./nutrients";
 import type { NutritionProfileInput, NutritionTargets } from "./targets";
 
-export type UserFoodSource = "usda" | "manual" | "nevo" | "recipe";
+export type UserFoodSource = "usda" | "manual" | "nevo" | "recipe" | "fatsecret";
 
 export type NutritionProfile = NutritionProfileInput & {
   updatedAt: string;
@@ -18,6 +18,7 @@ export type UserFood = {
   originalName: string;
   source: UserFoodSource;
   fdcId: number | null;
+  fatsecretId?: number | null;
   nevoCode: number | null;
   nutritionRecipeId: string | null;
   servingWeightG: number | null;
@@ -40,7 +41,15 @@ export type NevoFoodHit = {
   version: string;
 };
 
+export type FatsecretFoodHit = {
+  foodId: number;
+  name: string;
+  brandName?: string;
+  foodType: string;
+};
+
 export const NEVO_ATTRIBUTION = "NEVO-online version 2025/9.0, RIVM, Bilthoven";
+export const FATSECRET_ATTRIBUTION = "Powered by FatSecret";
 
 export type UserFoodDetail = UserFood & {
   attribution?: string;

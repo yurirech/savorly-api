@@ -3,6 +3,7 @@ import type { SavedRecipe } from "@savorly/shared";
 import { imageForCategory } from "../assets/categoryImages";
 import { tokens } from "../theme/tokens";
 import { AppText } from "./AppText";
+import RecipeSourceLabel from "./RecipeSourceLabel";
 import { RecipePantryBadge } from "./RecipePantryStatus";
 
 type RecipeCardProps = {
@@ -14,7 +15,6 @@ type RecipeCardProps = {
 
 export function RecipeCard(props: RecipeCardProps) {
   const { recipe, onPress, layout = "grid", pantryComplete = null } = props;
-  const source = recipe.source.author || recipe.source.sourceName || recipe.source.type;
   const pantryBadge =
     pantryComplete != null ? (
       <View style={styles.pantryBadge} pointerEvents="none">
@@ -34,9 +34,7 @@ export function RecipeCard(props: RecipeCardProps) {
           <AppText variant="title" numberOfLines={2}>
             {recipe.title}
           </AppText>
-          <AppText variant="caption" color="muted" numberOfLines={1}>
-            {source}
-          </AppText>
+          <RecipeSourceLabel recipe={recipe} numberOfLines={1} />
         </View>
       </Pressable>
     );
@@ -54,9 +52,7 @@ export function RecipeCard(props: RecipeCardProps) {
         <AppText variant="title" numberOfLines={2}>
           {recipe.title}
         </AppText>
-        <AppText variant="caption" color="muted" numberOfLines={1}>
-          {source}
-        </AppText>
+        <RecipeSourceLabel recipe={recipe} numberOfLines={1} />
       </View>
     </Pressable>
   );

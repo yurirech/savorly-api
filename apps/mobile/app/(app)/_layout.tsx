@@ -1,6 +1,6 @@
 import { Stack } from "expo-router";
 import { useEffect } from "react";
-import { ensureNevoSnapshot, fetchNutritionProfile, listCookbooks, listNutritionFoods, listRecipes } from "../../src/api/client";
+import { ensureNevoSnapshot, fetchNutritionProfile, listCookbooks, listNutritionFoods, listRecipes, prefetchDiaryDays } from "../../src/api/client";
 import { flushOutbox } from "../../src/offline/sync";
 import { tokens } from "../../src/theme/tokens";
 
@@ -14,6 +14,7 @@ export default function AppLayout() {
         listNutritionFoods(),
         fetchNutritionProfile(),
         ensureNevoSnapshot(),
+        prefetchDiaryDays(),
       ]);
     })();
   }, []);

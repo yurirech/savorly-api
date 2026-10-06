@@ -52,6 +52,7 @@ import {
   getFrequentGramsForFood,
   getNutritionProfile,
   importUsdaFood,
+  importFatsecretFood,
   importNevoFood,
   importStapleFoods,
   replaceStapleFoods,
@@ -80,7 +81,8 @@ import {
 import { listNevoSnapshot, requireNevoFood, searchNevoFoods, nevoFoodsReady } from "./nutrition/nevoStore";
 import { draftFoodFromText, draftRecipeFromText } from "./nutrition/pasteFill";
 import { fetchUsdaFood, searchUsdaFoods } from "./nutrition/usdaClient";
-import { NEVO_ATTRIBUTION } from "@savorly/shared";
+import { fetchFatsecretFood, searchFatsecretFoods } from "./nutrition/fatsecretClient";
+import { FATSECRET_ATTRIBUTION, NEVO_ATTRIBUTION } from "@savorly/shared";
 
 const importSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("instagram"), url: z.string().url() }),
@@ -285,6 +287,11 @@ const importFoodSchema = z.object({
 const importNevoFoodSchema = z.object({
   id: z.string().uuid().optional(),
   nevoCode: z.number().int().positive(),
+  name: z.string().trim().min(1).max(120).optional(),
+});
+
+const importFatsecretFoodSchema = z.object({
+  foodId: z.number().int().positive(),
   name: z.string().trim().min(1).max(120).optional(),
 });
 
@@ -611,6 +618,13 @@ export function createApp(db: Database, env: Env) {
     return c.json({ foods: hits });
   });
 
+  app.get("/nutrition/foods/fatsecret", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    void user;
+    const hits = await searchFatsecretFoods(c.req.query("q") ?? "", env);
+    return c.json({ foods: hits, attribution: FATSECRET_ATTRIBUTION });
+  });
+
   app.get("/nutrition/foods/nevo/snapshot", async (c) => {
     const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
     void user;
@@ -750,7 +764,12 @@ export function createApp(db: Database, env: Env) {
     const food = await getOwnedUserFood(db, user.id, c.req.param("id"));
     return c.json({
       food,
-      attribution: food.source === "nevo" ? NEVO_ATTRIBUTION : undefined,
+      attribution:
+        food.source === "nevo"
+          ? NEVO_ATTRIBUTION
+          : food.source === "fatsecret"
+            ? FATSECRET_ATTRIBUTION
+            : undefined,
     });
   });
 
@@ -789,6 +808,14 @@ export function createApp(db: Database, env: Env) {
   app.post("/nutrition/foods/staples/replace", async (c) => {
     const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
     return c.json(await replaceStapleFoods(db, user.id));
+  });
+
+  app.post("/nutrition/foods/import/fatsecret", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = importFatsecretFoodSchema.parse(await c.req.json());
+    const imported = await fetchFatsecretFood(body.foodId, env, body.name);
+    const food = await importFatsecretFood(db, user.id, imported);
+    return c.json({ food, attribution: FATSECRET_ATTRIBUTION }, 201);
   });
 
   app.post("/nutrition/foods/import/nevo", async (c) => {

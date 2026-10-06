@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   hasExtendedNutrients,
   listPresentNutrients,
+  FATSECRET_ATTRIBUTION,
   NEVO_ATTRIBUTION,
   resolveFoodGrams,
   scaleNutrition,
@@ -29,10 +30,12 @@ import { Button } from "../../../../src/components/Button";
 import { Field } from "../../../../src/components/Field";
 import NutrientDetailList from "../../../../src/components/NutrientDetailList";
 import { Screen } from "../../../../src/components/Screen";
+import Skeleton from "../../../../src/components/Skeleton";
 import DiaryMealNameSheet from "../../../../src/diary/DiaryMealNameSheet";
 import DiaryMealPickerSheet from "../../../../src/diary/DiaryMealPickerSheet";
 import FoodAmountFields, { parseFoodAmount } from "../../../../src/diary/FoodAmountFields";
 import { getCachedFood } from "../../../../src/diary/foodDetailCache";
+import { writeLastLoggedFood } from "../../../../src/diary/lastLoggedFood";
 import { resolveMealForDate, writeLastDiaryMeal } from "../../../../src/diary/lastDiaryMealStorage";
 import MealStaplesSection from "../../../../src/diary/MealStaplesSection";
 import { tokens } from "../../../../src/theme/tokens";
@@ -41,6 +44,7 @@ import { todayIsoDate } from "../../../../src/utils/isoDate";
 function sourceLabel(source: UserFood["source"]): string {
   if (source === "nevo") return "NEVO";
   if (source === "usda") return "USDA";
+  if (source === "fatsecret") return "FatSecret";
   if (source === "recipe") return "Recipe";
   return "Manual";
 }
@@ -157,7 +161,10 @@ export default function DiaryFoodDetailScreen() {
     }
   }
 
-  function leaveAfterLog() {
+  function leaveAfterLog(targetMealId: string, amount: number) {
+    if (food && returnTo === "foods") {
+      writeLastLoggedFood({ foodId: food.id, grams: amount, mealId: targetMealId });
+    }
     router.back();
   }
 
@@ -181,7 +188,7 @@ export default function DiaryFoodDetailScreen() {
         await addDiaryEntry(targetMealId, food.id, amount, date);
         await rememberMeal(targetMealId);
       }
-      leaveAfterLog();
+      leaveAfterLog(targetMealId, amount);
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : "Could not log food.");
     } finally {
@@ -350,21 +357,25 @@ export default function DiaryFoodDetailScreen() {
       }
     >
       {food && editingName ? (
-        <Field label="Name" value={nameDraft} onChangeText={setNameDraft} />
-      ) : (
-        <Pressable
-          onPress={() => food && setEditingName(true)}
-          accessibilityRole="button"
-          accessibilityLabel={food ? `Edit ${food.name}` : "Food"}
-        >
-          <AppText variant="display">{food?.name ?? "Food"}</AppText>
-        </Pressable>
-      )}
-      {food && nameDirty ? (
-        <View style={styles.nameActions}>
-          <Button size="compact" label="Save" variant="secondary" loading={renaming} onPress={() => void onSaveName()} />
+        <View style={styles.titleRow}>
+          <View style={styles.titleField}>
+            <Field label="Name" value={nameDraft} onChangeText={setNameDraft} />
+          </View>
+          {nameDirty ? (
+            <Button size="compact" label="Save" variant="secondary" loading={renaming} onPress={() => void onSaveName()} />
+          ) : null}
         </View>
       ) : null}
+      {food && !editingName ? (
+        <Pressable
+          onPress={() => setEditingName(true)}
+          accessibilityRole="button"
+          accessibilityLabel={`Edit ${food.name}`}
+        >
+          <AppText variant="display">{food.name}</AppText>
+        </Pressable>
+      ) : null}
+      {!food && !error ? <FoodProfileSkeleton /> : null}
 
       {food ? <MealStaplesSection foodId={food.id} /> : null}
 
@@ -374,6 +385,7 @@ export default function DiaryFoodDetailScreen() {
             {sourceLabel(food.source)}
             {food.nevoCode != null ? ` · NEVO ${food.nevoCode}` : ""}
             {food.fdcId != null ? ` · FDC ${food.fdcId}` : ""}
+            {food.fatsecretId != null ? ` · FatSecret ${food.fatsecretId}` : ""}
             {returnTo === "diary" || entryId ? ` · ${date}` : ""}
           </AppText>
 
@@ -458,9 +470,9 @@ export default function DiaryFoodDetailScreen() {
           {error}
         </AppText>
       ) : null}
-      {(attribution || food?.source === "nevo") && (
+      {(attribution || food?.source === "nevo" || food?.source === "fatsecret") && (
         <AppText variant="caption" color="muted">
-          {attribution ?? NEVO_ATTRIBUTION}
+          {attribution ?? (food?.source === "fatsecret" ? FATSECRET_ATTRIBUTION : NEVO_ATTRIBUTION)}
         </AppText>
       )}
       {food ? <View style={styles.fabClearance} /> : null}
@@ -472,6 +484,21 @@ type MacroCellProps = {
   label: string;
   value: string | number;
 };
+
+function FoodProfileSkeleton() {
+  return (
+    <View style={styles.skeleton}>
+      <Skeleton width="70%" height={34} />
+      <Skeleton width="40%" height={14} />
+      <View style={styles.macros}>
+        <Skeleton height={72} style={styles.macro} />
+        <Skeleton height={72} style={styles.macro} />
+        <Skeleton height={72} style={styles.macro} />
+        <Skeleton height={72} style={styles.macro} />
+      </View>
+    </View>
+  );
+}
 
 function MacroCell(props: MacroCellProps) {
   const { label, value } = props;
@@ -486,11 +513,17 @@ function MacroCell(props: MacroCellProps) {
 }
 
 const styles = StyleSheet.create({
-  nameActions: {
+  titleRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
+    alignItems: "flex-end",
     gap: tokens.space.sm,
+  },
+  titleField: {
+    flex: 1,
+    minWidth: 0,
+  },
+  skeleton: {
+    gap: tokens.space.md,
   },
   actions: {
     flexDirection: "row",

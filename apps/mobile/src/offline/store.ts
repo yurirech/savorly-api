@@ -447,6 +447,8 @@ export function localFood(input: {
   name: string;
   per100g: NutrientVector;
   source: UserFood["source"];
+  fdcId?: number | null;
+  fatsecretId?: number | null;
   nevoCode?: number | null;
   servingWeightG?: number | null;
 }): UserFood {
@@ -456,7 +458,8 @@ export function localFood(input: {
     name: input.name,
     originalName: input.name,
     source: input.source,
-    fdcId: null,
+    fdcId: input.fdcId ?? null,
+    fatsecretId: input.fatsecretId ?? null,
     nevoCode: input.nevoCode ?? null,
     nutritionRecipeId: null,
     servingWeightG: input.servingWeightG ?? null,

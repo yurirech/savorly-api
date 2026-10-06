@@ -30,7 +30,9 @@ import { RecipePantryMissingSheet } from "../../../src/components/RecipePantryMi
 import { RecipePantryStatus, RecipePantryStatusHint } from "../../../src/components/RecipePantryStatus";
 import { RecipePantrySubstitutionsSheet } from "../../../src/components/RecipePantrySubstitutionsSheet";
 import { RecipeNutritionSummary } from "../../../src/components/RecipeNutritionSummary";
+import RecipeSourceLabel from "../../../src/components/RecipeSourceLabel";
 import { Screen } from "../../../src/components/Screen";
+import Skeleton from "../../../src/components/Skeleton";
 import { SegmentedControl } from "../../../src/components/SegmentedControl";
 import { softWrapText } from "../../../src/utils/textWrap";
 import { getCachedRecipe, removeCachedRecipe, upsertCachedRecipe } from "../../../src/db/cache";
@@ -218,10 +220,18 @@ export default function RecipeDetailScreen() {
 
   if (!recipe) {
     return (
-      <Screen>
-        <AppText variant="body" color="muted">
-          Loading recipe…
-        </AppText>
+      <Screen padded={false} edges={[]} safeBottom={false}>
+        <View style={styles.heroWrap}>
+          <Skeleton height={280} radius={0} />
+        </View>
+        <View style={[styles.body, { paddingBottom: tokens.space.lg + insets.bottom }]}>
+          <Skeleton width="40%" height={14} />
+          <Skeleton width="80%" height={28} />
+          <Skeleton width="50%" height={14} />
+          <Skeleton height={72} />
+          <Skeleton height={72} />
+          <Skeleton height={72} />
+        </View>
       </Screen>
     );
   }
@@ -396,9 +406,7 @@ export default function RecipeDetailScreen() {
               />
             )}
           </View>
-          <AppText variant="caption" color="muted">
-            {recipe.source.author || recipe.source.sourceName || recipe.source.type}
-          </AppText>
+          <RecipeSourceLabel recipe={recipe} />
         </View>
       </View>
       <View style={[styles.body, { paddingBottom: tokens.space.lg + insets.bottom }]}>

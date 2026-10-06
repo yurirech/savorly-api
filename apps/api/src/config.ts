@@ -11,6 +11,8 @@ export type Env = {
   useMockImports: boolean;
   adminPassword?: string;
   usdaFdcApiKey?: string;
+  fatsecretClientId?: string;
+  fatsecretClientSecret?: string;
 };
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
@@ -36,6 +38,8 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     useMockImports: source.USE_MOCK_IMPORTS === "true",
     adminPassword: source.ADMIN_PASSWORD || undefined,
     usdaFdcApiKey: source.USDA_FDC_API_KEY || undefined,
+    fatsecretClientId: source.FATSECRET_CLIENT_ID || undefined,
+    fatsecretClientSecret: source.FATSECRET_CLIENT_SECRET || undefined,
   };
 }
 
