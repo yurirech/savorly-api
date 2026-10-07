@@ -1525,3 +1525,30 @@ export async function publishNutritionRecipe(id: string) {
     });
   }
 }
+
+export async function deleteNutritionRecipe(id: string) {
+  async function forget() {
+    const { listFoodsLocal, readNutritionRecipe, removeFood, removeNutritionRecipe } = await import("../offline/store");
+    const detail = await readNutritionRecipe<{ libraryFood?: { id: string } | null }>(id);
+    if (detail?.libraryFood?.id) {
+      await removeFood(detail.libraryFood.id);
+    } else {
+      for (const food of await listFoodsLocal()) {
+        if (food.nutritionRecipeId === id) await removeFood(food.id);
+      }
+    }
+    await removeNutritionRecipe(id);
+  }
+
+  try {
+    await request<void>(`/nutrition/recipes/${id}`, { method: "DELETE" });
+    await forget();
+  } catch (err) {
+    await offline(err, async () => {
+      const { enqueue, flushOutbox } = await import("../offline/sync");
+      await forget();
+      await enqueue("DELETE", `/nutrition/recipes/${id}`, null);
+      void flushOutbox();
+    });
+  }
+}

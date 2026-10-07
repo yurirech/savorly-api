@@ -234,10 +234,6 @@ export default function DiaryFoodsScreen() {
       });
       return;
     }
-    if (food.source === "recipe" && food.nutritionRecipeId) {
-      router.push(`/(app)/diary/nutrition-recipe/${food.nutritionRecipeId}` as Href);
-      return;
-    }
     router.push({
       pathname: `/(app)/diary/food/${food.id}`,
       params: {

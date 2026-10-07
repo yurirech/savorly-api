@@ -1,5 +1,6 @@
 import { type Href, router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { DotsThreeVertical } from "phosphor-react-native";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -19,6 +20,7 @@ import {
   createDiaryMeal,
   fetchDiaryDay,
   fetchFrequentGrams,
+  deleteNutritionRecipe,
   fetchNutritionFood,
   listNutritionFoods,
   patchNutritionFood,
@@ -27,6 +29,10 @@ import {
 } from "../../../../src/api/client";
 import { AppText } from "../../../../src/components/AppText";
 import { Button } from "../../../../src/components/Button";
+import ContextMenu, {
+  measureContextMenuAnchor,
+  type ContextMenuAnchor,
+} from "../../../../src/components/ContextMenu";
 import { Field } from "../../../../src/components/Field";
 import NutrientDetailList from "../../../../src/components/NutrientDetailList";
 import { Screen } from "../../../../src/components/Screen";
@@ -39,6 +45,7 @@ import { writeLastLoggedFood } from "../../../../src/diary/lastLoggedFood";
 import { resolveMealForDate, writeLastDiaryMeal } from "../../../../src/diary/lastDiaryMealStorage";
 import MealStaplesSection from "../../../../src/diary/MealStaplesSection";
 import { tokens } from "../../../../src/theme/tokens";
+import { confirmDestructive } from "../../../../src/utils/confirmDestructive";
 import { todayIsoDate } from "../../../../src/utils/isoDate";
 
 function sourceLabel(source: UserFood["source"]): string {
@@ -90,6 +97,10 @@ export default function DiaryFoodDetailScreen() {
   const [addingServing, setAddingServing] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [savingServing, setSavingServing] = useState(false);
+  const [deletingRecipe, setDeletingRecipe] = useState(false);
+  const [recipeMenuOpen, setRecipeMenuOpen] = useState(false);
+  const [recipeMenuAnchor, setRecipeMenuAnchor] = useState<ContextMenuAnchor | null>(null);
+  const recipeMenuRef = useRef<View>(null);
   const insets = useSafeAreaInsets();
 
   const parsedAmount = parseFoodAmount(grams);
@@ -307,6 +318,36 @@ export default function DiaryFoodDetailScreen() {
     }
   }
 
+  function openRecipeMenu() {
+    measureContextMenuAnchor(recipeMenuRef, (anchor) => {
+      setRecipeMenuAnchor(anchor);
+      setRecipeMenuOpen(true);
+    });
+  }
+
+  function confirmDeleteRecipe() {
+    if (!food?.nutritionRecipeId || deletingRecipe) return;
+    const recipeId = food.nutritionRecipeId;
+    confirmDestructive(
+      "Delete recipe?",
+      "This removes the recipe and its My foods copy.",
+      "Delete",
+      () => {
+        void (async () => {
+          setDeletingRecipe(true);
+          setError(null);
+          try {
+            await deleteNutritionRecipe(recipeId);
+            router.back();
+          } catch (err) {
+            setError(err instanceof ApiRequestError ? err.message : "Could not delete this recipe.");
+            setDeletingRecipe(false);
+          }
+        })();
+      },
+    );
+  }
+
   async function onSaveServing() {
     if (!food) return;
     const trimmed = servingDraft.trim();
@@ -367,17 +408,29 @@ export default function DiaryFoodDetailScreen() {
         </View>
       ) : null}
       {food && !editingName ? (
-        <Pressable
-          onPress={() => setEditingName(true)}
-          accessibilityRole="button"
-          accessibilityLabel={`Edit ${food.name}`}
-        >
-          <AppText variant="display">{food.name}</AppText>
-        </Pressable>
+        <View style={styles.nameRow}>
+          <Pressable
+            style={styles.titlePress}
+            onPress={() => setEditingName(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`Edit ${food.name}`}
+          >
+            <AppText variant="display">{food.name}</AppText>
+          </Pressable>
+          {food.nutritionRecipeId ? (
+            <Pressable
+              ref={recipeMenuRef}
+              onPress={openRecipeMenu}
+              style={styles.menuButton}
+              accessibilityRole="button"
+              accessibilityLabel="Recipe menu"
+            >
+              <DotsThreeVertical size={22} color={tokens.text} weight="bold" />
+            </Pressable>
+          ) : null}
+        </View>
       ) : null}
       {!food && !error ? <FoodProfileSkeleton /> : null}
-
-      {food ? <MealStaplesSection foodId={food.id} /> : null}
 
       {food ? (
         <>
@@ -400,16 +453,6 @@ export default function DiaryFoodDetailScreen() {
           {defaultMeal && !entryId && !mealIdParam ? (
             <View style={styles.actions}>
               <Button size="compact" label="Choose meal…" variant="ghost" onPress={() => void openLogFlow()} />
-            </View>
-          ) : null}
-          {food.nutritionRecipeId ? (
-            <View style={styles.actions}>
-              <Button
-                size="compact"
-                label="Edit recipe"
-                variant="secondary"
-                onPress={() => router.push(`/(app)/diary/nutrition-recipe/${food.nutritionRecipeId}` as Href)}
-              />
             </View>
           ) : null}
 
@@ -435,6 +478,7 @@ export default function DiaryFoodDetailScreen() {
               <Button size="compact" label="Save serving" variant="secondary" loading={savingServing} onPress={() => void onSaveServing()} />
             </>
           ) : null}
+          <MealStaplesSection foodId={food.id} />
           {nutrientGroups.length > 0 ? <NutrientDetailList groups={nutrientGroups} /> : null}
           {food.source === "nevo" && !hasExtendedNutrients(food.per100g) ? (
             <AppText variant="caption" color="muted">
@@ -464,6 +508,29 @@ export default function DiaryFoodDetailScreen() {
         onClose={() => setCreateMealVisible(false)}
         onConfirm={onCreateMealAndLog}
         loading={mealSaving}
+      />
+      <ContextMenu
+        visible={recipeMenuOpen}
+        anchor={recipeMenuAnchor}
+        onClose={() => {
+          setRecipeMenuOpen(false);
+          setRecipeMenuAnchor(null);
+        }}
+        items={[
+          {
+            label: "Edit recipe",
+            onPress: () => {
+              if (!food?.nutritionRecipeId) return;
+              router.push(`/(app)/diary/nutrition-recipe/${food.nutritionRecipeId}` as Href);
+            },
+          },
+          {
+            label: "Delete recipe",
+            destructive: true,
+            disabled: deletingRecipe,
+            onPress: confirmDeleteRecipe,
+          },
+        ]}
       />
       {error ? (
         <AppText variant="body" color="danger">
@@ -517,6 +584,21 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     gap: tokens.space.sm,
+  },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.space.sm,
+  },
+  titlePress: {
+    flex: 1,
+    minWidth: 0,
+  },
+  menuButton: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
   titleField: {
     flex: 1,

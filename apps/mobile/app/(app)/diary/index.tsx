@@ -34,7 +34,6 @@ import Skeleton from "../../../src/components/Skeleton";
 import Toast from "../../../src/components/Toast";
 import DiaryConfirmSheet from "../../../src/diary/DiaryConfirmSheet";
 import DiaryDayTargetSheet from "../../../src/diary/DiaryDayTargetSheet";
-import RemainingBanner from "../../../src/diary/RemainingBanner";
 import DiaryDayNutrition from "../../../src/diary/DiaryDayNutrition";
 import DiaryMealNameSheet from "../../../src/diary/DiaryMealNameSheet";
 import DiaryMoveSheet from "../../../src/diary/DiaryMoveSheet";
@@ -135,6 +134,8 @@ export default function DiaryScreen() {
   const dateSwipe = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_event, gesture) =>
+        Math.abs(gesture.dx) > 24 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.4,
+      onMoveShouldSetPanResponderCapture: (_event, gesture) =>
         Math.abs(gesture.dx) > 24 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.4,
       onPanResponderRelease: (_event, gesture) => {
         if (gesture.dx <= -80) {
@@ -403,6 +404,7 @@ export default function DiaryScreen() {
             toast?.undo
               ? () => {
                   const undo = toast.undo;
+                  if (!undo) return;
                   setToast(null);
                   void undo().catch((err: unknown) => {
                     setError(err instanceof ApiRequestError ? err.message : "Could not restore that food.");
@@ -412,6 +414,26 @@ export default function DiaryScreen() {
           }
           onHide={() => setToast(null)}
         />
+      }
+      header={
+        <View style={styles.dateRow} {...dateSwipe.panHandlers}>
+          <Pressable onPress={() => setDate((current) => shiftIsoDate(current, -1))} accessibilityLabel="Previous day">
+            <CaretLeft size={22} color={tokens.text} />
+          </Pressable>
+          <AppText variant="title">{date}</AppText>
+          <Pressable onPress={() => setDate((current) => shiftIsoDate(current, 1))} accessibilityLabel="Next day">
+            <CaretRight size={22} color={tokens.text} />
+          </Pressable>
+          <Pressable
+            ref={menuButtonRef}
+            onPress={openDiaryMenu}
+            style={styles.menuButton}
+            accessibilityRole="button"
+            accessibilityLabel="Diary menu"
+          >
+            <DotsThreeVertical size={22} color={tokens.text} weight="bold" />
+          </Pressable>
+        </View>
       }
       footer={
         selectedIds ? (
@@ -447,31 +469,16 @@ export default function DiaryScreen() {
         )
       }
     >
-      <View style={styles.swipePage} {...dateSwipe.panHandlers}>
-      <View style={styles.dateRow}>
-        <Pressable onPress={() => setDate((current) => shiftIsoDate(current, -1))} accessibilityLabel="Previous day">
-          <CaretLeft size={22} color={tokens.text} />
-        </Pressable>
-        <AppText variant="title">{date}</AppText>
-        <Pressable onPress={() => setDate((current) => shiftIsoDate(current, 1))} accessibilityLabel="Next day">
-          <CaretRight size={22} color={tokens.text} />
-        </Pressable>
-        <Pressable
-          ref={menuButtonRef}
-          onPress={openDiaryMenu}
-          style={styles.menuButton}
-          accessibilityRole="button"
-          accessibilityLabel="Diary menu"
-        >
-          <DotsThreeVertical size={22} color={tokens.text} weight="bold" />
-        </Pressable>
-      </View>
-
-      <RemainingBanner
-        remaining={remaining ?? null}
-        totalsKcal={totals?.kcal ?? null}
-        targetKcal={day?.targets?.kcal ?? null}
-      />
+      {totals ? (
+        <DiaryDayNutrition
+          date={date}
+          totals={totals}
+          targets={day?.targets ?? null}
+          sex={sex}
+          remaining={remaining ?? null}
+          targetKcal={day?.targets?.kcal ?? null}
+        />
+      ) : null}
 
       {error ? (
         <AppText variant="body" color={error === "No day saved on this phone yet." ? "muted" : "danger"}>
@@ -559,9 +566,6 @@ export default function DiaryScreen() {
             onToggleSelect={toggleSelect}
           />
         ))}
-      </View>
-
-      {totals ? <DiaryDayNutrition date={date} totals={totals} targets={day?.targets ?? null} sex={sex} /> : null}
       </View>
 
       <DiaryMealNameSheet
@@ -691,9 +695,6 @@ function DiaryDaySkeleton() {
 }
 
 const styles = StyleSheet.create({
-  swipePage: {
-    gap: tokens.space.md,
-  },
   skeleton: {
     gap: tokens.space.md,
   },

@@ -1,10 +1,12 @@
 import { type Href, router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { DotsThreeVertical } from "phosphor-react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import { foodEmoji, foodMatchesQuery, type UserFood } from "@savorly/shared";
 import {
   addNutritionRecipeItem,
   ApiRequestError,
+  deleteNutritionRecipe,
   deleteNutritionRecipeItem,
   fetchNutritionRecipe,
   listNutritionFoods,
@@ -16,10 +18,15 @@ import {
 } from "../../../../src/api/client";
 import { AppText } from "../../../../src/components/AppText";
 import { Button } from "../../../../src/components/Button";
+import ContextMenu, {
+  measureContextMenuAnchor,
+  type ContextMenuAnchor,
+} from "../../../../src/components/ContextMenu";
 import { Field } from "../../../../src/components/Field";
 import { Screen } from "../../../../src/components/Screen";
 import FoodEmojiBadge from "../../../../src/diary/FoodEmojiBadge";
 import { tokens } from "../../../../src/theme/tokens";
+import { confirmDestructive } from "../../../../src/utils/confirmDestructive";
 
 function ingredientCaption(matched: boolean, grams: number | null, kcalPer100g: number | undefined): string {
   if (!matched) return grams != null ? `${grams} g · Not matched yet` : "Not matched yet";
@@ -46,6 +53,10 @@ export default function NutritionRecipeScreen() {
   const [linking, setLinking] = useState(false);
   const [cookbookRecipes, setCookbookRecipes] = useState<Array<{ id: string; title: string }>>([]);
   const [cookbookLoaded, setCookbookLoaded] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState<ContextMenuAnchor | null>(null);
+  const menuButtonRef = useRef<View>(null);
 
   const reload = useCallback(async () => {
     if (!id) return;
@@ -98,9 +109,63 @@ export default function NutritionRecipeScreen() {
     router.setParams({ addFoodId: "" });
   }, [addFoodParam]);
 
+  function openMenu() {
+    measureContextMenuAnchor(menuButtonRef, (anchor) => {
+      setMenuAnchor(anchor);
+      setMenuOpen(true);
+    });
+  }
+
+  function confirmDelete() {
+    if (!detail || deleting) return;
+    const recipeId = detail.id;
+    confirmDestructive(
+      "Delete recipe?",
+      "This removes the recipe and its My foods copy.",
+      "Delete",
+      () => {
+        void (async () => {
+          setDeleting(true);
+          setError(null);
+          try {
+            await deleteNutritionRecipe(recipeId);
+            router.back();
+          } catch (err) {
+            setError(err instanceof ApiRequestError ? err.message : "Could not delete this recipe.");
+            setDeleting(false);
+          }
+        })();
+      },
+    );
+  }
+
   return (
     <Screen>
-      <AppText variant="display">{detail?.title ?? "Recipe copy"}</AppText>
+      <View style={styles.titleRow}>
+        <AppText variant="display" style={styles.title}>
+          {detail?.title ?? "Recipe copy"}
+        </AppText>
+        {detail ? (
+          <Pressable
+            ref={menuButtonRef}
+            onPress={openMenu}
+            style={styles.menuButton}
+            accessibilityRole="button"
+            accessibilityLabel="Recipe menu"
+          >
+            <DotsThreeVertical size={22} color={tokens.text} weight="bold" />
+          </Pressable>
+        ) : null}
+      </View>
+      <ContextMenu
+        visible={menuOpen}
+        anchor={menuAnchor}
+        onClose={() => {
+          setMenuOpen(false);
+          setMenuAnchor(null);
+        }}
+        items={[{ label: "Delete recipe", destructive: true, disabled: deleting, onPress: confirmDelete }]}
+      />
       <AppText variant="body" color="muted">
         Match every ingredient to a food in My foods, or delete the line. You can add extras.
       </AppText>
@@ -429,6 +494,20 @@ export default function NutritionRecipeScreen() {
 }
 
 const styles = StyleSheet.create({
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.space.sm,
+  },
+  title: {
+    flex: 1,
+  },
+  menuButton: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   meta: {
     flexDirection: "row",
     gap: tokens.space.sm,

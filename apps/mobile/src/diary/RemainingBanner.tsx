@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet } from "react-native";
 import type { DiaryDayResponse } from "@savorly/shared";
 import { AppText } from "../components/AppText";
 import { tokens } from "../theme/tokens";

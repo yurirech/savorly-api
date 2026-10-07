@@ -34,6 +34,7 @@ export default function DiaryFoodFormScreen() {
   const [protein, setProtein] = useState("");
   const [carbs, setCarbs] = useState("");
   const [fat, setFat] = useState("");
+  const [saturatedFat, setSaturatedFat] = useState("");
   const [fiber, setFiber] = useState("");
   const [micros, setMicros] = useState<Partial<Record<FoodLabelNutrientKey, string>>>({});
   const [servingWeight, setServingWeight] = useState("");
@@ -57,6 +58,7 @@ export default function DiaryFoodFormScreen() {
       setProtein(amountText(fill.per100g.proteinG));
       setCarbs(amountText(fill.per100g.carbsG));
       setFat(amountText(fill.per100g.fatG));
+      setSaturatedFat(amountText(fill.per100g.saturatedFatG));
       setFiber(amountText(fill.per100g.fiberG));
       setMicros((current) => {
         const next = { ...current };
@@ -88,6 +90,7 @@ export default function DiaryFoodFormScreen() {
       return;
     }
     const fiberG = optionalAmount(fiber);
+    const saturatedFatG = optionalAmount(saturatedFat);
     const servingWeightG = optionalAmount(servingWeight);
     if (servingWeightG === "invalid") {
       setError("Enter grams per serving as a number, or leave it blank.");
@@ -97,7 +100,12 @@ export default function DiaryFoodFormScreen() {
       setError("Enter fiber as a number, or leave it blank.");
       return;
     }
+    if (saturatedFatG === "invalid") {
+      setError("Enter saturated fat as a number, or leave it blank.");
+      return;
+    }
     if (fiberG != null) per100g.fiberG = fiberG;
+    if (saturatedFatG != null) per100g.saturatedFatG = saturatedFatG;
     for (const group of MICRO_GROUPS) {
       for (const field of group.fields) {
         const amount = optionalAmount(micros[field.key] ?? "");
@@ -145,6 +153,12 @@ export default function DiaryFoodFormScreen() {
       <Field label="Protein g / 100 g" value={protein} onChangeText={setProtein} keyboardType="numeric" />
       <Field label="Carbs g / 100 g" value={carbs} onChangeText={setCarbs} keyboardType="numeric" />
       <Field label="Fat g / 100 g" value={fat} onChangeText={setFat} keyboardType="numeric" />
+      <Field
+        label="Saturated fat g / 100 g (optional)"
+        value={saturatedFat}
+        onChangeText={setSaturatedFat}
+        keyboardType="numeric"
+      />
       <Field label="Fiber g / 100 g (optional)" value={fiber} onChangeText={setFiber} keyboardType="numeric" />
       {MICRO_GROUPS.map((group) => (
         <View key={group.id} style={styles.group}>

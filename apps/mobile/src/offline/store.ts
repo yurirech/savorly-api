@@ -313,6 +313,15 @@ export async function readNutritionRecipe<T>(id: string): Promise<T | null> {
   return row ? (JSON.parse(row.payload) as T) : null;
 }
 
+export async function removeNutritionRecipe(id: string): Promise<void> {
+  if (!useSqlite) {
+    memory.nutritionRecipes.delete(id);
+    return;
+  }
+  const db = await openDb();
+  await db.runAsync("DELETE FROM nutrition_recipes WHERE id = ?", [id]);
+}
+
 export async function replaceFoodStaples(foodId: string, mealNames: string[]): Promise<void> {
   if (!useSqlite) {
     for (const [name, ids] of memory.staples) {

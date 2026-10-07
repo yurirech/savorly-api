@@ -1,5 +1,6 @@
 import { type Href, router } from "expo-router";
 import { Bone, Drop, Lightning, Shield } from "phosphor-react-native";
+import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import {
@@ -20,6 +21,8 @@ interface DiaryDayNutritionProps {
   totals: NutrientVector;
   targets: NutritionTargets | null;
   sex: NutritionSex | null;
+  remaining: { kcal: number; proteinG: number; carbsG: number; fatG: number } | null;
+  targetKcal: number | null;
 }
 
 const DONUT_SIZE = 132;
@@ -36,7 +39,9 @@ const GROUP_ICONS = {
 } as const;
 
 function DiaryDayNutrition(props: DiaryDayNutritionProps) {
-  const { date, totals, targets, sex } = props;
+  const { date, totals, targets, sex, remaining, targetKcal } = props;
+  const [showGroups, setShowGroups] = useState(false);
+  const hasTargets = targetKcal != null;
   const intakes = dayIntakeTargets(targets, sex);
   const shares = macroCalorieShares(totals);
   const macroRows = [
@@ -73,8 +78,40 @@ function DiaryDayNutrition(props: DiaryDayNutritionProps) {
   ];
 
   return (
-    <View style={styles.block}>
-      <AppText variant="title">Today</AppText>
+    <View style={styles.card}>
+      <View style={styles.summaryHead}>
+        <View style={styles.summaryCopy}>
+          {hasTargets ? (
+            <>
+              <AppText variant="label" color="muted">
+                Remaining
+              </AppText>
+              <AppText variant="display">{remaining ? `${remaining.kcal} kcal` : "—"}</AppText>
+              <AppText variant="caption" color="muted">
+                {remaining
+                  ? `${remaining.proteinG}g protein · ${remaining.carbsG}g carbs · ${remaining.fatG}g fat`
+                  : "Set a profile to see targets."}
+              </AppText>
+              <AppText variant="caption" color="muted">
+                Logged {totals.kcal} / {targetKcal} kcal
+              </AppText>
+            </>
+          ) : null}
+          {!hasTargets ? (
+            <AppText variant="body" color="muted">
+              Set your height, weight, and goal so remaining calories have something to chase.
+            </AppText>
+          ) : null}
+        </View>
+        <Pressable
+          onPress={() => setShowGroups((current) => !current)}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={showGroups ? "Hide health groups" : "Show health groups"}
+        >
+          <Shield size={22} color={showGroups ? tokens.accent : tokens.text} />
+        </Pressable>
+      </View>
       <View style={styles.macroRow}>
         <MacroDonut carbs={shares.carbs} protein={shares.protein} fat={shares.fat} />
         <View style={styles.macroMeters}>
@@ -89,6 +126,7 @@ function DiaryDayNutrition(props: DiaryDayNutritionProps) {
           ))}
         </View>
       </View>
+      {showGroups ? (
       <View style={styles.groups}>
         {HEALTH_GROUPS.map((group) => {
           const Icon = GROUP_ICONS[group.id];
@@ -120,6 +158,7 @@ function DiaryDayNutrition(props: DiaryDayNutritionProps) {
           );
         })}
       </View>
+      ) : null}
     </View>
   );
 }
@@ -216,8 +255,23 @@ function IntakeMeter(props: IntakeMeterProps) {
 }
 
 const styles = StyleSheet.create({
-  block: {
+  card: {
+    backgroundColor: tokens.surface,
+    borderRadius: tokens.radius.md,
+    borderWidth: 1,
+    borderColor: tokens.border,
+    padding: tokens.space.md,
     gap: tokens.space.md,
+  },
+  summaryHead: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: tokens.space.sm,
+  },
+  summaryCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: tokens.space.xs,
   },
   macroRow: {
     flexDirection: "row",
@@ -237,11 +291,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: tokens.space.sm,
-    backgroundColor: tokens.surface,
-    borderRadius: tokens.radius.md,
-    borderWidth: 1,
-    borderColor: tokens.border,
-    padding: tokens.space.md,
+    paddingTop: tokens.space.sm,
   },
   groupCopy: {
     flex: 1,
