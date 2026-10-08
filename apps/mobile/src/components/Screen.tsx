@@ -1,6 +1,8 @@
 import type { PropsWithChildren, ReactNode, RefObject } from "react";
 import {
   KeyboardAvoidingView,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   Platform,
   RefreshControl,
   ScrollView,
@@ -21,6 +23,7 @@ type ScreenProps = PropsWithChildren<{
   header?: ReactNode;
   overlay?: ReactNode;
   scrollRef?: RefObject<ScrollView | null>;
+  onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
 }>;
 
 export function Screen(props: ScreenProps) {
@@ -36,6 +39,7 @@ export function Screen(props: ScreenProps) {
     header,
     overlay,
     scrollRef,
+    onScroll,
   } = props;
   const insets = useSafeAreaInsets();
   const bottomInset = safeBottom && !footer ? insets.bottom : 0;
@@ -63,6 +67,8 @@ export function Screen(props: ScreenProps) {
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="interactive"
       automaticallyAdjustKeyboardInsets={!footer}
+      onScroll={onScroll}
+      scrollEventThrottle={onScroll ? 16 : undefined}
       refreshControl={
         onRefresh ? (
           <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={tokens.accent} />

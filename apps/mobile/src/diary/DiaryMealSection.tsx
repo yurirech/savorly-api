@@ -1,11 +1,19 @@
 import { CaretDown, CaretUp, ChartPie, Check, PencilSimple, Trash } from "phosphor-react-native";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { PanResponder, Pressable, StyleSheet, View } from "react-native";
-import { foodEmoji, listPresentNutrients, type DiaryEntry, type DiaryMealGroup } from "@savorly/shared";
+import { Animated, PanResponder, Pressable, StyleSheet, View } from "react-native";
+import {
+  foodEmoji,
+  listPresentNutrients,
+  resolveFoodGrams,
+  type DiaryEntry,
+  type DiaryMealGroup,
+  type FoodAmountUnit,
+} from "@savorly/shared";
 import { AppText } from "../components/AppText";
 import { Button } from "../components/Button";
 import NutrientDetailList from "../components/NutrientDetailList";
 import { tokens } from "../theme/tokens";
+import FoodAmountFields, { parseFoodAmount } from "./FoodAmountFields";
 import FoodEmojiBadge from "./FoodEmojiBadge";
 
 interface DiaryMealSectionProps {
@@ -25,6 +33,9 @@ interface DiaryMealSectionProps {
   selectedIds: ReadonlySet<string>;
   onStartSelect: (entry: DiaryEntry) => void;
   onToggleSelect: (entry: DiaryEntry) => void;
+  amountEntryId: string | null;
+  savingAmount: boolean;
+  onSaveAmount: (entry: DiaryEntry, grams: number) => void;
 }
 
 function formatMealMacros(meal: DiaryMealGroup): string {
@@ -50,6 +61,9 @@ function DiaryMealSection(props: DiaryMealSectionProps) {
     selectedIds,
     onStartSelect,
     onToggleSelect,
+    amountEntryId,
+    savingAmount,
+    onSaveAmount,
   } = props;
   const [nutrientsOpen, setNutrientsOpen] = useState(false);
   const [openEntryId, setOpenEntryId] = useState<string | null>(null);
@@ -104,6 +118,9 @@ function DiaryMealSection(props: DiaryMealSectionProps) {
               onCopy={() => onCopyEntry([entry.id])}
               onStartSelect={() => onStartSelect(entry)}
               onToggleSelect={() => onToggleSelect(entry)}
+              editingAmount={amountEntryId === entry.id}
+              savingAmount={savingAmount}
+              onSaveAmount={(grams) => onSaveAmount(entry, grams)}
             />
           ))}
           <View style={styles.actions}>
@@ -163,11 +180,33 @@ interface DiaryEntryRowProps {
   onCopy: () => void;
   onStartSelect: () => void;
   onToggleSelect: () => void;
+  editingAmount: boolean;
+  savingAmount: boolean;
+  onSaveAmount: (grams: number) => void;
 }
 
 function DiaryEntryRow(props: DiaryEntryRowProps) {
-  const { entry, active, selecting, selected, onActivate, onPress, onDelete, onCopy, onStartSelect, onToggleSelect } = props;
+  const {
+    entry,
+    active,
+    selecting,
+    selected,
+    onActivate,
+    onPress,
+    onDelete,
+    onCopy,
+    onStartSelect,
+    onToggleSelect,
+    editingAmount,
+    savingAmount,
+    onSaveAmount,
+  } = props;
   const [offset, setOffset] = useState(0);
+  const [amount, setAmount] = useState(String(entry.grams));
+  const [unit, setUnit] = useState<FoodAmountUnit>("grams");
+  const [servingWeightG, setServingWeightG] = useState<number | null>(null);
+  const editorFade = useRef(new Animated.Value(0)).current;
+  const editorSlide = useRef(new Animated.Value(8)).current;
   const dragged = useRef(false);
   const actions = useRef({ onActivate, onDelete, onCopy });
   actions.current = { onActivate, onDelete, onCopy };
@@ -177,6 +216,38 @@ function DiaryEntryRow(props: DiaryEntryRowProps) {
       setOffset(0);
     }
   }, [active]);
+
+  useEffect(() => {
+    setAmount(String(entry.grams));
+    setUnit("grams");
+  }, [editingAmount, entry.grams]);
+
+  useEffect(() => {
+    if (!editingAmount) return;
+    editorFade.setValue(0);
+    editorSlide.setValue(8);
+    Animated.parallel([
+      Animated.timing(editorFade, { toValue: 1, duration: 180, useNativeDriver: true }),
+      Animated.timing(editorSlide, { toValue: 0, duration: 180, useNativeDriver: true }),
+    ]).start();
+  }, [editingAmount, editorFade, editorSlide]);
+
+  useEffect(() => {
+    if (!editingAmount || !entry.foodId) {
+      setServingWeightG(null);
+      return;
+    }
+    let activeLoad = true;
+    void import("../offline/store").then(({ readFood }) =>
+      readFood(entry.foodId as string).then((food) => {
+        if (!activeLoad) return;
+        setServingWeightG(food?.servingWeightG ?? null);
+      }),
+    );
+    return () => {
+      activeLoad = false;
+    };
+  }, [editingAmount, entry.foodId]);
 
   const pan = useRef(
     PanResponder.create({
@@ -259,6 +330,29 @@ function DiaryEntryRow(props: DiaryEntryRowProps) {
           </AppText>
         </View>
       </Pressable>
+      {editingAmount ? (
+        <Animated.View style={[styles.amountEditor, { opacity: editorFade, transform: [{ translateY: editorSlide }] }]}>
+          <FoodAmountFields
+            unit={unit}
+            amount={amount}
+            servingWeightG={servingWeightG}
+            frequentGrams={[]}
+            onUnitChange={setUnit}
+            onAmountChange={setAmount}
+          />
+          <Button
+            size="compact"
+            label="OK"
+            loading={savingAmount}
+            onPress={() => {
+              const parsed = parseFoodAmount(amount);
+              const grams = parsed == null ? null : resolveFoodGrams(unit, parsed, servingWeightG);
+              if (grams == null || grams <= 0) return;
+              onSaveAmount(grams);
+            }}
+          />
+        </Animated.View>
+      ) : null}
     </View>
   );
 }
@@ -350,6 +444,10 @@ const styles = StyleSheet.create({
   entryCopy: {
     flex: 1,
     gap: tokens.space.xs,
+  },
+  amountEditor: {
+    gap: tokens.space.sm,
+    paddingBottom: tokens.space.sm,
   },
   actions: {
     flexDirection: "row",

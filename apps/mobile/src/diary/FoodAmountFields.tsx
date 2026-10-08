@@ -10,7 +10,7 @@ export function parseFoodAmount(value: string): number | null {
   return Number.isFinite(amount) && amount >= 0 ? amount : null;
 }
 
-function formatAmount(value: number): string {
+export function formatAmount(value: number): string {
   if (Number.isInteger(value)) return String(value);
   return String(Math.round(value * 100) / 100);
 }

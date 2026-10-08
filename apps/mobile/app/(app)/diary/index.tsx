@@ -1,7 +1,20 @@
 import { type Href, router, useFocusEffect, useSegments } from "expo-router";
-import { CaretLeft, CaretRight, ChartPie, DotsThreeVertical } from "phosphor-react-native";
+import { CaretDown, CaretLeft, CaretRight, CaretUp, ChartPie, DotsThreeVertical } from "phosphor-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { PanResponder, Pressable, StyleSheet, View } from "react-native";
+import {
+  Animated,
+  LayoutAnimation,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  PanResponder,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  UIManager,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { hasExtendedNutrients, listPresentNutrients, type DiaryDayResponse, type NutritionSex } from "@savorly/shared";
 import type { DiaryEntry } from "@savorly/shared";
 import {
@@ -20,6 +33,7 @@ import {
   fetchNutritionProfile,
   setDiaryDayTarget,
   clearDiaryDayTarget,
+  updateDiaryEntry,
   updateDiaryMeal,
 } from "../../../src/api/client";
 import { AppText } from "../../../src/components/AppText";
@@ -50,8 +64,15 @@ type NameSheetMode =
 
 type RelocateRequest = { entryIds: string[] };
 
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
 export default function DiaryScreen() {
   const inTabs = (useSegments() as string[]).includes("(tabs)");
+  const insets = useSafeAreaInsets();
+  const scrollRef = useRef<ScrollView>(null);
+  const dayFade = useRef(new Animated.Value(1)).current;
   const [date, setDate] = useState(todayIsoDate);
   const [day, setDay] = useState<DiaryDayResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -85,6 +106,9 @@ export default function DiaryScreen() {
   const [targetSaving, setTargetSaving] = useState(false);
   const [targetError, setTargetError] = useState<string | null>(null);
   const [profileKcal, setProfileKcal] = useState<number | null>(null);
+  const [scrollY, setScrollY] = useState(0);
+  const [scrollSpan, setScrollSpan] = useState(0);
+  const [savingAmount, setSavingAmount] = useState(false);
 
   const closeDiaryMenu = useCallback(() => {
     setMenuOpen(false);
@@ -149,7 +173,9 @@ export default function DiaryScreen() {
 
   useEffect(() => {
     setSelectedIds(null);
-  }, [date]);
+    dayFade.setValue(0.35);
+    Animated.timing(dayFade, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+  }, [date, dayFade]);
 
   useFocusEffect(
     useCallback(() => {
@@ -171,6 +197,12 @@ export default function DiaryScreen() {
   }
 
   function toggleMealCollapsed(mealId: string) {
+    LayoutAnimation.configureNext({
+      duration: 180,
+      update: { type: LayoutAnimation.Types.easeInEaseOut },
+      create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+      delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+    });
     setCollapsedMeals((current) => {
       const next = new Set(current);
       if (next.has(mealId)) {
@@ -322,6 +354,32 @@ export default function DiaryScreen() {
     setSelectedIds((current) => (current?.includes(entry.id) ? current : [...(current ?? []), entry.id]));
   }
 
+  function onDiaryScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    setScrollY(contentOffset.y);
+    setScrollSpan(Math.max(0, contentSize.height - layoutMeasurement.height));
+  }
+
+  function jumpDiary() {
+    if (scrollY > scrollSpan / 2) {
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+      return;
+    }
+    scrollRef.current?.scrollToEnd({ animated: true });
+  }
+
+  async function saveEntryAmount(entry: DiaryEntry, grams: number) {
+    setSavingAmount(true);
+    setError(null);
+    try {
+      setDay(await updateDiaryEntry(entry.id, grams));
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : "Could not update that amount.");
+    } finally {
+      setSavingAmount(false);
+    }
+  }
+
   function toggleSelect(entry: DiaryEntry) {
     setSelectedIds((current) => {
       const ids = current ?? [];
@@ -388,32 +446,65 @@ export default function DiaryScreen() {
   const meals = day?.meals ?? [];
   const remaining = day?.remaining;
   const totals = day?.totals;
+  const jumpVisible = scrollY > 24 && scrollSpan > 48;
+  const jumpToTop = scrollY > scrollSpan / 2;
+  const amountEntry =
+    selectedIds?.length === 1
+      ? meals.flatMap((meal) => meal.entries).find((entry) => entry.id === selectedIds[0] && entry.kind === "food") ??
+        null
+      : null;
 
   return (
     <Screen
       safeBottom={!inTabs}
+      scrollRef={scrollRef}
+      onScroll={onDiaryScroll}
       onRefresh={() => void onRefresh()}
       refreshing={refreshing}
       overlay={
-        <Toast
-          visible={toast != null}
-          message={toast?.message ?? ""}
-          offset={inTabs ? tokens.tabBarHeight : 0}
-          actionLabel={toast?.undo ? "Undo" : undefined}
-          onAction={
-            toast?.undo
-              ? () => {
-                  const undo = toast.undo;
-                  if (!undo) return;
-                  setToast(null);
-                  void undo().catch((err: unknown) => {
-                    setError(err instanceof ApiRequestError ? err.message : "Could not restore that food.");
-                  });
-                }
-              : undefined
-          }
-          onHide={() => setToast(null)}
-        />
+        <>
+          <Toast
+            visible={toast != null}
+            message={toast?.message ?? ""}
+            offset={inTabs ? tokens.tabBarHeight : 0}
+            actionLabel={toast?.undo ? "Undo" : undefined}
+            onAction={
+              toast?.undo
+                ? () => {
+                    const undo = toast.undo;
+                    if (!undo) return;
+                    setToast(null);
+                    void undo().catch((err: unknown) => {
+                      setError(err instanceof ApiRequestError ? err.message : "Could not restore that food.");
+                    });
+                  }
+                : undefined
+            }
+            onHide={() => setToast(null)}
+          />
+          {jumpVisible ? (
+            <Pressable
+              onPress={jumpDiary}
+              style={[
+                styles.jump,
+                {
+                  bottom:
+                    tokens.space.lg +
+                    72 +
+                    (inTabs ? tokens.tabBarHeight : insets.bottom),
+                },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={jumpToTop ? "Scroll to top" : "Scroll to bottom"}
+            >
+              {jumpToTop ? (
+                <CaretUp size={22} color={tokens.bg} weight="bold" />
+              ) : (
+                <CaretDown size={22} color={tokens.bg} weight="bold" />
+              )}
+            </Pressable>
+          ) : null}
+        </>
       }
       header={
         <View style={styles.dateRow} {...dateSwipe.panHandlers}>
@@ -469,6 +560,7 @@ export default function DiaryScreen() {
         )
       }
     >
+      <Animated.View style={{ opacity: dayFade, gap: tokens.space.md }}>
       {totals ? (
         <DiaryDayNutrition
           date={date}
@@ -564,9 +656,13 @@ export default function DiaryScreen() {
             selectedIds={new Set(selectedIds ?? [])}
             onStartSelect={startSelect}
             onToggleSelect={toggleSelect}
+            amountEntryId={amountEntry?.id ?? null}
+            savingAmount={savingAmount}
+            onSaveAmount={saveEntryAmount}
           />
         ))}
       </View>
+      </Animated.View>
 
       <DiaryMealNameSheet
         visible={nameSheet != null}
@@ -730,5 +826,17 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     alignItems: "center",
     gap: tokens.space.sm,
+  },
+  jump: {
+    position: "absolute",
+    right: tokens.space.lg,
+    width: 48,
+    height: 48,
+    borderRadius: tokens.radius.full,
+    backgroundColor: tokens.accent,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 20,
+    ...tokens.shadow.card,
   },
 });
