@@ -9,8 +9,8 @@ import type {
   GeneratedRecipe,
   MealSuggestionResponse,
   NutrientVector,
-  NutritionProfileInput,
   NutritionProfileResponse,
+  NutritionProfileWrite,
   PantryResponse,
   PantrySubstitutionResponse,
   FoodCategory,
@@ -23,7 +23,7 @@ import type {
   UserFood,
   UserPantryItem,
 } from "@savorly/shared";
-import { coerceDiaryDayResponse } from "@savorly/shared";
+import { coerceDiaryDayResponse, roundNutrition } from "@savorly/shared";
 import { getToken, clearSession } from "../auth/session";
 import { shiftIsoDate, todayIsoDate } from "../utils/isoDate";
 
@@ -505,7 +505,7 @@ export function chatAboutRecipe(
     history?: { role: "user" | "assistant"; text: string }[];
   },
 ) {
-  return request<{ reply: string; recipe: GeneratedRecipe }>(`/recipes/${encodeURIComponent(recipeId)}/chat`, {
+  return request<{ reply: string; recipe: GeneratedRecipe; changes: string[] }>(`/recipes/${encodeURIComponent(recipeId)}/chat`, {
     method: "POST",
     body: JSON.stringify(body),
   });
@@ -534,7 +534,7 @@ export async function fetchNutritionProfile() {
   }
 }
 
-export async function saveNutritionProfile(body: NutritionProfileInput) {
+export async function saveNutritionProfile(body: NutritionProfileWrite) {
   try {
     const live = await request<NutritionProfileResponse>("/nutrition/profile", {
       method: "PUT",
@@ -545,12 +545,14 @@ export async function saveNutritionProfile(body: NutritionProfileInput) {
     return live;
   } catch (err) {
     return offline(err, async () => {
-      const { computeNutritionTargets } = await import("@savorly/shared");
+      const { computeNutritionTargets, dayIntakeTargets } = await import("@savorly/shared");
       const { saveProfile } = await import("../offline/store");
       const { enqueue, flushOutbox } = await import("../offline/sync");
+      const targets = computeNutritionTargets(body);
       const live: NutritionProfileResponse = {
         profile: { ...body, updatedAt: new Date().toISOString() },
-        targets: computeNutritionTargets(body),
+        targets,
+        intakeTargets: dayIntakeTargets(targets, body.sex, body.microTargets),
       };
       await saveProfile(live);
       await enqueue("PUT", "/nutrition/profile", body);
@@ -1072,8 +1074,9 @@ export async function addDiaryEntry(mealId: string, foodId: string, grams: numbe
 }
 
 export async function updateDiaryEntry(id: string, grams: number) {
+  const roundedGrams = roundNutrition(grams, 1);
   try {
-    return await persistDay(`/nutrition/diary/${id}`, { method: "PATCH", body: JSON.stringify({ grams }) });
+    return await persistDay(`/nutrition/diary/${id}`, { method: "PATCH", body: JSON.stringify({ grams: roundedGrams }) });
   } catch (err) {
     return offline(err, async () => {
       const { enqueue, flushOutbox } = await import("../offline/sync");
@@ -1088,7 +1091,7 @@ export async function updateDiaryEntry(id: string, grams: number) {
           ...meal,
           entries: meal.entries.map((entry) => {
             if (entry.id !== id) return entry;
-            return { ...entry, grams, nutrients: entry.kind === "food" ? entry.nutrients : entry.nutrients };
+            return { ...entry, grams: roundedGrams, nutrients: entry.kind === "food" ? entry.nutrients : entry.nutrients };
           }),
         })),
       }));
@@ -1101,11 +1104,11 @@ export async function updateDiaryEntry(id: string, grams: number) {
             meals: current.meals.map((meal) => ({
               ...meal,
               entries: meal.entries.map((item) =>
-                item.id === id ? { ...item, grams, nutrients: scaleNutrition(food.per100g, grams) } : item,
+                item.id === id ? { ...item, grams: roundedGrams, nutrients: scaleNutrition(food.per100g, roundedGrams) } : item,
               ),
             })),
           }));
-          await enqueue("PATCH", `/nutrition/diary/${id}`, { grams });
+          await enqueue("PATCH", `/nutrition/diary/${id}`, { grams: roundedGrams });
           void flushOutbox();
           return scaled;
         }

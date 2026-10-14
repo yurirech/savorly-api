@@ -8,6 +8,7 @@ import {
   listPresentNutrients,
   FATSECRET_ATTRIBUTION,
   NEVO_ATTRIBUTION,
+  formatDiaryNumber,
   resolveFoodGrams,
   scaleNutrition,
   type DiaryMealGroup,
@@ -132,11 +133,11 @@ export default function DiaryFoodDetailScreen() {
       if (entryId) {
         const entry = day.meals.flatMap((row) => row.entries).find((row) => row.id === entryId);
         if (entry && entry.kind !== "quick") {
-          setGrams(String(entry.grams));
+          setGrams(formatDiaryNumber(entry.grams));
           setUnit("grams");
         }
       } else if (!grams && freq.grams[0] != null) {
-        setGrams(String(freq.grams[0]));
+        setGrams(formatDiaryNumber(freq.grams[0]));
       }
       setError(null);
     } catch (err) {
@@ -456,12 +457,12 @@ export default function DiaryFoodDetailScreen() {
             </View>
           ) : null}
 
-          <AppText variant="title">{previewGrams} g</AppText>
+          <AppText variant="title">{formatDiaryNumber(previewGrams)} g</AppText>
           <View style={styles.macros}>
-            <MacroCell label="kcal" value={scaled?.kcal ?? 0} />
-            <MacroCell label="Protein" value={`${scaled?.proteinG ?? 0} g`} />
-            <MacroCell label="Carbs" value={`${scaled?.carbsG ?? 0} g`} />
-            <MacroCell label="Fat" value={`${scaled?.fatG ?? 0} g`} />
+            <MacroCell label="kcal" value={formatDiaryNumber(scaled?.kcal ?? 0)} />
+            <MacroCell label="Protein" value={`${formatDiaryNumber(scaled?.proteinG ?? 0)} g`} />
+            <MacroCell label="Carbs" value={`${formatDiaryNumber(scaled?.carbsG ?? 0)} g`} />
+            <MacroCell label="Fat" value={`${formatDiaryNumber(scaled?.fatG ?? 0)} g`} />
           </View>
           {!hasServing && !addingServing ? (
             <Button size="compact" label="Add serving" variant="secondary" onPress={() => setAddingServing(true)} />

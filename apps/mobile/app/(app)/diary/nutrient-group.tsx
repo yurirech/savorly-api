@@ -7,6 +7,7 @@ import {
   findHealthGroup,
   formatNutrientAmount,
   healthNutrientAmount,
+  type MicroTargets,
   type NutrientVector,
   type NutritionSex,
   type NutritionTargets,
@@ -27,6 +28,7 @@ export default function NutrientGroupScreen() {
   const [totals, setTotals] = useState<NutrientVector | null>(null);
   const [targets, setTargets] = useState<NutritionTargets | null>(null);
   const [sex, setSex] = useState<NutritionSex | null>(null);
+  const [microTargets, setMicroTargets] = useState<MicroTargets | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -42,6 +44,7 @@ export default function NutrientGroupScreen() {
       setTotals(live.totals);
       setTargets(live.targets);
       setSex(profile?.profile?.sex ?? null);
+      setMicroTargets(profile?.profile?.microTargets ?? null);
       setError(null);
     } catch {
       setError("Could not load this day's nutrients.");
@@ -54,7 +57,7 @@ export default function NutrientGroupScreen() {
     }, [load]),
   );
 
-  const intakes = totals ? dayIntakeTargets(targets, sex) : null;
+  const intakes = totals ? dayIntakeTargets(targets, sex, microTargets) : null;
 
   return (
     <Screen>

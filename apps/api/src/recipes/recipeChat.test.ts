@@ -37,6 +37,7 @@ describe("recipe chat", () => {
     expect(result.recipe.title).toBe("Lemon cake");
     expect(result.recipe.ingredients[0]?.name).toBe("flour");
     expect(result.reply).toBe("This stays the same recipe.");
+    expect(result.changes).toEqual([]);
   });
 
   it("tells the model to stay on this recipe", () => {

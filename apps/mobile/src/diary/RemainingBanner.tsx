@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet } from "react-native";
-import type { DiaryDayResponse } from "@savorly/shared";
+import { formatDiaryNumber, type DiaryDayResponse } from "@savorly/shared";
 import { AppText } from "../components/AppText";
 import { tokens } from "../theme/tokens";
 
@@ -27,15 +27,15 @@ function RemainingBanner(props: RemainingBannerProps) {
           <AppText variant="label" color="muted">
             Remaining
           </AppText>
-          <AppText variant="display">{remaining ? `${remaining.kcal} kcal` : "—"}</AppText>
+          <AppText variant="display">{remaining ? `${formatDiaryNumber(remaining.kcal)} kcal` : "—"}</AppText>
           <AppText variant="caption" color="muted">
             {remaining
-              ? `${remaining.proteinG}g protein · ${remaining.carbsG}g carbs · ${remaining.fatG}g fat`
+              ? `${formatDiaryNumber(remaining.proteinG)}g protein · ${formatDiaryNumber(remaining.carbsG)}g carbs · ${formatDiaryNumber(remaining.fatG)}g fat`
               : "Set a profile to see targets."}
           </AppText>
           {totalsKcal != null ? (
             <AppText variant="caption" color="muted">
-              Logged {totalsKcal} / {targetKcal} kcal
+              Logged {formatDiaryNumber(totalsKcal)} / {formatDiaryNumber(targetKcal ?? 0)} kcal
             </AppText>
           ) : null}
         </Pressable>

@@ -3,13 +3,16 @@ import {
   buildDiaryMeals,
   buildQuickDiaryNutrients,
   computeNutritionTargets,
+  dayIntakeTargets,
   dayTotalsFromMeals,
+  parseMicroTargets,
   DIARY_MEAL_NAME_MAX_LENGTH,
   mealsMakeCompleteDay,
   parseQuickDiaryLabel,
   QUICK_DIARY_ENTRY_GRAMS,
   QUICK_DIARY_LABEL_MAX_LENGTH,
   remainingMacros,
+  roundNutrition,
   scaleNutrition,
   type DiaryDayResponse,
   type DiaryEntry,
@@ -19,6 +22,7 @@ import {
   type NutritionProfile,
   type NutritionProfileInput,
   type NutritionProfileResponse,
+  type NutritionProfileWrite,
   type QuickDiaryNutrientsInput,
   type UserFood,
   type UserFoodSource,
@@ -79,6 +83,7 @@ function profileFromRow(row: ProfileRow): NutritionProfile {
     activity: row.activity as NutritionProfileInput["activity"],
     goal: row.goal as NutritionProfileInput["goal"],
     weeklyKgChange: row.weeklyKgChange,
+    microTargets: parseMicroTargets(row.microTargets),
     updatedAt: row.updatedAt.toISOString(),
   };
 }
@@ -203,9 +208,11 @@ function validateGrams(grams: number): void {
 }
 
 export function profileResponse(profile: NutritionProfile | null): NutritionProfileResponse {
+  const targets = profile ? computeNutritionTargets(profile) : null;
   return {
     profile,
-    targets: profile ? computeNutritionTargets(profile) : null,
+    targets,
+    intakeTargets: targets ? dayIntakeTargets(targets, profile?.sex ?? null, profile?.microTargets) : null,
   };
 }
 
@@ -217,9 +224,10 @@ export async function getNutritionProfile(db: Database, userId: string): Promise
 export async function upsertNutritionProfile(
   db: Database,
   userId: string,
-  input: NutritionProfileInput,
+  input: NutritionProfileWrite,
 ): Promise<NutritionProfileResponse> {
   const weeklyKgChange = input.goal === "maintain" ? 0 : input.weeklyKgChange;
+  const microTargets = input.microTargets === undefined ? undefined : parseMicroTargets(input.microTargets);
   const values = {
     userId,
     sex: input.sex,
@@ -229,12 +237,13 @@ export async function upsertNutritionProfile(
     activity: input.activity,
     goal: input.goal,
     weeklyKgChange,
+    ...(microTargets !== undefined ? { microTargets } : {}),
     updatedAt: new Date(),
   };
 
   const [row] = await db
     .insert(nutritionProfiles)
-    .values(values)
+    .values({ ...values, microTargets: microTargets ?? null })
     .onConflictDoUpdate({
       target: nutritionProfiles.userId,
       set: {
@@ -246,6 +255,7 @@ export async function upsertNutritionProfile(
         goal: values.goal,
         weeklyKgChange: values.weeklyKgChange,
         updatedAt: values.updatedAt,
+        ...(microTargets !== undefined ? { microTargets } : {}),
       },
     })
     .returning();
@@ -871,12 +881,13 @@ export async function addDiaryEntry(
 ): Promise<DiaryDayResponse> {
   const isoDate = parseIsoDate(input.date);
   validateGrams(input.grams);
+  const grams = roundNutrition(input.grams, 1);
   const meal = await getOwnedDiaryMeal(db, userId, input.mealId);
   if (asIsoDate(meal.date) !== isoDate) {
     throw new AppError("validation_error", "Meal group belongs to a different day.", 400);
   }
   const food = await getOwnedUserFood(db, userId, input.foodId);
-  const nutrients = scaleNutrition(food.per100g, input.grams);
+  const nutrients = scaleNutrition(food.per100g, grams);
   await db
     .insert(diaryEntries)
     .values({
@@ -885,7 +896,7 @@ export async function addDiaryEntry(
       foodId: food.id,
       kind: "food",
       date: isoDate,
-      grams: input.grams,
+      grams,
       nutrients,
       ...(input.id ? { id: input.id } : {}),
     })
@@ -1183,14 +1194,15 @@ export async function updateDiaryEntry(
     throw new AppError("validation_error", "Grams are required.", 400);
   }
   validateGrams(body.grams);
+  const grams = roundNutrition(body.grams, 1);
   if (!entry.foodId) {
     throw new AppError("internal_error", "Food entry is missing food.", 500);
   }
   const food = await getOwnedUserFood(db, userId, entry.foodId);
-  const nutrients = scaleNutrition(food.per100g, body.grams);
+  const nutrients = scaleNutrition(food.per100g, grams);
   await db
     .update(diaryEntries)
-    .set({ grams: body.grams, nutrients })
+    .set({ grams, nutrients })
     .where(eq(diaryEntries.id, entry.id));
   return getDiaryDay(db, userId, asIsoDate(entry.date));
 }

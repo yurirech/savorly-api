@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { ZodError } from "zod";
 import { z } from "zod";
-import { FOOD_CATEGORIES, OPTIONAL_NUTRIENT_KEYS, type GeneratedRecipe, type RecipeGenerateRequest } from "@savorly/shared";
+import { FOOD_CATEGORIES, MICRO_TARGET_KEYS, OPTIONAL_NUTRIENT_KEYS, type GeneratedRecipe, type RecipeGenerateRequest } from "@savorly/shared";
 import type { Env } from "./config";
 import type { Database } from "./db/client";
 import { createAuthApp, requireUser } from "./auth/auth";
@@ -265,6 +265,14 @@ const nutritionProfileSchema = z.object({
   activity: z.enum(["sedentary", "light", "moderate", "active"]),
   goal: z.enum(["lose", "maintain", "gain"]),
   weeklyKgChange: z.number().min(0).max(2),
+  microTargets: z
+    .object(
+      Object.fromEntries(
+        MICRO_TARGET_KEYS.map((key) => [key, z.number().finite().positive().max(100_000).optional()]),
+      ) as Record<(typeof MICRO_TARGET_KEYS)[number], z.ZodOptional<z.ZodNumber>>,
+    )
+    .optional()
+    .nullable(),
 });
 
 const manualFoodSchema = z.object({

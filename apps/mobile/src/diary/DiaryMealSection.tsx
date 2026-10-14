@@ -1,8 +1,10 @@
 import { CaretDown, CaretUp, ChartPie, Check, PencilSimple, Trash } from "phosphor-react-native";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Animated, PanResponder, Pressable, StyleSheet, View } from "react-native";
+import { Animated, PanResponder, Pressable, StyleSheet, TextInput, View } from "react-native";
 import {
+  convertFoodAmount,
   foodEmoji,
+  formatDiaryNumber,
   listPresentNutrients,
   resolveFoodGrams,
   type DiaryEntry,
@@ -13,7 +15,7 @@ import { AppText } from "../components/AppText";
 import { Button } from "../components/Button";
 import NutrientDetailList from "../components/NutrientDetailList";
 import { tokens } from "../theme/tokens";
-import FoodAmountFields, { parseFoodAmount } from "./FoodAmountFields";
+import { parseFoodAmount } from "./FoodAmountFields";
 import FoodEmojiBadge from "./FoodEmojiBadge";
 
 interface DiaryMealSectionProps {
@@ -40,7 +42,7 @@ interface DiaryMealSectionProps {
 
 function formatMealMacros(meal: DiaryMealGroup): string {
   const { totals } = meal;
-  return `${totals.kcal} kcal · ${totals.proteinG}g protein · ${totals.carbsG}g carbs · ${totals.fatG}g fat`;
+  return `${formatDiaryNumber(totals.kcal)} kcal · ${formatDiaryNumber(totals.proteinG)}g protein · ${formatDiaryNumber(totals.carbsG)}g carbs · ${formatDiaryNumber(totals.fatG)}g fat`;
 }
 
 function DiaryMealSection(props: DiaryMealSectionProps) {
@@ -202,7 +204,7 @@ function DiaryEntryRow(props: DiaryEntryRowProps) {
     onSaveAmount,
   } = props;
   const [offset, setOffset] = useState(0);
-  const [amount, setAmount] = useState(String(entry.grams));
+  const [amount, setAmount] = useState(formatDiaryNumber(entry.grams));
   const [unit, setUnit] = useState<FoodAmountUnit>("grams");
   const [servingWeightG, setServingWeightG] = useState<number | null>(null);
   const editorFade = useRef(new Animated.Value(0)).current;
@@ -218,7 +220,7 @@ function DiaryEntryRow(props: DiaryEntryRowProps) {
   }, [active]);
 
   useEffect(() => {
-    setAmount(String(entry.grams));
+    setAmount(formatDiaryNumber(entry.grams));
     setUnit("grams");
   }, [editingAmount, entry.grams]);
 
@@ -279,8 +281,9 @@ function DiaryEntryRow(props: DiaryEntryRowProps) {
 
   const caption =
     entry.kind === "quick"
-      ? `${entry.nutrients.kcal} kcal · ${entry.nutrients.proteinG}g protein · ${entry.nutrients.carbsG}g carbs · ${entry.nutrients.fatG}g fat`
-      : `${entry.grams} g · ${entry.nutrients.kcal} kcal`;
+      ? `${formatDiaryNumber(entry.nutrients.kcal)} kcal · ${formatDiaryNumber(entry.nutrients.proteinG)}g protein · ${formatDiaryNumber(entry.nutrients.carbsG)}g carbs · ${formatDiaryNumber(entry.nutrients.fatG)}g fat`
+      : `${formatDiaryNumber(entry.grams)} g · ${formatDiaryNumber(entry.nutrients.kcal)} kcal`;
+  const hasServing = servingWeightG != null && servingWeightG > 0;
 
   return (
     <View style={styles.swipe} {...(selecting ? {} : pan.panHandlers)}>
@@ -315,7 +318,7 @@ function DiaryEntryRow(props: DiaryEntryRowProps) {
         style={[styles.entryRow, { transform: [{ translateX: selecting ? 0 : offset }] }]}
         accessibilityRole="button"
         accessibilityState={{ selected }}
-        accessibilityLabel={entry.kind === "quick" ? `${entry.foodName}, ${entry.nutrients.kcal} kcal` : `${entry.foodName}, ${entry.grams} grams`}
+        accessibilityLabel={entry.kind === "quick" ? `${entry.foodName}, ${formatDiaryNumber(entry.nutrients.kcal)} kcal` : `${entry.foodName}, ${formatDiaryNumber(entry.grams)} grams`}
       >
         {selecting ? (
           <View style={[styles.check, selected && styles.checkOn]}>
@@ -332,14 +335,42 @@ function DiaryEntryRow(props: DiaryEntryRowProps) {
       </Pressable>
       {editingAmount ? (
         <Animated.View style={[styles.amountEditor, { opacity: editorFade, transform: [{ translateY: editorSlide }] }]}>
-          <FoodAmountFields
-            unit={unit}
-            amount={amount}
-            servingWeightG={servingWeightG}
-            frequentGrams={[]}
-            onUnitChange={setUnit}
-            onAmountChange={setAmount}
+          <TextInput
+            value={amount}
+            onChangeText={setAmount}
+            keyboardType="numeric"
+            accessibilityLabel={unit === "servings" ? "Servings" : "Grams"}
+            style={styles.amountInput}
           />
+          {hasServing ? (
+            <View style={styles.unitToggle}>
+              {(["grams", "servings"] as const).map((next) => {
+                const selected = unit === next;
+                return (
+                  <Pressable
+                    key={next}
+                    onPress={() => {
+                      const parsed = parseFoodAmount(amount);
+                      const converted =
+                        parsed == null ? null : convertFoodAmount(parsed, unit, next, servingWeightG);
+                      setUnit(next);
+                      if (converted != null) {
+                        setAmount(formatDiaryNumber(converted));
+                      }
+                    }}
+                    style={[styles.unitChip, selected && styles.unitChipOn]}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    accessibilityLabel={next === "grams" ? "Grams" : "Servings"}
+                  >
+                    <AppText variant="caption" style={selected ? styles.unitChipOnLabel : undefined}>
+                      {next === "grams" ? "g" : "serv"}
+                    </AppText>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
           <Button
             size="compact"
             label="OK"
@@ -446,8 +477,45 @@ const styles = StyleSheet.create({
     gap: tokens.space.xs,
   },
   amountEditor: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: tokens.space.sm,
     paddingBottom: tokens.space.sm,
+  },
+  amountInput: {
+    flex: 1,
+    minHeight: 40,
+    color: tokens.text,
+    fontSize: tokens.type.body.fontSize,
+    fontFamily: tokens.font.body,
+    backgroundColor: tokens.bgElevated,
+    borderWidth: 1,
+    borderColor: tokens.border,
+    borderRadius: tokens.radius.sm,
+    paddingHorizontal: tokens.space.sm,
+    paddingVertical: tokens.space.xs,
+  },
+  unitToggle: {
+    flexDirection: "row",
+    backgroundColor: tokens.bgElevated,
+    borderRadius: tokens.radius.full,
+    padding: tokens.space.xs,
+    gap: tokens.space.xs,
+  },
+  unitChip: {
+    minHeight: 32,
+    minWidth: 40,
+    borderRadius: tokens.radius.full,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: tokens.space.sm,
+  },
+  unitChipOn: {
+    backgroundColor: tokens.accent,
+  },
+  unitChipOnLabel: {
+    color: tokens.bg,
+    fontFamily: tokens.font.bodyBold,
   },
   actions: {
     flexDirection: "row",

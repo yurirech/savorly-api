@@ -1,16 +1,61 @@
 import { useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
-import type { NutritionActivity, NutritionGoal, NutritionProfileInput, NutritionSex, NutritionTargets } from "@savorly/shared";
+import { useCallback, useRef, useState } from "react";
+import { StyleSheet, TextInput, View } from "react-native";
+import {
+  computeNutritionTargets,
+  dayIntakeTargets,
+  formatDiaryNumber,
+  MICRO_TARGET_FIELDS,
+  MICRO_TARGET_KEYS,
+  parseMicroTargets,
+  type DayIntakeTargets,
+  type MicroTargetKey,
+  type MicroTargets,
+  type NutritionActivity,
+  type NutritionGoal,
+  type NutritionProfileWrite,
+  type NutritionSex,
+  type NutritionTargets,
+} from "@savorly/shared";
 import { ApiRequestError, fetchNutritionProfile, saveNutritionProfile } from "../../../src/api/client";
 import { AppText } from "../../../src/components/AppText";
 import { Button } from "../../../src/components/Button";
 import { Field } from "../../../src/components/Field";
 import { Screen } from "../../../src/components/Screen";
 import { SegmentedControl } from "../../../src/components/SegmentedControl";
+import { tokens } from "../../../src/theme/tokens";
 
 function parseNumber(value: string): number | null {
   const parsed = Number(value.replace(",", "."));
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function draftsFromIntakes(intakes: DayIntakeTargets): Record<MicroTargetKey, string> {
+  return Object.fromEntries(
+    MICRO_TARGET_KEYS.map((key) => [key, formatDiaryNumber(intakes[key])]),
+  ) as Record<MicroTargetKey, string>;
+}
+
+function overridesFromDrafts(
+  drafts: Record<MicroTargetKey, string>,
+  loadedDefaults: DayIntakeTargets,
+  loadedOverrides: MicroTargets | null,
+  nextDefaults: DayIntakeTargets,
+): MicroTargets | null {
+  const next: MicroTargets = {};
+  for (const key of MICRO_TARGET_KEYS) {
+    const parsed = parseNumber(drafts[key] ?? "");
+    if (parsed == null || parsed <= 0) {
+      continue;
+    }
+    const rounded = Number(formatDiaryNumber(parsed));
+    const leftAtLoadedDefault = rounded === loadedDefaults[key] && loadedOverrides?.[key] == null;
+    if (leftAtLoadedDefault || rounded === nextDefaults[key]) {
+      continue;
+    }
+    next[key] = rounded;
+  }
+  return parseMicroTargets(next);
 }
 
 export default function DiaryProfileScreen() {
@@ -22,13 +67,21 @@ export default function DiaryProfileScreen() {
   const [goal, setGoal] = useState<NutritionGoal>("maintain");
   const [weeklyKgChange, setWeeklyKgChange] = useState("0.5");
   const [targets, setTargets] = useState<NutritionTargets | null>(null);
+  const [microDrafts, setMicroDrafts] = useState<Record<MicroTargetKey, string>>(() =>
+    draftsFromIntakes(dayIntakeTargets(null, "male")),
+  );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const loadedRef = useRef<{ defaults: DayIntakeTargets; overrides: MicroTargets | null }>({
+    defaults: dayIntakeTargets(null, "male"),
+    overrides: null,
+  });
 
   useFocusEffect(
     useCallback(() => {
       void fetchNutritionProfile()
         .then((live) => {
+          const nextSex = live.profile?.sex ?? "male";
           if (live.profile) {
             setSex(live.profile.sex);
             setAge(String(live.profile.age));
@@ -39,6 +92,13 @@ export default function DiaryProfileScreen() {
             setWeeklyKgChange(String(live.profile.weeklyKgChange || 0.5));
           }
           setTargets(live.targets);
+          const defaults = dayIntakeTargets(live.targets, nextSex);
+          const merged = live.intakeTargets ?? defaults;
+          loadedRef.current = {
+            defaults,
+            overrides: live.profile?.microTargets ?? null,
+          };
+          setMicroDrafts(draftsFromIntakes(merged));
         })
         .catch((err) => {
           setError(err instanceof ApiRequestError ? err.message : "Could not load profile.");
@@ -47,7 +107,7 @@ export default function DiaryProfileScreen() {
   );
 
   async function onSave() {
-    const body: NutritionProfileInput = {
+    const body: NutritionProfileWrite = {
       sex,
       age: parseNumber(age) ?? Number.NaN,
       heightCm: parseNumber(heightCm) ?? Number.NaN,
@@ -60,11 +120,25 @@ export default function DiaryProfileScreen() {
       setError("Age, height, and weight are required.");
       return;
     }
+    const nextTargets = computeNutritionTargets(body);
+    const nextDefaults = dayIntakeTargets(nextTargets, body.sex);
+    body.microTargets = overridesFromDrafts(
+      microDrafts,
+      loadedRef.current.defaults,
+      loadedRef.current.overrides,
+      nextDefaults,
+    );
     setSaving(true);
     setError(null);
     try {
       const live = await saveNutritionProfile(body);
       setTargets(live.targets);
+      const defaults = dayIntakeTargets(live.targets, live.profile?.sex ?? body.sex);
+      loadedRef.current = {
+        defaults,
+        overrides: live.profile?.microTargets ?? null,
+      };
+      setMicroDrafts(draftsFromIntakes(live.intakeTargets ?? defaults));
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : "Could not save profile.");
     } finally {
@@ -130,6 +204,26 @@ export default function DiaryProfileScreen() {
           {targets.kcal} kcal · {targets.proteinG}g P · {targets.carbsG}g C · {targets.fatG}g F
         </AppText>
       ) : null}
+      <AppText variant="title">Micronutrients</AppText>
+      <AppText variant="body" color="muted">
+        Defaults come from your calorie target and sex. Edit a value to override it.
+      </AppText>
+      <View style={styles.microGrid}>
+        {MICRO_TARGET_FIELDS.map((field) => (
+          <View key={field.key} style={styles.microField}>
+            <AppText variant="caption" color="muted">
+              {field.label} ({field.unit})
+            </AppText>
+            <TextInput
+              value={microDrafts[field.key] ?? ""}
+              onChangeText={(value) => setMicroDrafts((current) => ({ ...current, [field.key]: value }))}
+              keyboardType="numeric"
+              accessibilityLabel={field.label}
+              style={styles.microInput}
+            />
+          </View>
+        ))}
+      </View>
       {error ? (
         <AppText variant="body" color="danger">
           {error}
@@ -139,3 +233,28 @@ export default function DiaryProfileScreen() {
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  microGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: tokens.space.sm,
+  },
+  microField: {
+    width: "48%",
+    flexGrow: 1,
+    gap: tokens.space.xs,
+  },
+  microInput: {
+    color: tokens.text,
+    fontSize: tokens.type.body.fontSize,
+    fontFamily: tokens.font.body,
+    backgroundColor: tokens.surface,
+    borderWidth: 1,
+    borderColor: tokens.border,
+    borderRadius: tokens.radius.sm,
+    paddingHorizontal: tokens.space.sm,
+    paddingVertical: tokens.space.xs,
+    minHeight: 44,
+  },
+});

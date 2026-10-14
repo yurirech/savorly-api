@@ -120,6 +120,7 @@ export const nutritionProfiles = pgTable("nutrition_profiles", {
   activity: text("activity").notNull(),
   goal: text("goal").notNull(),
   weeklyKgChange: real("weekly_kg_change").notNull().default(0),
+  microTargets: jsonb("micro_targets"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

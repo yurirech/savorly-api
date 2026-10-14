@@ -77,6 +77,10 @@ export function roundNutrition(value: number, decimals = 1): number {
   return Math.round(value * factor) / factor;
 }
 
+export function formatDiaryNumber(value: number): string {
+  return String(roundNutrition(value, 1));
+}
+
 export function scaleNutrition(per100g: NutrientVector, grams: number): NutrientVector {
   const factor = grams / 100;
   const scaled: NutrientVector = {

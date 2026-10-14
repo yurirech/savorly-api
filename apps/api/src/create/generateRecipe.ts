@@ -1,4 +1,4 @@
-import type { GeneratedRecipe, RecipeGenerateRequest } from "@savorly/shared";
+import { summarizeRecipeDiff, type GeneratedRecipe, type RecipeGenerateRequest } from "@savorly/shared";
 import type { Env } from "../config";
 import type { Database } from "../db/client";
 import { AppError } from "../errors";
@@ -17,7 +17,6 @@ import {
   isAdaptRequest,
 } from "./composeGeneratePrompt";
 import { mockAdaptSummary, mockGeneratedCreate } from "./mockGenerate";
-import { summarizeRecipeDiff } from "./summarizeRecipeDiff";
 import { normalizeBakeRecipe } from "./validateBakeRecipe";
 import { normalizeBreadRecipe } from "./validateBreadRecipe";
 import { normalizeChefRecipe } from "./validateChefRecipe";

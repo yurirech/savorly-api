@@ -1,3 +1,4 @@
+import type { DayIntakeTargets, MicroTargets } from "./healthGroups";
 import type { NutrientVector } from "./nutrients";
 import type { NutritionProfileInput, NutritionTargets } from "./targets";
 
@@ -5,11 +6,17 @@ export type UserFoodSource = "usda" | "manual" | "nevo" | "recipe" | "fatsecret"
 
 export type NutritionProfile = NutritionProfileInput & {
   updatedAt: string;
+  microTargets?: MicroTargets | null;
+};
+
+export type NutritionProfileWrite = NutritionProfileInput & {
+  microTargets?: MicroTargets | null;
 };
 
 export type NutritionProfileResponse = {
   profile: NutritionProfile | null;
   targets: NutritionTargets | null;
+  intakeTargets?: DayIntakeTargets | null;
 };
 
 export type UserFood = {

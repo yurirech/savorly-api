@@ -16,6 +16,17 @@ describe("health groups", () => {
     expect(intakes.ironMg).toBe(18);
   });
 
+  it("applies optional micro target overrides", () => {
+    const intakes = dayIntakeTargets(
+      { bmr: 1, tdee: 1, dailyKcalDelta: 0, kcal: 2000, proteinG: 150, carbsG: 200, fatG: 67 },
+      "female",
+      { fiberG: 40, ironMg: 12 },
+    );
+    expect(intakes.fiberG).toBe(40);
+    expect(intakes.ironMg).toBe(12);
+    expect(intakes.proteinG).toBe(150);
+  });
+
   it("ignores nutrients that have no amount when scoring a group", () => {
     const energy = HEALTH_GROUPS.find((group) => group.id === "energy");
     expect(energy).toBeDefined();

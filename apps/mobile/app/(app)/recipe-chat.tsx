@@ -1,7 +1,7 @@
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Keyboard, ScrollView, StyleSheet, TextInput, View } from "react-native";
-import type { GeneratedRecipe } from "@savorly/shared";
+import { Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
+import { listRecipeChanges, type GeneratedRecipe } from "@savorly/shared";
 import { ApiRequestError, chatAboutRecipe, getRecipe } from "../../src/api/client";
 import { AppText } from "../../src/components/AppText";
 import { Button } from "../../src/components/Button";
@@ -12,12 +12,20 @@ import { tokens } from "../../src/theme/tokens";
 type ChatMessage = {
   role: "user" | "assistant";
   text: string;
+  changes?: string[];
 };
+
+const CHAT_PRESETS = [
+  { label: "Make it healthier", prompt: "Make it healthier" },
+  { label: "Translate to English", prompt: "Translate to English" },
+  { label: "Convert to cups or grams", prompt: "Convert to cups or grams" },
+] as const;
 
 export default function RecipeChatScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const [title, setTitle] = useState("");
+  const [saved, setSaved] = useState<GeneratedRecipe | null>(null);
   const [draft, setDraft] = useState<GeneratedRecipe | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -48,6 +56,7 @@ export default function RecipeChatScreen() {
     try {
       const live = await getRecipe(id);
       setTitle(live.recipe.title);
+      setSaved(live.recipe);
       setReady(true);
       setError(null);
     } catch (err) {
@@ -61,9 +70,10 @@ export default function RecipeChatScreen() {
     }, [load]),
   );
 
-  async function send() {
-    const message = input.trim();
+  async function send(raw: string) {
+    const message = raw.trim();
     if (!id || !message || sending) return;
+    const baseline = draft ?? saved;
     const history = messages.slice(-8).map((turn) => ({ role: turn.role, text: turn.text.slice(0, 500) }));
     setInput("");
     setMessages((current) => [...current, { role: "user", text: message }]);
@@ -75,8 +85,14 @@ export default function RecipeChatScreen() {
         recipe: draft ?? undefined,
         history,
       });
+      const changes =
+        result.changes?.length > 0
+          ? result.changes
+          : baseline
+            ? listRecipeChanges(baseline, result.recipe)
+            : [];
       setDraft(result.recipe);
-      setMessages((current) => [...current, { role: "assistant", text: result.reply }]);
+      setMessages((current) => [...current, { role: "assistant", text: result.reply, changes }]);
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : "Changing this recipe needs a connection.");
     } finally {
@@ -95,18 +111,45 @@ export default function RecipeChatScreen() {
       scrollRef={scrollRef}
       onRefresh={() => void load()}
       footer={
-        <View style={styles.composer}>
-          <TextInput
-            value={input}
-            onChangeText={setInput}
-            placeholder="Ask about this recipe"
-            placeholderTextColor={tokens.textMuted}
-            accessibilityLabel="Ask about this recipe"
-            editable={!sending}
-            onFocus={scrollChatToEnd}
-            style={styles.input}
-          />
-          <Button size="compact" label="Send" onPress={() => void send()} loading={sending} disabled={!input.trim()} />
+        <View style={styles.footer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chips}
+            keyboardShouldPersistTaps="handled"
+          >
+            {CHAT_PRESETS.map((preset) => (
+              <Pressable
+                key={preset.label}
+                onPress={() => void send(preset.prompt)}
+                disabled={sending}
+                style={styles.chip}
+                accessibilityRole="button"
+                accessibilityLabel={preset.label}
+              >
+                <AppText variant="caption">{preset.label}</AppText>
+              </Pressable>
+            ))}
+          </ScrollView>
+          <View style={styles.composer}>
+            <TextInput
+              value={input}
+              onChangeText={setInput}
+              placeholder="Ask about this recipe"
+              placeholderTextColor={tokens.textMuted}
+              accessibilityLabel="Ask about this recipe"
+              editable={!sending}
+              onFocus={scrollChatToEnd}
+              style={styles.input}
+            />
+            <Button
+              size="compact"
+              label="Send"
+              onPress={() => void send(input)}
+              loading={sending}
+              disabled={!input.trim()}
+            />
+          </View>
         </View>
       }
     >
@@ -118,6 +161,18 @@ export default function RecipeChatScreen() {
       {messages.map((message, index) => (
         <View key={`${message.role}-${index}`} style={message.role === "user" ? styles.userBubble : styles.assistantBubble}>
           <AppText variant="body">{message.text}</AppText>
+          {message.role === "assistant" && message.changes && message.changes.length > 0 ? (
+            <View style={styles.changes}>
+              <AppText variant="label" color="muted">
+                Changes
+              </AppText>
+              {message.changes.map((line) => (
+                <AppText key={line} variant="caption">
+                  {line}
+                </AppText>
+              ))}
+            </View>
+          ) : null}
         </View>
       ))}
       {!ready && messages.length === 0 && !error ? (
@@ -135,6 +190,21 @@ export default function RecipeChatScreen() {
 }
 
 const styles = StyleSheet.create({
+  footer: {
+    gap: tokens.space.sm,
+  },
+  chips: {
+    gap: tokens.space.sm,
+    paddingVertical: tokens.space.xs,
+  },
+  chip: {
+    borderRadius: tokens.radius.full,
+    borderWidth: 1,
+    borderColor: tokens.border,
+    paddingHorizontal: tokens.space.md,
+    paddingVertical: tokens.space.sm,
+    backgroundColor: tokens.surface,
+  },
   composer: {
     flexDirection: "row",
     alignItems: "center",
@@ -166,5 +236,9 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.surface,
     borderRadius: tokens.radius.md,
     padding: tokens.space.sm,
+    gap: tokens.space.sm,
+  },
+  changes: {
+    gap: tokens.space.xs,
   },
 });

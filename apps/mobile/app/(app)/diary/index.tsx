@@ -15,7 +15,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { hasExtendedNutrients, listPresentNutrients, type DiaryDayResponse, type NutritionSex } from "@savorly/shared";
+import { hasExtendedNutrients, listPresentNutrients, type DiaryDayResponse, type MicroTargets, type NutritionSex } from "@savorly/shared";
 import type { DiaryEntry } from "@savorly/shared";
 import {
   addDiaryEntry,
@@ -93,6 +93,7 @@ export default function DiaryScreen() {
     meals: DiaryDayResponse["meals"];
   } | null>(null);
   const [sex, setSex] = useState<NutritionSex | null>(null);
+  const [microTargets, setMicroTargets] = useState<MicroTargets | null>(null);
   const [pasteText, setPasteText] = useState("");
   const [fillingPaste, setFillingPaste] = useState(false);
   const [fillError, setFillError] = useState<string | null>(null);
@@ -142,6 +143,7 @@ export default function DiaryScreen() {
       if (isActive()) {
         setDay(live);
         setSex(profile?.profile?.sex ?? null);
+        setMicroTargets(profile?.profile?.microTargets ?? null);
         setProfileKcal(profile?.targets?.kcal ?? null);
         setError(null);
       }
@@ -373,6 +375,7 @@ export default function DiaryScreen() {
     setError(null);
     try {
       setDay(await updateDiaryEntry(entry.id, grams));
+      setSelectedIds(null);
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : "Could not update that amount.");
     } finally {
@@ -567,6 +570,7 @@ export default function DiaryScreen() {
           totals={totals}
           targets={day?.targets ?? null}
           sex={sex}
+          microTargets={microTargets}
           remaining={remaining ?? null}
           targetKcal={day?.targets?.kcal ?? null}
         />

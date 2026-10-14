@@ -1,7 +1,27 @@
-import type { GeneratedRecipe, Ingredient, RecipeMacros } from "@savorly/shared";
+import type { GeneratedRecipe, Ingredient, RecipeMacros, RecipeStep } from "./recipe";
 
-export function summarizeRecipeDiff(before: GeneratedRecipe, after: GeneratedRecipe): string {
+export function listRecipeChanges(before: GeneratedRecipe, after: GeneratedRecipe): string[] {
   const lines: string[] = [];
+
+  if (before.title.trim() !== after.title.trim()) {
+    lines.push(`Title: ${before.title} → ${after.title}.`);
+  }
+
+  const beforeNotes = (before.notes ?? "").trim();
+  const afterNotes = (after.notes ?? "").trim();
+  if (beforeNotes !== afterNotes) {
+    if (!beforeNotes) {
+      lines.push("Notes added.");
+    } else if (!afterNotes) {
+      lines.push("Notes removed.");
+    } else {
+      lines.push("Notes updated.");
+    }
+  }
+
+  if (stepsChanged(before.steps, after.steps)) {
+    lines.push("Instructions updated.");
+  }
 
   for (const line of diffIngredients(before.ingredients, after.ingredients)) {
     lines.push(line);
@@ -12,11 +32,21 @@ export function summarizeRecipeDiff(before: GeneratedRecipe, after: GeneratedRec
     lines.push(macroLine);
   }
 
+  return lines;
+}
+
+export function summarizeRecipeDiff(before: GeneratedRecipe, after: GeneratedRecipe): string {
+  const lines = listRecipeChanges(before, after);
   if (lines.length === 0) {
     return "Changes: updated the recipe to match your request.";
   }
-
   return `Changes: ${lines.join(" ")}`;
+}
+
+function stepsChanged(before: RecipeStep[], after: RecipeStep[]): boolean {
+  const previous = before.map((step) => step.text.trim()).join("\n");
+  const next = after.map((step) => step.text.trim()).join("\n");
+  return previous !== next;
 }
 
 function diffIngredients(before: Ingredient[], after: Ingredient[]): string[] {

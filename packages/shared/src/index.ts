@@ -40,6 +40,7 @@ export {
   promoteIngredientSections,
   recipeNotesText,
 } from "./recipe";
+export { listRecipeChanges, summarizeRecipeDiff } from "./recipeDiff";
 export { detectVideoImportType, normalizeVideoImportUrl, type VideoImportType } from "./videoImport";
 export { resolveCreamiSweetenerName } from "./creamiSweetener";
 export { CHEF_SERVING_WEIGHT_G, chefServingWeightG, chefServingWeightHint } from "./chefConstraints";
@@ -140,6 +141,7 @@ export {
   hasExtendedNutrients,
   OPTIONAL_NUTRIENT_KEYS,
   remainingMacros,
+  formatDiaryNumber,
   roundNutrition,
   scaleNutrition,
   sumNutrients,
@@ -180,15 +182,24 @@ export type {
   HealthGroupId,
   HealthNutrient,
   HealthNutrientUnit,
+  IntakeKey,
+  MicroTargetField,
+  MicroTargetKey,
+  MicroTargets,
 } from "./nutrition/healthGroups";
 export {
+  applyMicroTargetOverrides,
   cappedProgress,
   dayIntakeTargets,
   findHealthGroup,
   HEALTH_GROUPS,
   healthGroupPercent,
   healthNutrientAmount,
+  isMicroTargetKey,
   macroCalorieShares,
+  MICRO_TARGET_FIELDS,
+  MICRO_TARGET_KEYS,
+  parseMicroTargets,
 } from "./nutrition/healthGroups";
 export type {
   NutritionActivity,
@@ -213,6 +224,7 @@ export type {
   NevoFoodHit,
   NutritionProfile,
   NutritionProfileResponse,
+  NutritionProfileWrite,
   UsdaFoodHit,
   UserFood,
   UserFoodDetail,

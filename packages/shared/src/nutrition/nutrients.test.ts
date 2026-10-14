@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { remainingMacros, scaleNutrition, sumNutrients } from "./nutrients";
+import { formatDiaryNumber, remainingMacros, scaleNutrition, sumNutrients } from "./nutrients";
 
 const peanutButter = {
   kcal: 588,
@@ -51,5 +51,13 @@ describe("remainingMacros", () => {
       carbsG: 197.6,
       fatG: 61,
     });
+  });
+});
+
+describe("formatDiaryNumber", () => {
+  it("keeps one decimal and drops trailing .0", () => {
+    expect(formatDiaryNumber(12.111111)).toBe("12.1");
+    expect(formatDiaryNumber(8)).toBe("8");
+    expect(formatDiaryNumber(8.04)).toBe("8");
   });
 });

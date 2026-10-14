@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, View } from "react-native";
-import { convertFoodAmount, type FoodAmountUnit } from "@savorly/shared";
+import { convertFoodAmount, formatDiaryNumber, type FoodAmountUnit } from "@savorly/shared";
 import { AppText } from "../components/AppText";
 import { Field } from "../components/Field";
 import { SegmentedControl } from "../components/SegmentedControl";
@@ -11,8 +11,7 @@ export function parseFoodAmount(value: string): number | null {
 }
 
 export function formatAmount(value: number): string {
-  if (Number.isInteger(value)) return String(value);
-  return String(Math.round(value * 100) / 100);
+  return formatDiaryNumber(value);
 }
 
 interface FoodAmountFieldsProps {

@@ -5,10 +5,12 @@ import { Pressable, StyleSheet, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import {
   dayIntakeTargets,
+  formatDiaryNumber,
   formatNutrientAmount,
   HEALTH_GROUPS,
   healthGroupPercent,
   macroCalorieShares,
+  type MicroTargets,
   type NutrientVector,
   type NutritionSex,
   type NutritionTargets,
@@ -21,6 +23,7 @@ interface DiaryDayNutritionProps {
   totals: NutrientVector;
   targets: NutritionTargets | null;
   sex: NutritionSex | null;
+  microTargets?: MicroTargets | null;
   remaining: { kcal: number; proteinG: number; carbsG: number; fatG: number } | null;
   targetKcal: number | null;
 }
@@ -39,10 +42,10 @@ const GROUP_ICONS = {
 } as const;
 
 function DiaryDayNutrition(props: DiaryDayNutritionProps) {
-  const { date, totals, targets, sex, remaining, targetKcal } = props;
+  const { date, totals, targets, sex, microTargets, remaining, targetKcal } = props;
   const [showGroups, setShowGroups] = useState(false);
   const hasTargets = targetKcal != null;
-  const intakes = dayIntakeTargets(targets, sex);
+  const intakes = dayIntakeTargets(targets, sex, microTargets);
   const shares = macroCalorieShares(totals);
   const macroRows = [
     {
@@ -86,14 +89,14 @@ function DiaryDayNutrition(props: DiaryDayNutritionProps) {
               <AppText variant="label" color="muted">
                 Remaining
               </AppText>
-              <AppText variant="display">{remaining ? `${remaining.kcal} kcal` : "—"}</AppText>
+              <AppText variant="display">{remaining ? `${formatDiaryNumber(remaining.kcal)} kcal` : "—"}</AppText>
               <AppText variant="caption" color="muted">
                 {remaining
-                  ? `${remaining.proteinG}g protein · ${remaining.carbsG}g carbs · ${remaining.fatG}g fat`
+                  ? `${formatDiaryNumber(remaining.proteinG)}g protein · ${formatDiaryNumber(remaining.carbsG)}g carbs · ${formatDiaryNumber(remaining.fatG)}g fat`
                   : "Set a profile to see targets."}
               </AppText>
               <AppText variant="caption" color="muted">
-                Logged {totals.kcal} / {targetKcal} kcal
+                Logged {formatDiaryNumber(totals.kcal)} / {formatDiaryNumber(targetKcal)} kcal
               </AppText>
             </>
           ) : null}

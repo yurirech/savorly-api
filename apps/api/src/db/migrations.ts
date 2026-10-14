@@ -15,4 +15,5 @@ export const MIGRATIONS = [
   "0013_meal_staples.sql",
   "0014_diary_day_targets.sql",
   "0015_food_serving_weight.sql",
+  "0016_nutrition_micro_targets.sql",
 ] as const;

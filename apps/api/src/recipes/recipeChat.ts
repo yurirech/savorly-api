@@ -1,4 +1,4 @@
-import type { GeneratedRecipe, SavedRecipe } from "@savorly/shared";
+import { listRecipeChanges, type GeneratedRecipe, type SavedRecipe } from "@savorly/shared";
 import type { Env } from "../config";
 import { AppError } from "../errors";
 import {
@@ -32,14 +32,14 @@ export async function chatAboutRecipe(
   saved: SavedRecipe,
   input: RecipeChatInput,
   env: Env,
-): Promise<{ reply: string; recipe: GeneratedRecipe }> {
+): Promise<{ reply: string; recipe: GeneratedRecipe; changes: string[] }> {
   const message = input.message.trim();
   if (!message) {
     throw new AppError("validation_error", "Write a message about this recipe.", 400);
   }
   const working = input.recipe ?? asGenerated(saved);
   if (env.useMockImports) {
-    return { reply: "This stays the same recipe.", recipe: working };
+    return { reply: "This stays the same recipe.", recipe: working, changes: listRecipeChanges(working, working) };
   }
   if (!env.geminiApiKey) {
     throw new AppError("normalizer_failed", "GEMINI_API_KEY is not configured.", 500);
@@ -56,9 +56,11 @@ export async function chatAboutRecipe(
     responseSchema: GEMINI_ADAPT_RECIPE_SCHEMA,
   });
 
+  const recipe = parseGeminiRecipe(parsed, saved.source);
   return {
     reply: extractAdaptSummary(parsed) ?? "Updated this recipe.",
-    recipe: parseGeminiRecipe(parsed, saved.source),
+    recipe,
+    changes: listRecipeChanges(working, recipe),
   };
 }
 

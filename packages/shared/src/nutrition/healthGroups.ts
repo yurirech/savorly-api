@@ -5,7 +5,7 @@ export type HealthNutrientUnit = "g" | "mg" | "mcg";
 
 export type HealthGroupId = "electrolytes" | "bone" | "energy" | "blood" | "immune";
 
-type IntakeKey =
+export type IntakeKey =
   | "proteinG"
   | "carbsG"
   | "fatG"
@@ -29,7 +29,39 @@ type IntakeKey =
   | "vitaminB12Mcg"
   | "folateMcg";
 
+export type MicroTargetKey = Exclude<IntakeKey, "proteinG" | "carbsG" | "fatG">;
+
+export type MicroTargets = Partial<Record<MicroTargetKey, number>>;
+
 export type DayIntakeTargets = Record<IntakeKey, number>;
+
+export const MICRO_TARGET_KEYS = [
+  "saturatedFatG",
+  "fiberG",
+  "sodiumMg",
+  "potassiumMg",
+  "calciumMg",
+  "magnesiumMg",
+  "phosphorusMg",
+  "vitaminDMcg",
+  "vitaminKMcg",
+  "ironMg",
+  "zincMg",
+  "vitaminAMcgRae",
+  "vitaminCMg",
+  "thiaminMg",
+  "riboflavinMg",
+  "niacinMg",
+  "vitaminB6Mg",
+  "vitaminB12Mcg",
+  "folateMcg",
+] as const satisfies readonly MicroTargetKey[];
+
+export type MicroTargetField = {
+  key: MicroTargetKey;
+  label: string;
+  unit: HealthNutrientUnit;
+};
 
 export type HealthNutrient = {
   id: string;
@@ -176,20 +208,80 @@ export const HEALTH_GROUPS: HealthGroup[] = [
   },
 ];
 
+export const MICRO_TARGET_FIELDS: MicroTargetField[] = (() => {
+  const fields: MicroTargetField[] = [
+    { key: "fiberG", label: "Fiber", unit: "g" },
+    { key: "saturatedFatG", label: "Saturated fat", unit: "g" },
+  ];
+  const seen = new Set<MicroTargetKey>(fields.map((field) => field.key));
+  for (const group of HEALTH_GROUPS) {
+    for (const nutrient of group.nutrients) {
+      const key = nutrient.intakeKey;
+      if (!key || !isMicroTargetKey(key) || seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      fields.push({ key, label: nutrient.label, unit: nutrient.unit });
+    }
+  }
+  return fields;
+})();
+
+export function isMicroTargetKey(key: string): key is MicroTargetKey {
+  return (MICRO_TARGET_KEYS as readonly string[]).includes(key);
+}
+
+export function parseMicroTargets(value: unknown): MicroTargets | null {
+  if (value == null || typeof value !== "object") {
+    return null;
+  }
+  const row = value as Record<string, unknown>;
+  const parsed: MicroTargets = {};
+  for (const key of MICRO_TARGET_KEYS) {
+    const raw = row[key];
+    if (typeof raw !== "number" || !Number.isFinite(raw) || raw <= 0) {
+      continue;
+    }
+    parsed[key] = roundNutrition(raw);
+  }
+  return Object.keys(parsed).length > 0 ? parsed : null;
+}
+
+export function applyMicroTargetOverrides(
+  base: DayIntakeTargets,
+  overrides?: MicroTargets | null,
+): DayIntakeTargets {
+  if (!overrides) {
+    return base;
+  }
+  const next = { ...base };
+  for (const key of MICRO_TARGET_KEYS) {
+    const value = overrides[key];
+    if (value != null && value > 0) {
+      next[key] = value;
+    }
+  }
+  return next;
+}
+
 export function dayIntakeTargets(
   targets: NutritionTargets | null,
   sex: NutritionSex | null,
+  overrides?: MicroTargets | null,
 ): DayIntakeTargets {
   const kcal = targets?.kcal ?? DEFAULT_KCAL;
   const micros = MICRO_BY_SEX[sex ?? "adult"];
-  return {
-    proteinG: targets?.proteinG ?? Math.round((kcal * 0.3) / 4),
-    carbsG: targets?.carbsG ?? Math.round((kcal * 0.4) / 4),
-    fatG: targets?.fatG ?? Math.round((kcal * 0.3) / 9),
-    saturatedFatG: roundNutrition((kcal * 0.1) / 9),
-    fiberG: roundNutrition((kcal / 1000) * 14),
-    ...micros,
-  };
+  return applyMicroTargetOverrides(
+    {
+      proteinG: targets?.proteinG ?? Math.round((kcal * 0.3) / 4),
+      carbsG: targets?.carbsG ?? Math.round((kcal * 0.4) / 4),
+      fatG: targets?.fatG ?? Math.round((kcal * 0.3) / 9),
+      saturatedFatG: roundNutrition((kcal * 0.1) / 9),
+      fiberG: roundNutrition((kcal / 1000) * 14),
+      ...micros,
+    },
+    overrides,
+  );
 }
 
 export function healthNutrientAmount(totals: NutrientVector, nutrient: HealthNutrient): number | null {
