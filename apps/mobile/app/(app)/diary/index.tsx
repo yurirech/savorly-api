@@ -110,6 +110,7 @@ export default function DiaryScreen() {
   const [scrollY, setScrollY] = useState(0);
   const [scrollSpan, setScrollSpan] = useState(0);
   const [savingAmount, setSavingAmount] = useState(false);
+  const [amountEntryId, setAmountEntryId] = useState<string | null>(null);
 
   const closeDiaryMenu = useCallback(() => {
     setMenuOpen(false);
@@ -125,36 +126,35 @@ export default function DiaryScreen() {
 
   const dayMicroGroups = useMemo(() => (day?.totals ? listPresentNutrients(day.totals) : []), [day?.totals]);
 
-  const load = useCallback(async (nextDate: string, isActive: () => boolean = () => true) => {
-    const { readDay } = await import("../../../src/offline/store");
-    const cached = await readDay(nextDate);
+  const load = useCallback(async (nextDate: string, isActive: () => boolean = () => true, waitForLive = false) => {
+    const { openLocalDiaryDay } = await import("../../../src/offline/sync");
+    const { readProfile } = await import("../../../src/offline/store");
+    const local = await openLocalDiaryDay(nextDate);
     if (!isActive()) return;
-    if (cached) {
-      setDay(cached);
-      setError(null);
-    } else {
-      setDay(null);
+    setDay(local);
+    setError(null);
+    const cachedProfile = await readProfile();
+    if (cachedProfile && isActive()) {
+      setSex(cachedProfile.profile?.sex ?? null);
+      setMicroTargets(cachedProfile.profile?.microTargets ?? null);
+      setProfileKcal(cachedProfile.targets?.kcal ?? null);
     }
-    try {
-      const [live, profile] = await Promise.all([
-        fetchDiaryDay(nextDate),
-        fetchNutritionProfile().catch(() => null),
-      ]);
-      if (isActive()) {
+    const livePromise = Promise.all([
+      fetchDiaryDay(nextDate),
+      fetchNutritionProfile().catch(() => null),
+    ])
+      .then(([live, profile]) => {
+        if (!isActive()) return;
         setDay(live);
-        setSex(profile?.profile?.sex ?? null);
-        setMicroTargets(profile?.profile?.microTargets ?? null);
-        setProfileKcal(profile?.targets?.kcal ?? null);
+        if (profile) {
+          setSex(profile.profile?.sex ?? null);
+          setMicroTargets(profile.profile?.microTargets ?? null);
+          setProfileKcal(profile.targets?.kcal ?? null);
+        }
         setError(null);
-      }
-    } catch {
-      if (!isActive()) return;
-      if (cached) {
-        setError(null);
-        return;
-      }
-      setError("No day saved on this phone yet.");
-    }
+      })
+      .catch(() => undefined);
+    if (waitForLive) await livePromise;
   }, []);
 
   const dateSwipe = useRef(
@@ -175,6 +175,7 @@ export default function DiaryScreen() {
 
   useEffect(() => {
     setSelectedIds(null);
+    setAmountEntryId(null);
     dayFade.setValue(0.35);
     Animated.timing(dayFade, { toValue: 1, duration: 180, useNativeDriver: true }).start();
   }, [date, dayFade]);
@@ -192,7 +193,7 @@ export default function DiaryScreen() {
   async function onRefresh() {
     setRefreshing(true);
     try {
-      await load(date);
+      await load(date, () => true, true);
     } finally {
       setRefreshing(false);
     }
@@ -353,6 +354,7 @@ export default function DiaryScreen() {
   }
 
   function startSelect(entry: DiaryEntry) {
+    setAmountEntryId(null);
     setSelectedIds((current) => (current?.includes(entry.id) ? current : [...(current ?? []), entry.id]));
   }
 
@@ -375,7 +377,7 @@ export default function DiaryScreen() {
     setError(null);
     try {
       setDay(await updateDiaryEntry(entry.id, grams));
-      setSelectedIds(null);
+      setAmountEntryId(null);
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : "Could not update that amount.");
     } finally {
@@ -452,10 +454,10 @@ export default function DiaryScreen() {
   const jumpVisible = scrollY > 24 && scrollSpan > 48;
   const jumpToTop = scrollY > scrollSpan / 2;
   const amountEntry =
-    selectedIds?.length === 1
-      ? meals.flatMap((meal) => meal.entries).find((entry) => entry.id === selectedIds[0] && entry.kind === "food") ??
-        null
-      : null;
+    amountEntryId == null
+      ? null
+      : meals.flatMap((meal) => meal.entries).find((entry) => entry.id === amountEntryId && entry.kind === "food") ??
+        null;
 
   return (
     <Screen
@@ -662,6 +664,10 @@ export default function DiaryScreen() {
             onToggleSelect={toggleSelect}
             amountEntryId={amountEntry?.id ?? null}
             savingAmount={savingAmount}
+            onEditAmount={(entry) => {
+              if (entry.kind !== "food") return;
+              setAmountEntryId((current) => (current === entry.id ? null : entry.id));
+            }}
             onSaveAmount={saveEntryAmount}
           />
         ))}

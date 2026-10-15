@@ -1,6 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { DiaryMealGroup } from "@savorly/shared";
-import { fetchDiaryDay } from "../api/client";
 
 const KEYS = {
   mealId: "diary:lastMealId",
@@ -38,15 +37,17 @@ export async function writeLastDiaryMeal(input: LastDiaryMealPreference): Promis
 }
 
 export async function resolveMealForDate(date: string): Promise<Pick<DiaryMealGroup, "id" | "name"> | null> {
+  const { openLocalDiaryDay } = await import("../offline/sync");
   const saved = await readLastDiaryMeal();
-  if (saved && saved.date === date) {
-    const day = await fetchDiaryDay(date);
-    const meal = day.meals.find((row) => row.id === saved.mealId);
+  const day = await openLocalDiaryDay(date);
+  if (saved) {
+    const meal =
+      (saved.date === date ? day.meals.find((row) => row.id === saved.mealId) : undefined) ??
+      day.meals.find((row) => row.name === saved.mealName);
     if (meal) {
       return { id: meal.id, name: meal.name };
     }
   }
-  const day = await fetchDiaryDay(date);
   if (day.meals.length === 1) {
     const only = day.meals[0];
     return only ? { id: only.id, name: only.name } : null;

@@ -788,6 +788,12 @@ export async function createDiaryMeal(
   const isoDate = parseIsoDate(input.date);
   const name = parseMealName(input.name);
   await materializeMealTemplates(db, userId, isoDate);
+  const [existing] = await db
+    .select({ id: diaryMeals.id })
+    .from(diaryMeals)
+    .where(and(eq(diaryMeals.userId, userId), eq(diaryMeals.date, isoDate), eq(diaryMeals.name, name)))
+    .limit(1);
+  if (existing) return getDiaryDay(db, userId, isoDate);
   const [maxOrder] = await db
     .select({ value: sql<number>`coalesce(max(${diaryMeals.sortOrder}), -1)` })
     .from(diaryMeals)

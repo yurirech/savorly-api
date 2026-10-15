@@ -37,6 +37,7 @@ interface DiaryMealSectionProps {
   onToggleSelect: (entry: DiaryEntry) => void;
   amountEntryId: string | null;
   savingAmount: boolean;
+  onEditAmount: (entry: DiaryEntry) => void;
   onSaveAmount: (entry: DiaryEntry, grams: number) => void;
 }
 
@@ -65,6 +66,7 @@ function DiaryMealSection(props: DiaryMealSectionProps) {
     onToggleSelect,
     amountEntryId,
     savingAmount,
+    onEditAmount,
     onSaveAmount,
   } = props;
   const [nutrientsOpen, setNutrientsOpen] = useState(false);
@@ -122,6 +124,7 @@ function DiaryMealSection(props: DiaryMealSectionProps) {
               onToggleSelect={() => onToggleSelect(entry)}
               editingAmount={amountEntryId === entry.id}
               savingAmount={savingAmount}
+              onEditAmount={() => onEditAmount(entry)}
               onSaveAmount={(grams) => onSaveAmount(entry, grams)}
             />
           ))}
@@ -184,6 +187,7 @@ interface DiaryEntryRowProps {
   onToggleSelect: () => void;
   editingAmount: boolean;
   savingAmount: boolean;
+  onEditAmount: () => void;
   onSaveAmount: (grams: number) => void;
 }
 
@@ -201,6 +205,7 @@ function DiaryEntryRow(props: DiaryEntryRowProps) {
     onToggleSelect,
     editingAmount,
     savingAmount,
+    onEditAmount,
     onSaveAmount,
   } = props;
   const [offset, setOffset] = useState(0);
@@ -301,38 +306,70 @@ function DiaryEntryRow(props: DiaryEntryRowProps) {
           </AppText>
         </View>
       ) : null}
-      <Pressable
-        onPress={() => {
-          if (selecting) {
-            onToggleSelect();
-            return;
-          }
-          if (dragged.current) {
-            dragged.current = false;
-            return;
-          }
-          onPress();
-        }}
-        onLongPress={onStartSelect}
-        delayLongPress={350}
-        style={[styles.entryRow, { transform: [{ translateX: selecting ? 0 : offset }] }]}
-        accessibilityRole="button"
-        accessibilityState={{ selected }}
-        accessibilityLabel={entry.kind === "quick" ? `${entry.foodName}, ${formatDiaryNumber(entry.nutrients.kcal)} kcal` : `${entry.foodName}, ${formatDiaryNumber(entry.grams)} grams`}
-      >
+      <View style={[styles.entryRow, { transform: [{ translateX: selecting ? 0 : offset }] }]}>
         {selecting ? (
           <View style={[styles.check, selected && styles.checkOn]}>
             {selected ? <Check size={16} color={tokens.bg} weight="bold" /> : null}
           </View>
         ) : null}
-        <FoodEmojiBadge emoji={entry.kind === "quick" ? "⚡" : foodEmoji({ name: entry.foodName })} />
         <View style={styles.entryCopy}>
-          <AppText variant="body">{entry.foodName}</AppText>
-          <AppText variant="caption" color="muted">
-            {caption}
-          </AppText>
+          <Pressable
+            onPress={() => {
+              if (selecting) {
+                onToggleSelect();
+                return;
+              }
+              if (dragged.current) {
+                dragged.current = false;
+                return;
+              }
+              onPress();
+            }}
+            onLongPress={onStartSelect}
+            delayLongPress={350}
+            style={styles.entryMain}
+            accessibilityRole="button"
+            accessibilityState={{ selected }}
+            accessibilityLabel={entry.foodName}
+          >
+            <FoodEmojiBadge emoji={entry.kind === "quick" ? "⚡" : foodEmoji({ name: entry.foodName })} />
+            <AppText variant="body" style={styles.entryName}>
+              {entry.foodName}
+            </AppText>
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              if (selecting) {
+                onToggleSelect();
+                return;
+              }
+              if (dragged.current) {
+                dragged.current = false;
+                return;
+              }
+              if (entry.kind === "quick") {
+                onPress();
+                return;
+              }
+              onEditAmount();
+            }}
+            onLongPress={onStartSelect}
+            delayLongPress={350}
+            hitSlop={8}
+            style={styles.entryAmount}
+            accessibilityRole="button"
+            accessibilityLabel={
+              entry.kind === "quick"
+                ? `${formatDiaryNumber(entry.nutrients.kcal)} kcal, edit`
+                : `${formatDiaryNumber(entry.grams)} grams, ${formatDiaryNumber(entry.nutrients.kcal)} kcal, edit amount`
+            }
+          >
+            <AppText variant="caption" color="muted">
+              {caption}
+            </AppText>
+          </Pressable>
         </View>
-      </Pressable>
+      </View>
       {editingAmount ? (
         <Animated.View style={[styles.amountEditor, { opacity: editorFade, transform: [{ translateY: editorSlide }] }]}>
           <TextInput
@@ -431,6 +468,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: tokens.border,
     backgroundColor: tokens.surface,
+  },
+  entryMain: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.space.sm,
+  },
+  entryName: {
+    flex: 1,
+  },
+  entryAmount: {
+    minHeight: 44,
+    justifyContent: "center",
+    paddingLeft: 40 + tokens.space.sm,
   },
   check: {
     width: 22,

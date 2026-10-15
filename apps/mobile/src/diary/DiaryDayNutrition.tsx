@@ -2,14 +2,12 @@ import { type Href, router } from "expo-router";
 import { Bone, Drop, Lightning, Shield } from "phosphor-react-native";
 import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import Svg, { Circle } from "react-native-svg";
 import {
   dayIntakeTargets,
   formatDiaryNumber,
   formatNutrientAmount,
   HEALTH_GROUPS,
   healthGroupPercent,
-  macroCalorieShares,
   type MicroTargets,
   type NutrientVector,
   type NutritionSex,
@@ -28,11 +26,6 @@ interface DiaryDayNutritionProps {
   targetKcal: number | null;
 }
 
-const DONUT_SIZE = 132;
-const DONUT_STROKE = 16;
-const DONUT_RADIUS = (DONUT_SIZE - DONUT_STROKE) / 2;
-const DONUT_CIRCUMFERENCE = 2 * Math.PI * DONUT_RADIUS;
-
 const GROUP_ICONS = {
   electrolytes: Lightning,
   bone: Bone,
@@ -46,7 +39,7 @@ function DiaryDayNutrition(props: DiaryDayNutritionProps) {
   const [showGroups, setShowGroups] = useState(false);
   const hasTargets = targetKcal != null;
   const intakes = dayIntakeTargets(targets, sex, microTargets);
-  const shares = macroCalorieShares(totals);
+  const caloriePercent = hasTargets ? percentOf(totals.kcal, targetKcal) : 0;
   const macroRows = [
     {
       label: "Carbs",
@@ -115,19 +108,25 @@ function DiaryDayNutrition(props: DiaryDayNutritionProps) {
           <Shield size={22} color={showGroups ? tokens.accent : tokens.text} />
         </Pressable>
       </View>
-      <View style={styles.macroRow}>
-        <MacroDonut carbs={shares.carbs} protein={shares.protein} fat={shares.fat} />
-        <View style={styles.macroMeters}>
-          {macroRows.map((row) => (
-            <IntakeMeter
-              key={row.label}
-              label={row.label}
-              detail={`${row.amount} · ${row.percent}%`}
-              percent={row.percent}
-              color={row.color}
-            />
-          ))}
-        </View>
+      <View style={styles.meters}>
+        {hasTargets ? (
+          <IntakeMeter
+            label="Calories"
+            detail={`${formatDiaryNumber(totals.kcal)} kcal · ${caloriePercent}%`}
+            percent={caloriePercent}
+            color={tokens.accent}
+            trackHeight={16}
+          />
+        ) : null}
+        {macroRows.map((row) => (
+          <IntakeMeter
+            key={row.label}
+            label={row.label}
+            detail={`${row.amount} · ${row.percent}%`}
+            percent={row.percent}
+            color={row.color}
+          />
+        ))}
       </View>
       {showGroups ? (
       <View style={styles.groups}>
@@ -173,71 +172,17 @@ function percentOf(amount: number, target: number): number {
   return Math.round((amount / target) * 100);
 }
 
-interface MacroDonutProps {
-  carbs: number;
-  protein: number;
-  fat: number;
-}
-
-function macroArcs(carbs: number, protein: number, fat: number) {
-  const slices = [
-    { id: "carbs", share: carbs, color: tokens.accent },
-    { id: "protein", share: protein, color: tokens.success },
-    { id: "fat", share: fat, color: tokens.danger },
-  ];
-  let cursor = 0;
-  return slices.flatMap((slice) => {
-    const length = slice.share * DONUT_CIRCUMFERENCE;
-    const offset = DONUT_CIRCUMFERENCE / 4 - cursor;
-    cursor += length;
-    if (length <= 0) {
-      return [];
-    }
-    return [{ id: slice.id, color: slice.color, length, offset }];
-  });
-}
-
-function MacroDonut(props: MacroDonutProps) {
-  const { carbs, protein, fat } = props;
-  const arcs = macroArcs(carbs, protein, fat);
-
-  return (
-    <Svg width={DONUT_SIZE} height={DONUT_SIZE} accessibilityLabel="Macro calorie share">
-      <Circle
-        cx={DONUT_SIZE / 2}
-        cy={DONUT_SIZE / 2}
-        r={DONUT_RADIUS}
-        stroke={tokens.border}
-        strokeWidth={DONUT_STROKE}
-        fill="none"
-      />
-      {arcs.map((arc) => (
-        <Circle
-          key={arc.id}
-          cx={DONUT_SIZE / 2}
-          cy={DONUT_SIZE / 2}
-          r={DONUT_RADIUS}
-          stroke={arc.color}
-          strokeWidth={DONUT_STROKE}
-          fill="none"
-          strokeDasharray={`${arc.length} ${DONUT_CIRCUMFERENCE - arc.length}`}
-          strokeDashoffset={arc.offset}
-        />
-      ))}
-    </Svg>
-  );
-}
-
 interface IntakeMeterProps {
   label: string;
   detail: string;
   percent: number;
   color: string;
   hideCopy?: boolean;
+  trackHeight?: number;
 }
 
 function IntakeMeter(props: IntakeMeterProps) {
-  const { label, detail, percent, color, hideCopy = false } = props;
+  const { label, detail, percent, color, hideCopy = false, trackHeight = 8 } = props;
   const width = `${Math.min(100, Math.max(0, percent))}%` as const;
 
   return (
@@ -250,8 +195,8 @@ function IntakeMeter(props: IntakeMeterProps) {
           </AppText>
         </View>
       )}
-      <View style={styles.track}>
-        <View style={[styles.fill, { width, backgroundColor: color }]} />
+      <View style={[styles.track, { height: trackHeight }]}>
+        <View style={[styles.fill, { width, height: trackHeight, backgroundColor: color }]} />
       </View>
     </View>
   );
@@ -276,15 +221,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
     gap: tokens.space.xs,
   },
-  macroRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: tokens.space.md,
-  },
-  macroMeters: {
-    flex: 1,
-    minWidth: 180,
+  meters: {
     gap: tokens.space.sm,
   },
   groups: {

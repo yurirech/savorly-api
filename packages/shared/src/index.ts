@@ -241,6 +241,14 @@ export {
   mealTotalsFromEntries,
 } from "./nutrition/diaryMeals";
 export {
+  emptyDiaryDay,
+  mergeRemoteDay,
+  mostRecentCachedDay,
+  resolveLocalDiaryDay,
+  seedDayFromSource,
+} from "./nutrition/diaryLocal";
+export type { MergeRemoteDayResult, SeededMeal } from "./nutrition/diaryLocal";
+export {
   buildQuickDiaryNutrients,
   parseQuickDiaryLabel,
   QUICK_DIARY_DEFAULT_LABEL,

@@ -14,10 +14,14 @@ import type {
 import {
   computeNutritionTargets,
   dayTotalsFromMeals,
+  emptyDiaryDay,
   mealTotalsFromEntries,
+  mergeRemoteDay,
   NEVO_ATTRIBUTION,
   remainingMacros,
+  resolveLocalDiaryDay,
   scaleNutrition,
+  type SeededMeal,
 } from "@savorly/shared";
 import { getCachedRecipe, openDb } from "../db/cache";
 
@@ -54,10 +58,6 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-function emptyTotals(): NutrientVector {
-  return { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 };
-}
-
 export function recomputeDay(day: DiaryDayResponse, profile: NutritionProfileResponse | null): DiaryDayResponse {
   const meals = day.meals.map((meal) => ({
     ...meal,
@@ -75,7 +75,112 @@ export function recomputeDay(day: DiaryDayResponse, profile: NutritionProfileRes
 }
 
 export function emptyDay(date: string): DiaryDayResponse {
-  return { date, meals: [], totals: emptyTotals(), remaining: null, targets: null };
+  return emptyDiaryDay(date);
+}
+
+const ensuringDays = new Map<string, Promise<{ day: DiaryDayResponse; seededMeals: SeededMeal[] }>>();
+const dayWrites = new Map<string, Promise<unknown>>();
+
+function withDayWrite<T>(date: string, fn: () => Promise<T>): Promise<T> {
+  const previous = dayWrites.get(date) ?? Promise.resolve();
+  const next = previous.then(fn, fn);
+  dayWrites.set(
+    date,
+    next.then(
+      () => undefined,
+      () => undefined,
+    ),
+  );
+  return next;
+}
+
+export async function ensureLocalDay(date: string): Promise<{ day: DiaryDayResponse; seededMeals: SeededMeal[] }> {
+  const pending = ensuringDays.get(date);
+  if (pending) return pending;
+  const job = withDayWrite(date, ensureLocalDayUnlocked.bind(null, date)).finally(() => {
+    ensuringDays.delete(date);
+  });
+  ensuringDays.set(date, job);
+  return job;
+}
+
+async function ensureLocalDayUnlocked(
+  date: string,
+): Promise<{ day: DiaryDayResponse; seededMeals: SeededMeal[] }> {
+  const cached = await readDay(date);
+  if (cached) return { day: cached, seededMeals: [] };
+  const days = await listDays();
+  const resolved = resolveLocalDiaryDay(date, null, days, newId);
+  await saveDay(resolved.day);
+  return { day: (await readDay(date)) ?? resolved.day, seededMeals: resolved.seededMeals };
+}
+
+export function applyRemoteDiaryDay(date: string, remote: DiaryDayResponse): Promise<DiaryDayResponse> {
+  return withDayWrite(date, async () => {
+    const local = await readDay(date);
+    const { day, mealIdMap } = mergeRemoteDay(local, { ...remote, date });
+    await rewriteOutboxMealIds(mealIdMap);
+    await saveDay(day);
+    return (await readDay(date)) ?? day;
+  });
+}
+
+export async function rewriteOutboxMealIds(mealIdMap: Record<string, string>): Promise<void> {
+  const entries = Object.entries(mealIdMap);
+  if (entries.length === 0) return;
+  const jobs = await listJobs();
+  for (const job of jobs) {
+    const bodyId = job.body && typeof job.body === "object" ? (job.body as { id?: string }).id : undefined;
+    if (job.method === "POST" && job.path === "/nutrition/diary/meals" && bodyId && mealIdMap[bodyId]) {
+      await deleteJob(job.id);
+      continue;
+    }
+    const path = remapPath(job.path, mealIdMap);
+    const body = remapMealIdsInBody(job.body, mealIdMap);
+    if (path === job.path && body === job.body) continue;
+    await replaceJob({ ...job, path, body });
+  }
+}
+
+function remapPath(path: string, mealIdMap: Record<string, string>): string {
+  let next = path;
+  for (const [from, to] of Object.entries(mealIdMap)) {
+    next = next.split(from).join(to);
+  }
+  return next;
+}
+
+function remapMealIdsInBody(body: unknown, mealIdMap: Record<string, string>): unknown {
+  if (Array.isArray(body)) return body.map((item) => remapMealIdsInBody(item, mealIdMap));
+  if (!body || typeof body !== "object") return body;
+  const row = body as Record<string, unknown>;
+  let changed = false;
+  const next: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(row)) {
+    if (key === "mealId" && typeof value === "string" && mealIdMap[value]) {
+      next[key] = mealIdMap[value];
+      changed = true;
+      continue;
+    }
+    const nested = remapMealIdsInBody(value, mealIdMap);
+    if (nested !== value) changed = true;
+    next[key] = nested;
+  }
+  return changed ? next : body;
+}
+
+export async function replaceJob(job: OutboxJob): Promise<void> {
+  if (!useSqlite) {
+    memory.outbox = memory.outbox.map((row) => (row.id === job.id ? job : row));
+    return;
+  }
+  const db = await openDb();
+  await db.runAsync("UPDATE outbox SET method = ?, path = ?, body = ? WHERE id = ?", [
+    job.method,
+    job.path,
+    job.body == null ? null : JSON.stringify(job.body),
+    job.id,
+  ]);
 }
 
 export async function readMeta(key: string): Promise<string | null> {
@@ -503,14 +608,16 @@ export function localEntry(input: {
   };
 }
 
-export async function mutateDay(
+export function mutateDay(
   date: string,
   change: (day: DiaryDayResponse) => DiaryDayResponse,
 ): Promise<DiaryDayResponse> {
-  const current = (await readDay(date)) ?? emptyDay(date);
-  const next = await (async () => change(current))();
-  await saveDay(next);
-  return (await readDay(date)) ?? next;
+  return withDayWrite(date, async () => {
+    const current = (await readDay(date)) ?? emptyDay(date);
+    const next = change(current);
+    await saveDay(next);
+    return (await readDay(date)) ?? next;
+  });
 }
 
 export function findMeal(day: DiaryDayResponse, mealId: string): DiaryMealGroup | undefined {

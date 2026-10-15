@@ -28,6 +28,10 @@ import { getToken, clearSession } from "../auth/session";
 import { shiftIsoDate, todayIsoDate } from "../utils/isoDate";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4000";
+const DEFAULT_TIMEOUT_MS = 3000;
+const LONG_TIMEOUT_MS = 120_000;
+
+export type ApiRequestInit = RequestInit & { timeoutMs?: number | null };
 
 export class ApiRequestError extends Error {
   constructor(
@@ -39,16 +43,35 @@ export class ApiRequestError extends Error {
   }
 }
 
-export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function request<T>(path: string, init: ApiRequestInit = {}): Promise<T> {
   const token = await getToken();
-  const response = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...init.headers,
-    },
-  });
+  const { timeoutMs = DEFAULT_TIMEOUT_MS, signal: callerSignal, ...rest } = init;
+  const controller = new AbortController();
+  const timer =
+    timeoutMs == null || timeoutMs <= 0 ? null : setTimeout(() => controller.abort(), timeoutMs);
+  if (callerSignal) {
+    if (callerSignal.aborted) controller.abort();
+    else callerSignal.addEventListener("abort", () => controller.abort(), { once: true });
+  }
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      ...rest,
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...rest.headers,
+      },
+    });
+  } catch (err) {
+    if (controller.signal.aborted) {
+      throw new ApiRequestError("unavailable", "The API did not respond in time.");
+    }
+    throw err;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 
   if (response.status === 401) {
     await clearSession();
@@ -88,9 +111,13 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
 
 export { request as apiRequest };
 
-async function requestDiaryDay(path: string, init: RequestInit = {}): Promise<DiaryDayResponse> {
+async function requestDiaryDay(path: string, init: ApiRequestInit = {}): Promise<DiaryDayResponse> {
   const data = await request<unknown>(path, init);
   return coerceDiaryDayResponse(data);
+}
+
+function longRequest<T>(path: string, init: ApiRequestInit = {}): Promise<T> {
+  return request<T>(path, { ...init, timeoutMs: LONG_TIMEOUT_MS });
 }
 
 async function offline<T>(err: unknown, fallback: () => Promise<T>): Promise<T> {
@@ -114,14 +141,14 @@ export function register(email: string, password: string) {
 }
 
 export function importRecipe(body: RecipeImportRequest) {
-  return request<{ recipe: GeneratedRecipe }>("/imports", {
+  return longRequest<{ recipe: GeneratedRecipe }>("/imports", {
     method: "POST",
     body: JSON.stringify(body),
   });
 }
 
 export function generateRecipe(body: RecipeGenerateRequest) {
-  return request<{ recipe: GeneratedRecipe; adaptSummary?: string }>("/generations", {
+  return longRequest<{ recipe: GeneratedRecipe; adaptSummary?: string }>("/generations", {
     method: "POST",
     body: JSON.stringify(body),
   });
@@ -494,7 +521,7 @@ export function fetchMealSuggestion(options: { category?: FoodCategory; excludeI
     params.set("exclude", options.excludeIds.join(","));
   }
   const query = params.toString();
-  return request<MealSuggestionResponse>(`/pantry/meal-suggestions${query ? `?${query}` : ""}`);
+  return longRequest<MealSuggestionResponse>(`/pantry/meal-suggestions${query ? `?${query}` : ""}`);
 }
 
 export function chatAboutRecipe(
@@ -505,14 +532,14 @@ export function chatAboutRecipe(
     history?: { role: "user" | "assistant"; text: string }[];
   },
 ) {
-  return request<{ reply: string; recipe: GeneratedRecipe; changes: string[] }>(`/recipes/${encodeURIComponent(recipeId)}/chat`, {
+  return longRequest<{ reply: string; recipe: GeneratedRecipe; changes: string[] }>(`/recipes/${encodeURIComponent(recipeId)}/chat`, {
     method: "POST",
     body: JSON.stringify(body),
   });
 }
 
 export function requestPantrySubstitutions(recipeId: string, options?: { displayServings?: number }) {
-  return request<PantrySubstitutionResponse>(`/recipes/${encodeURIComponent(recipeId)}/pantry-substitutions`, {
+  return longRequest<PantrySubstitutionResponse>(`/recipes/${encodeURIComponent(recipeId)}/pantry-substitutions`, {
     method: "POST",
     body: JSON.stringify(options ?? {}),
   });
@@ -596,7 +623,7 @@ export async function fetchNutritionFood(id: string): Promise<{ food: UserFood; 
 }
 
 export function parseFoodLabel(text: string) {
-  return request<FoodLabelFill>("/nutrition/foods/from-text", {
+  return longRequest<FoodLabelFill>("/nutrition/foods/from-text", {
     method: "POST",
     body: JSON.stringify({ text }),
   });
@@ -655,14 +682,14 @@ export async function searchNevoFoods(q: string) {
 export async function ensureNevoSnapshot() {
   const { hasNevoSnapshot, saveNevoFoods } = await import("../offline/store");
   if (await hasNevoSnapshot()) return;
-  const live = await request<{
+  const live = await longRequest<{
     foods: Array<NevoFoodHit & { per100g: NutrientVector }>;
   }>("/nutrition/foods/nevo/snapshot");
   await saveNevoFoods(live.foods);
 }
 
 export async function importUsdaFood(fdcId: number, name?: string) {
-  const live = await request<{ food: UserFood }>("/nutrition/foods/import", {
+  const live = await longRequest<{ food: UserFood }>("/nutrition/foods/import", {
     method: "POST",
     body: JSON.stringify({ fdcId, name }),
   });
@@ -672,7 +699,7 @@ export async function importUsdaFood(fdcId: number, name?: string) {
 }
 
 export async function importFatsecretFood(foodId: number, name?: string) {
-  const live = await request<{ food: UserFood; attribution: string }>("/nutrition/foods/import/fatsecret", {
+  const live = await longRequest<{ food: UserFood; attribution: string }>("/nutrition/foods/import/fatsecret", {
     method: "POST",
     body: JSON.stringify({ foodId, name }),
   });
@@ -695,7 +722,7 @@ export function replaceStapleFoods() {
 
 export async function importNevoFood(nevoCode: number, name?: string) {
   try {
-    const live = await request<{ food: UserFood; attribution: string }>("/nutrition/foods/import/nevo", {
+    const live = await longRequest<{ food: UserFood; attribution: string }>("/nutrition/foods/import/nevo", {
       method: "POST",
       body: JSON.stringify({ nevoCode, name }),
     });
@@ -775,14 +802,13 @@ export async function deleteNutritionFood(id: string) {
 export async function fetchDiaryDay(date: string) {
   try {
     const live = await requestDiaryDay(`/nutrition/diary?date=${encodeURIComponent(date)}`);
-    const { saveDay } = await import("../offline/store");
-    await saveDay(live);
-    return live;
+    const { applyRemoteDiaryDay } = await import("../offline/store");
+    return applyRemoteDiaryDay(date, live);
   } catch (err) {
     return offline(err, async () => {
-      const { readDay } = await import("../offline/store");
-      const day = await readDay(date);
-      if (!day) throw err;
+      const { flushOutbox, openLocalDiaryDay } = await import("../offline/sync");
+      const day = await openLocalDiaryDay(date);
+      void flushOutbox();
       return day;
     });
   }
@@ -819,64 +845,54 @@ export async function setDiaryDayTarget(date: string, kcal: number) {
     method: "PUT",
     body: JSON.stringify({ date, kcal }),
   });
-  const { saveDay } = await import("../offline/store");
-  await saveDay(live);
-  return live;
+  const { applyRemoteDiaryDay } = await import("../offline/store");
+  return applyRemoteDiaryDay(date, live);
 }
 
 export async function clearDiaryDayTarget(date: string) {
   const live = await requestDiaryDay(`/nutrition/diary/target?date=${encodeURIComponent(date)}`, {
     method: "DELETE",
   });
-  const { saveDay } = await import("../offline/store");
-  await saveDay(live);
-  return live;
+  const { applyRemoteDiaryDay } = await import("../offline/store");
+  return applyRemoteDiaryDay(date, live);
 }
 
 export async function createDiaryMeal(date: string, name: string) {
-  try {
-    const live = await requestDiaryDay("/nutrition/diary/meals", {
-      method: "POST",
-      body: JSON.stringify({ date, name }),
-    });
-    const { saveDay } = await import("../offline/store");
-    await saveDay(live);
-    return live;
-  } catch (err) {
-    return offline(err, async () => {
-      const { enqueue, flushOutbox } = await import("../offline/sync");
-      const { mutateDay, newId } = await import("../offline/store");
-      const id = newId();
-      const day = await mutateDay(date, (current) => {
-        if (current.meals.some((meal) => meal.name === name.trim())) return current;
-        const sortOrder = current.meals.reduce((max, meal) => Math.max(max, meal.sortOrder), -1) + 1;
-        return {
-          ...current,
-          meals: [
-            ...current.meals,
-            {
-              id,
-              date,
-              name: name.trim(),
-              sortOrder,
-              totals: { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 },
-              entries: [],
-            },
-          ],
-        };
-      });
-      await enqueue("POST", "/nutrition/diary/meals", { id, date, name: name.trim() });
-      void flushOutbox();
-      return day;
-    });
+  const { enqueue, flushOutbox } = await import("../offline/sync");
+  const { mutateDay, newId } = await import("../offline/store");
+  const trimmed = name.trim();
+  const id = newId();
+  let created = false;
+  const day = await mutateDay(date, (current) => {
+    if (current.meals.some((meal) => meal.name === trimmed)) return current;
+    created = true;
+    const sortOrder = current.meals.reduce((max, meal) => Math.max(max, meal.sortOrder), -1) + 1;
+    return {
+      ...current,
+      meals: [
+        ...current.meals,
+        {
+          id,
+          date,
+          name: trimmed,
+          sortOrder,
+          totals: { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 },
+          entries: [],
+        },
+      ],
+    };
+  });
+  if (created) {
+    await enqueue("POST", "/nutrition/diary/meals", { id, date, name: trimmed });
+    void flushOutbox();
   }
+  return day;
 }
 
-async function persistDay(path: string, init: RequestInit, dateHint?: string) {
+async function persistDay(path: string, init: ApiRequestInit, dateHint?: string) {
   const live = await requestDiaryDay(path, init);
-  const { saveDay } = await import("../offline/store");
-  await saveDay(live);
-  return live;
+  const { applyRemoteDiaryDay } = await import("../offline/store");
+  return applyRemoteDiaryDay(dateHint ?? live.date, live);
 }
 
 async function dayContainingMeal(mealId: string) {
@@ -965,38 +981,32 @@ export async function copyPreviousDiaryMeal(id: string) {
 }
 
 export async function logMealStaples(id: string) {
-  try {
-    return await persistDay(`/nutrition/diary/meals/${id}/staples`, { method: "POST" });
-  } catch (err) {
-    return offline(err, async () => {
-      const { enqueue, flushOutbox } = await import("../offline/sync");
-      const { listDays, mutateDay, newId, readFood, scaledFoodEntry, stapleFoodIds } = await import("../offline/store");
-      const target = await dayContainingMeal(id);
-      const meal = target?.meals.find((item) => item.id === id);
-      if (!target || !meal) throw err;
-      const foodIds = await stapleFoodIds(meal.name);
-      if (foodIds.length === 0) throw new Error("Those staples are not on this phone yet.");
-      const days = await listDays();
-      const entries: DiaryEntry[] = [];
-      for (const foodId of foodIds) {
-        const food = await readFood(foodId);
-        if (!food) continue;
-        const previous = days
-          .flatMap((row) => row.meals.flatMap((group) => group.entries))
-          .filter((entry) => entry.foodId === foodId)
-          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-        entries.push(scaledFoodEntry(food, previous?.grams ?? 0, target.date, id, newId()));
-      }
-      if (entries.length === 0) throw new Error("Those staples are not on this phone yet.");
-      const filled = await mutateDay(target.date, (current) => ({
-        ...current,
-        meals: current.meals.map((item) => (item.id === id ? { ...item, entries } : item)),
-      }));
-      await enqueue("POST", `/nutrition/diary/meals/${id}/staples`, null);
-      void flushOutbox();
-      return filled;
-    });
+  const { enqueue, flushOutbox } = await import("../offline/sync");
+  const { listDays, mutateDay, newId, readFood, scaledFoodEntry, stapleFoodIds } = await import("../offline/store");
+  const target = await dayContainingMeal(id);
+  const meal = target?.meals.find((item) => item.id === id);
+  if (!target || !meal) throw new Error("Those staples are not on this phone yet.");
+  const foodIds = await stapleFoodIds(meal.name);
+  if (foodIds.length === 0) throw new Error("Those staples are not on this phone yet.");
+  const days = await listDays();
+  const entries: DiaryEntry[] = [];
+  for (const foodId of foodIds) {
+    const food = await readFood(foodId);
+    if (!food) continue;
+    const previous = days
+      .flatMap((row) => row.meals.flatMap((group) => group.entries))
+      .filter((entry) => entry.foodId === foodId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    entries.push(scaledFoodEntry(food, previous?.grams ?? 0, target.date, id, newId()));
   }
+  if (entries.length === 0) throw new Error("Those staples are not on this phone yet.");
+  const filled = await mutateDay(target.date, (current) => ({
+    ...current,
+    meals: current.meals.map((item) => (item.id === id ? { ...item, entries } : item)),
+  }));
+  await enqueue("POST", `/nutrition/diary/meals/${id}/staples`, null);
+  void flushOutbox();
+  return filled;
 }
 
 export async function fetchMealStaples(foodId: string) {
@@ -1048,76 +1058,70 @@ export async function setMealStaple(foodId: string, body: { mealName: string; en
 }
 
 export async function addDiaryEntry(mealId: string, foodId: string, grams: number, date: string) {
-  try {
-    return await persistDay("/nutrition/diary", {
-      method: "POST",
-      body: JSON.stringify({ mealId, foodId, grams, date }),
-    });
-  } catch (err) {
-    return offline(err, async () => {
-      const { enqueue, flushOutbox } = await import("../offline/sync");
-      const { mutateDay, newId, readFood, scaledFoodEntry } = await import("../offline/store");
-      const food = await readFood(foodId);
-      if (!food) throw err;
-      const entryId = newId();
-      const day = await mutateDay(date, (current) => ({
-        ...current,
-        meals: current.meals.map((meal) =>
-          meal.id === mealId ? { ...meal, entries: [...meal.entries, scaledFoodEntry(food, grams, date, mealId, entryId)] } : meal,
-        ),
-      }));
-      await enqueue("POST", "/nutrition/diary", { id: entryId, mealId, foodId, grams, date });
-      void flushOutbox();
-      return day;
-    });
+  const { enqueue, flushOutbox } = await import("../offline/sync");
+  const { mutateDay, newId, readDay, readFood, scaledFoodEntry } = await import("../offline/store");
+  const food = await readFood(foodId);
+  const current = await readDay(date);
+  const meal = current?.meals.find((row) => row.id === mealId);
+  if (!food || !meal) {
+    try {
+      return await persistDay("/nutrition/diary", {
+        method: "POST",
+        body: JSON.stringify({ mealId, foodId, grams, date }),
+      });
+    } catch (err) {
+      return offline(err, async () => {
+        throw food ? new Error("That meal is not on this phone yet.") : err;
+      });
+    }
   }
+  const entryId = newId();
+  const day = await mutateDay(date, (row) => ({
+    ...row,
+    meals: row.meals.map((item) =>
+      item.id === mealId ? { ...item, entries: [...item.entries, scaledFoodEntry(food, grams, date, mealId, entryId)] } : item,
+    ),
+  }));
+  await enqueue("POST", "/nutrition/diary", { id: entryId, mealId, foodId, grams, date });
+  void flushOutbox();
+  return day;
 }
 
 export async function updateDiaryEntry(id: string, grams: number) {
   const roundedGrams = roundNutrition(grams, 1);
-  try {
-    return await persistDay(`/nutrition/diary/${id}`, { method: "PATCH", body: JSON.stringify({ grams: roundedGrams }) });
-  } catch (err) {
-    return offline(err, async () => {
-      const { enqueue, flushOutbox } = await import("../offline/sync");
-      const { listDays, mutateDay, readFood } = await import("../offline/store");
-      const { scaleNutrition } = await import("@savorly/shared");
-      const days = await listDays();
-      const host = days.find((day) => day.meals.some((meal) => meal.entries.some((entry) => entry.id === id)));
-      if (!host) throw err;
-      const day = await mutateDay(host.date, (current) => ({
-        ...current,
-        meals: current.meals.map((meal) => ({
-          ...meal,
-          entries: meal.entries.map((entry) => {
-            if (entry.id !== id) return entry;
-            return { ...entry, grams: roundedGrams, nutrients: entry.kind === "food" ? entry.nutrients : entry.nutrients };
-          }),
-        })),
-      }));
-      const entry = day.meals.flatMap((meal) => meal.entries).find((item) => item.id === id);
-      if (entry?.foodId) {
-        const food = await readFood(entry.foodId);
-        if (food) {
-          const scaled = await mutateDay(host.date, (current) => ({
-            ...current,
-            meals: current.meals.map((meal) => ({
-              ...meal,
-              entries: meal.entries.map((item) =>
-                item.id === id ? { ...item, grams: roundedGrams, nutrients: scaleNutrition(food.per100g, roundedGrams) } : item,
-              ),
-            })),
-          }));
-          await enqueue("PATCH", `/nutrition/diary/${id}`, { grams: roundedGrams });
-          void flushOutbox();
-          return scaled;
-        }
-      }
-      await enqueue("PATCH", `/nutrition/diary/${id}`, { grams });
-      void flushOutbox();
-      return day;
-    });
+  const { enqueue, flushOutbox } = await import("../offline/sync");
+  const { listDays, mutateDay, readFood } = await import("../offline/store");
+  const { scaleNutrition } = await import("@savorly/shared");
+  const days = await listDays();
+  const host = days.find((day) => day.meals.some((meal) => meal.entries.some((row) => row.id === id)));
+  if (!host) {
+    try {
+      return await persistDay(`/nutrition/diary/${id}`, { method: "PATCH", body: JSON.stringify({ grams: roundedGrams }) });
+    } catch (err) {
+      return offline(err, async () => {
+        throw err;
+      });
+    }
   }
+  const currentEntry = host.meals.flatMap((meal) => meal.entries).find((item) => item.id === id);
+  const food = currentEntry?.foodId ? await readFood(currentEntry.foodId) : null;
+  const day = await mutateDay(host.date, (current) => ({
+    ...current,
+    meals: current.meals.map((meal) => ({
+      ...meal,
+      entries: meal.entries.map((item) => {
+        if (item.id !== id) return item;
+        return {
+          ...item,
+          grams: roundedGrams,
+          nutrients: food ? scaleNutrition(food.per100g, roundedGrams) : item.nutrients,
+        };
+      }),
+    })),
+  }));
+  await enqueue("PATCH", `/nutrition/diary/${id}`, { grams: roundedGrams });
+  void flushOutbox();
+  return day;
 }
 
 export async function addQuickDiaryEntry(body: {
@@ -1129,43 +1133,47 @@ export async function addQuickDiaryEntry(body: {
   carbsG?: number;
   fatG?: number;
 }) {
-  try {
-    return await persistDay("/nutrition/diary/quick", { method: "POST", body: JSON.stringify(body) });
-  } catch (err) {
-    return offline(err, async () => {
-      const { buildQuickDiaryNutrients } = await import("@savorly/shared");
-      const { enqueue, flushOutbox } = await import("../offline/sync");
-      const { localEntry, mutateDay, newId } = await import("../offline/store");
-      const entryId = newId();
-      const day = await mutateDay(body.date, (current) => ({
-        ...current,
-        meals: current.meals.map((meal) =>
-          meal.id === body.mealId
-            ? {
-                ...meal,
-                entries: [
-                  ...meal.entries,
-                  localEntry({
-                    id: entryId,
-                    date: body.date,
-                    mealId: body.mealId,
-                    foodId: null,
-                    foodName: body.label?.trim() || "Quick add",
-                    label: body.label?.trim() || "Quick add",
-                    grams: 0,
-                    nutrients: buildQuickDiaryNutrients(body),
-                    kind: "quick",
-                  }),
-                ],
-              }
-            : meal,
-        ),
-      }));
-      await enqueue("POST", "/nutrition/diary/quick", { id: entryId, ...body });
-      void flushOutbox();
-      return day;
-    });
+  const { buildQuickDiaryNutrients } = await import("@savorly/shared");
+  const { enqueue, flushOutbox } = await import("../offline/sync");
+  const { localEntry, mutateDay, newId, readDay } = await import("../offline/store");
+  const current = await readDay(body.date);
+  if (!current?.meals.some((meal) => meal.id === body.mealId)) {
+    try {
+      return await persistDay("/nutrition/diary/quick", { method: "POST", body: JSON.stringify(body) });
+    } catch (err) {
+      return offline(err, async () => {
+        throw err;
+      });
+    }
   }
+  const entryId = newId();
+  const day = await mutateDay(body.date, (row) => ({
+    ...row,
+    meals: row.meals.map((meal) =>
+      meal.id === body.mealId
+        ? {
+            ...meal,
+            entries: [
+              ...meal.entries,
+              localEntry({
+                id: entryId,
+                date: body.date,
+                mealId: body.mealId,
+                foodId: null,
+                foodName: body.label?.trim() || "Quick add",
+                label: body.label?.trim() || "Quick add",
+                grams: 0,
+                nutrients: buildQuickDiaryNutrients(body),
+                kind: "quick",
+              }),
+            ],
+          }
+        : meal,
+    ),
+  }));
+  await enqueue("POST", "/nutrition/diary/quick", { id: entryId, ...body });
+  void flushOutbox();
+  return day;
 }
 
 export function updateQuickDiaryEntry(
@@ -1185,23 +1193,25 @@ export function updateQuickDiaryEntry(
 }
 
 export async function deleteDiaryEntry(id: string) {
-  try {
-    return await persistDay(`/nutrition/diary/${id}`, { method: "DELETE" });
-  } catch (err) {
-    return offline(err, async () => {
-      const { enqueue, flushOutbox } = await import("../offline/sync");
-      const { listDays, mutateDay } = await import("../offline/store");
-      const host = (await listDays()).find((day) => day.meals.some((meal) => meal.entries.some((entry) => entry.id === id)));
-      if (!host) throw err;
-      const day = await mutateDay(host.date, (current) => ({
-        ...current,
-        meals: current.meals.map((meal) => ({ ...meal, entries: meal.entries.filter((entry) => entry.id !== id) })),
-      }));
-      await enqueue("DELETE", `/nutrition/diary/${id}`, null);
-      void flushOutbox();
-      return day;
-    });
+  const { enqueue, flushOutbox } = await import("../offline/sync");
+  const { listDays, mutateDay } = await import("../offline/store");
+  const host = (await listDays()).find((day) => day.meals.some((meal) => meal.entries.some((entry) => entry.id === id)));
+  if (!host) {
+    try {
+      return await persistDay(`/nutrition/diary/${id}`, { method: "DELETE" });
+    } catch (err) {
+      return offline(err, async () => {
+        throw err;
+      });
+    }
   }
+  const day = await mutateDay(host.date, (current) => ({
+    ...current,
+    meals: current.meals.map((meal) => ({ ...meal, entries: meal.entries.filter((entry) => entry.id !== id) })),
+  }));
+  await enqueue("DELETE", `/nutrition/diary/${id}`, null);
+  void flushOutbox();
+  return day;
 }
 
 export async function copyDiaryEntry(id: string, mealId: string) {
@@ -1394,7 +1404,7 @@ export async function createNutritionRecipe(title: string) {
 
 export async function createNutritionRecipeFromText(text: string) {
   return rememberRecipe(
-    await request<NutritionRecipeDetail>("/nutrition/recipes/from-text", {
+    await longRequest<NutritionRecipeDetail>("/nutrition/recipes/from-text", {
       method: "POST",
       body: JSON.stringify({ text }),
     }),
@@ -1404,7 +1414,7 @@ export async function createNutritionRecipeFromText(text: string) {
 export async function createNutritionRecipeFromCookbook(recipeId: string) {
   try {
     return await rememberRecipe(
-      await request<NutritionRecipeDetail>("/nutrition/recipes/from-cookbook", {
+      await longRequest<NutritionRecipeDetail>("/nutrition/recipes/from-cookbook", {
         method: "POST",
         body: JSON.stringify({ recipeId }),
       }),

@@ -113,31 +113,46 @@ export default function DiaryFoodsScreen() {
   const [importingKey, setImportingKey] = useState<string | null>(null);
 
   const loadLibrary = useCallback(async () => {
-    try {
-      const live = await listNutritionFoods();
-      setFoods(live.foods);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof ApiRequestError ? err.message : "Could not load foods.");
-    } finally {
-      setLibraryReady(true);
-    }
+    const { listFoodsLocal } = await import("../../../src/offline/store");
+    const cached = await listFoodsLocal();
+    setFoods(cached);
+    setLibraryReady(true);
+    void listNutritionFoods()
+      .then((live) => {
+        setFoods(live.foods);
+        setError(null);
+      })
+      .catch((err: unknown) => {
+        if (cached.length > 0) return;
+        setError(err instanceof ApiRequestError ? err.message : "Could not load foods.");
+      });
   }, []);
 
   const loadMealContext = useCallback(async () => {
+    const { openLocalDiaryDay } = await import("../../../src/offline/sync");
     try {
-      const day = await fetchDiaryDay(date);
-      setMeals(day.meals);
+      const local = await openLocalDiaryDay(date);
+      setMeals(local.meals);
       if (mealIdParam) {
-        const meal = day.meals.find((row) => row.id === mealIdParam);
+        const meal = local.meals.find((row) => row.id === mealIdParam);
         setBoundMeal(meal ? { id: meal.id, name: meal.name } : null);
-        return;
+      } else {
+        setBoundMeal(await resolveMealForDate(date));
       }
-      const last = await resolveMealForDate(date);
-      setBoundMeal(last);
     } catch {
       setBoundMeal(mealIdParam ? { id: mealIdParam, name: "Meal" } : null);
     }
+    void fetchDiaryDay(date)
+      .then(async (day) => {
+        setMeals(day.meals);
+        if (mealIdParam) {
+          const meal = day.meals.find((row) => row.id === mealIdParam);
+          setBoundMeal(meal ? { id: meal.id, name: meal.name } : null);
+          return;
+        }
+        setBoundMeal(await resolveMealForDate(date));
+      })
+      .catch(() => undefined);
   }, [date, mealIdParam]);
 
   useFocusEffect(
@@ -156,6 +171,11 @@ export default function DiaryFoodsScreen() {
     const term = query.trim();
     if (!term || filter !== "library") return;
     const handle = setTimeout(() => {
+      void import("../../../src/offline/store").then(({ listFoodsLocal }) =>
+        listFoodsLocal(term).then((local) => {
+          setFoods((current) => mergeFoods(current, local));
+        }),
+      );
       void listNutritionFoods(term)
         .then((live) => {
           setFoods((current) => mergeFoods(current, live.foods));
