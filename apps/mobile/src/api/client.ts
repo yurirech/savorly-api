@@ -6,6 +6,7 @@ import type {
   DiaryDayResponse,
   FoodLabelFill,
   DiaryEntry,
+  FoodAmountUnit,
   GeneratedRecipe,
   MealSuggestionResponse,
   NutrientVector,
@@ -23,7 +24,7 @@ import type {
   UserFood,
   UserPantryItem,
 } from "@savorly/shared";
-import { coerceDiaryDayResponse, roundNutrition } from "@savorly/shared";
+import { coerceDiaryDayResponse, parseAmountUnit, roundNutrition } from "@savorly/shared";
 import { getToken, clearSession } from "../auth/session";
 import { shiftIsoDate, todayIsoDate } from "../utils/isoDate";
 
@@ -754,7 +755,10 @@ export async function renameNutritionFood(id: string, name: string) {
   return patchNutritionFood(id, { name });
 }
 
-export async function patchNutritionFood(id: string, body: { name?: string; servingWeightG?: number | null }) {
+export async function patchNutritionFood(
+  id: string,
+  body: { name?: string; servingWeightG?: number | null; category?: string | null },
+) {
   try {
     const live = await request<{ food: UserFood }>(`/nutrition/foods/${id}`, {
       method: "PATCH",
@@ -773,6 +777,7 @@ export async function patchNutritionFood(id: string, body: { name?: string; serv
         ...current,
         name: body.name?.trim() || current.name,
         servingWeightG: body.servingWeightG === undefined ? current.servingWeightG : body.servingWeightG,
+        category: body.category === undefined ? (current.category ?? null) : body.category?.trim() || null,
         updatedAt: new Date().toISOString(),
       };
       await saveFood(food);
@@ -997,7 +1002,16 @@ export async function logMealStaples(id: string) {
       .flatMap((row) => row.meals.flatMap((group) => group.entries))
       .filter((entry) => entry.foodId === foodId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-    entries.push(scaledFoodEntry(food, previous?.grams ?? 0, target.date, id, newId()));
+    entries.push(
+      scaledFoodEntry(
+        food,
+        previous?.grams ?? 0,
+        target.date,
+        id,
+        newId(),
+        parseAmountUnit(previous?.amountUnit),
+      ),
+    );
   }
   if (entries.length === 0) throw new Error("Those staples are not on this phone yet.");
   const filled = await mutateDay(target.date, (current) => ({
@@ -1057,17 +1071,29 @@ export async function setMealStaple(foodId: string, body: { mealName: string; en
   }
 }
 
-export async function addDiaryEntry(mealId: string, foodId: string, grams: number, date: string) {
+export async function addDiaryEntry(
+  mealId: string,
+  foodId: string,
+  grams: number,
+  date: string,
+  amountUnit: FoodAmountUnit = "grams",
+) {
   const { enqueue, flushOutbox } = await import("../offline/sync");
   const { mutateDay, newId, readDay, readFood, scaledFoodEntry } = await import("../offline/store");
+  const { readLastDiaryMeal } = await import("../diary/lastDiaryMealStorage");
   const food = await readFood(foodId);
   const current = await readDay(date);
-  const meal = current?.meals.find((row) => row.id === mealId);
+  const saved = await readLastDiaryMeal();
+  const meal =
+    current?.meals.find((row) => row.id === mealId) ??
+    (saved?.mealName ? current?.meals.find((row) => row.name === saved.mealName) : undefined);
+  const liveMealId = meal?.id ?? mealId;
+  const unit = parseAmountUnit(amountUnit);
   if (!food || !meal) {
     try {
       return await persistDay("/nutrition/diary", {
         method: "POST",
-        body: JSON.stringify({ mealId, foodId, grams, date }),
+        body: JSON.stringify({ mealId: liveMealId, foodId, grams, date, amountUnit: unit }),
       });
     } catch (err) {
       return offline(err, async () => {
@@ -1079,24 +1105,35 @@ export async function addDiaryEntry(mealId: string, foodId: string, grams: numbe
   const day = await mutateDay(date, (row) => ({
     ...row,
     meals: row.meals.map((item) =>
-      item.id === mealId ? { ...item, entries: [...item.entries, scaledFoodEntry(food, grams, date, mealId, entryId)] } : item,
+      item.id === liveMealId
+        ? { ...item, entries: [...item.entries, scaledFoodEntry(food, grams, date, liveMealId, entryId, unit)] }
+        : item,
     ),
   }));
-  await enqueue("POST", "/nutrition/diary", { id: entryId, mealId, foodId, grams, date });
+  await enqueue("POST", "/nutrition/diary", {
+    id: entryId,
+    mealId: liveMealId,
+    foodId,
+    grams,
+    date,
+    amountUnit: unit,
+  });
   void flushOutbox();
   return day;
 }
 
-export async function updateDiaryEntry(id: string, grams: number) {
+export async function updateDiaryEntry(id: string, grams: number, amountUnit?: FoodAmountUnit) {
   const roundedGrams = roundNutrition(grams, 1);
+  const unit = amountUnit === undefined ? undefined : parseAmountUnit(amountUnit);
   const { enqueue, flushOutbox } = await import("../offline/sync");
   const { listDays, mutateDay, readFood } = await import("../offline/store");
   const { scaleNutrition } = await import("@savorly/shared");
   const days = await listDays();
   const host = days.find((day) => day.meals.some((meal) => meal.entries.some((row) => row.id === id)));
+  const patch = { grams: roundedGrams, ...(unit ? { amountUnit: unit } : {}) };
   if (!host) {
     try {
-      return await persistDay(`/nutrition/diary/${id}`, { method: "PATCH", body: JSON.stringify({ grams: roundedGrams }) });
+      return await persistDay(`/nutrition/diary/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
     } catch (err) {
       return offline(err, async () => {
         throw err;
@@ -1114,12 +1151,13 @@ export async function updateDiaryEntry(id: string, grams: number) {
         return {
           ...item,
           grams: roundedGrams,
+          amountUnit: unit ?? item.amountUnit ?? "grams",
           nutrients: food ? scaleNutrition(food.per100g, roundedGrams) : item.nutrients,
         };
       }),
     })),
   }));
-  await enqueue("PATCH", `/nutrition/diary/${id}`, { grams: roundedGrams });
+  await enqueue("PATCH", `/nutrition/diary/${id}`, patch);
   void flushOutbox();
   return day;
 }

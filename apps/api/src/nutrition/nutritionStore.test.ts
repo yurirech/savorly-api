@@ -33,12 +33,14 @@ describe("food and diary mapping", () => {
       nevoCode: null,
       nutritionRecipeId: null,
       servingWeightG: 32,
+      category: "Bread",
       per100g,
       createdAt: now,
       updatedAt: now,
     });
     expect(food.per100g.kcal).toBe(588);
     expect(food.servingWeightG).toBe(32);
+    expect(food.category).toBe("Bread");
     expect(food.fatsecretId).toBeNull();
 
     const fatsecret = foodFromRow({
@@ -51,6 +53,7 @@ describe("food and diary mapping", () => {
       nevoCode: null,
       nutritionRecipeId: null,
       servingWeightG: null,
+      category: null,
       per100g,
       createdAt: now,
       updatedAt: now,
@@ -69,6 +72,7 @@ describe("food and diary mapping", () => {
         label: null,
         date: "2026-09-22",
         grams: 12,
+        amountUnit: "servings",
         nutrients,
         createdAt: now,
       },
@@ -77,6 +81,7 @@ describe("food and diary mapping", () => {
     expect(entry.nutrients).toEqual({ kcal: 71, proteinG: 3, carbsG: 2.4, fatG: 6 });
     expect(entry.foodName).toBe("Peanut butter");
     expect(entry.kind).toBe("food");
+    expect(entry.amountUnit).toBe("servings");
 
     const quick = diaryFromRow(
       {
@@ -88,6 +93,7 @@ describe("food and diary mapping", () => {
         label: "Office lunch",
         date: "2026-09-22",
         grams: 100,
+        amountUnit: "grams",
         nutrients: { kcal: 450, proteinG: 20, carbsG: 40, fatG: 15 },
         createdAt: now,
       },

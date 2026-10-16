@@ -169,6 +169,7 @@ export {
   servingsFromGrams,
 } from "./nutrition/foodServing";
 export type { FoodAmountUnit } from "./nutrition/foodServing";
+export { formatDiaryEntryCaption, parseAmountUnit } from "./nutrition/formatDiaryEntryCaption";
 export {
   defaultSelectedWeekDays,
   isCountableWeekDay,

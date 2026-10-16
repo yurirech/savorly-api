@@ -4,9 +4,11 @@ import { Animated, PanResponder, Pressable, StyleSheet, TextInput, View } from "
 import {
   convertFoodAmount,
   foodEmoji,
+  formatDiaryEntryCaption,
   formatDiaryNumber,
   listPresentNutrients,
   resolveFoodGrams,
+  servingsFromGrams,
   type DiaryEntry,
   type DiaryMealGroup,
   type FoodAmountUnit,
@@ -38,7 +40,7 @@ interface DiaryMealSectionProps {
   amountEntryId: string | null;
   savingAmount: boolean;
   onEditAmount: (entry: DiaryEntry) => void;
-  onSaveAmount: (entry: DiaryEntry, grams: number) => void;
+  onSaveAmount: (entry: DiaryEntry, grams: number, amountUnit: FoodAmountUnit) => void;
 }
 
 function formatMealMacros(meal: DiaryMealGroup): string {
@@ -125,7 +127,7 @@ function DiaryMealSection(props: DiaryMealSectionProps) {
               editingAmount={amountEntryId === entry.id}
               savingAmount={savingAmount}
               onEditAmount={() => onEditAmount(entry)}
-              onSaveAmount={(grams) => onSaveAmount(entry, grams)}
+              onSaveAmount={(grams, amountUnit) => onSaveAmount(entry, grams, amountUnit)}
             />
           ))}
           <View style={styles.actions}>
@@ -188,7 +190,7 @@ interface DiaryEntryRowProps {
   editingAmount: boolean;
   savingAmount: boolean;
   onEditAmount: () => void;
-  onSaveAmount: (grams: number) => void;
+  onSaveAmount: (grams: number, amountUnit: FoodAmountUnit) => void;
 }
 
 function DiaryEntryRow(props: DiaryEntryRowProps) {
@@ -225,9 +227,15 @@ function DiaryEntryRow(props: DiaryEntryRowProps) {
   }, [active]);
 
   useEffect(() => {
-    setAmount(formatDiaryNumber(entry.grams));
-    setUnit("grams");
-  }, [editingAmount, entry.grams]);
+    if (!editingAmount) return;
+    const nextUnit = entry.amountUnit === "servings" && servingWeightG != null && servingWeightG > 0 ? "servings" : "grams";
+    setUnit(nextUnit);
+    setAmount(
+      nextUnit === "servings" && servingWeightG
+        ? formatDiaryNumber(servingsFromGrams(entry.grams, servingWeightG))
+        : formatDiaryNumber(entry.grams),
+    );
+  }, [editingAmount, entry.amountUnit, entry.grams, servingWeightG]);
 
   useEffect(() => {
     if (!editingAmount) return;
@@ -240,7 +248,7 @@ function DiaryEntryRow(props: DiaryEntryRowProps) {
   }, [editingAmount, editorFade, editorSlide]);
 
   useEffect(() => {
-    if (!editingAmount || !entry.foodId) {
+    if (!entry.foodId) {
       setServingWeightG(null);
       return;
     }
@@ -254,11 +262,11 @@ function DiaryEntryRow(props: DiaryEntryRowProps) {
     return () => {
       activeLoad = false;
     };
-  }, [editingAmount, entry.foodId]);
+  }, [entry.foodId]);
 
   const pan = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponderCapture: (_event, gesture) =>
+      onMoveShouldSetPanResponder: (_event, gesture) =>
         Math.abs(gesture.dx) > 12 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
       onPanResponderGrant: () => {
         dragged.current = false;
@@ -284,10 +292,16 @@ function DiaryEntryRow(props: DiaryEntryRowProps) {
     }),
   ).current;
 
-  const caption =
-    entry.kind === "quick"
-      ? `${formatDiaryNumber(entry.nutrients.kcal)} kcal · ${formatDiaryNumber(entry.nutrients.proteinG)}g protein · ${formatDiaryNumber(entry.nutrients.carbsG)}g carbs · ${formatDiaryNumber(entry.nutrients.fatG)}g fat`
-      : `${formatDiaryNumber(entry.grams)} g · ${formatDiaryNumber(entry.nutrients.kcal)} kcal`;
+  const caption = formatDiaryEntryCaption({
+    kind: entry.kind,
+    grams: entry.grams,
+    kcal: entry.nutrients.kcal,
+    proteinG: entry.nutrients.proteinG,
+    carbsG: entry.nutrients.carbsG,
+    fatG: entry.nutrients.fatG,
+    amountUnit: entry.amountUnit,
+    servingWeightG,
+  });
   const hasServing = servingWeightG != null && servingWeightG > 0;
 
   return (
@@ -358,11 +372,7 @@ function DiaryEntryRow(props: DiaryEntryRowProps) {
             hitSlop={8}
             style={styles.entryAmount}
             accessibilityRole="button"
-            accessibilityLabel={
-              entry.kind === "quick"
-                ? `${formatDiaryNumber(entry.nutrients.kcal)} kcal, edit`
-                : `${formatDiaryNumber(entry.grams)} grams, ${formatDiaryNumber(entry.nutrients.kcal)} kcal, edit amount`
-            }
+            accessibilityLabel={`${caption}, edit amount`}
           >
             <AppText variant="caption" color="muted">
               {caption}
@@ -416,7 +426,7 @@ function DiaryEntryRow(props: DiaryEntryRowProps) {
               const parsed = parseFoodAmount(amount);
               const grams = parsed == null ? null : resolveFoodGrams(unit, parsed, servingWeightG);
               if (grams == null || grams <= 0) return;
-              onSaveAmount(grams);
+              onSaveAmount(grams, unit);
             }}
           />
         </Animated.View>
@@ -478,8 +488,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   entryAmount: {
-    minHeight: 44,
+    minHeight: 22,
     justifyContent: "center",
+    paddingVertical: tokens.space.xs / 2,
     paddingLeft: 40 + tokens.space.sm,
   },
   check: {

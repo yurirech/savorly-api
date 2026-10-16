@@ -285,6 +285,16 @@ const manualFoodSchema = z.object({
 const foodPatchSchema = z.object({
   name: z.string().trim().min(1).max(120).optional(),
   servingWeightG: z.number().positive().max(5000).nullable().optional(),
+  category: z
+    .string()
+    .max(40)
+    .nullable()
+    .optional()
+    .transform((value) => {
+      if (value == null) return value;
+      const trimmed = value.trim();
+      return trimmed ? trimmed : null;
+    }),
 });
 
 const importFoodSchema = z.object({
@@ -303,16 +313,20 @@ const importFatsecretFoodSchema = z.object({
   name: z.string().trim().min(1).max(120).optional(),
 });
 
+const diaryAmountUnitSchema = z.enum(["grams", "servings"]);
+
 const diaryEntrySchema = z.object({
   id: z.string().uuid().optional(),
   mealId: z.string().uuid(),
   foodId: z.string().uuid(),
   grams: z.number().nonnegative().max(5000),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  amountUnit: diaryAmountUnitSchema.optional(),
 });
 
 const diaryEntryPatchSchema = z.object({
   grams: z.number().nonnegative().max(5000),
+  amountUnit: diaryAmountUnitSchema.optional(),
 });
 
 const diaryEntryCopySchema = z.object({

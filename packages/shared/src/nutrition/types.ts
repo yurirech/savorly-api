@@ -1,3 +1,4 @@
+import type { FoodAmountUnit } from "./foodServing";
 import type { DayIntakeTargets, MicroTargets } from "./healthGroups";
 import type { NutrientVector } from "./nutrients";
 import type { NutritionProfileInput, NutritionTargets } from "./targets";
@@ -29,6 +30,7 @@ export type UserFood = {
   nevoCode: number | null;
   nutritionRecipeId: string | null;
   servingWeightG: number | null;
+  category: string | null;
   per100g: NutrientVector;
   createdAt: string;
   updatedAt: string;
@@ -73,6 +75,7 @@ export type DiaryEntry = {
   label?: string;
   foodName: string;
   grams: number;
+  amountUnit?: FoodAmountUnit;
   nutrients: NutrientVector;
   createdAt: string;
 };

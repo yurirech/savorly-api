@@ -36,6 +36,30 @@ export async function writeLastDiaryMeal(input: LastDiaryMealPreference): Promis
   ]);
 }
 
+export function pickMealFromDay(
+  meals: Pick<DiaryMealGroup, "id" | "name">[],
+  mealId?: string | null,
+  mealName?: string | null,
+): Pick<DiaryMealGroup, "id" | "name"> | null {
+  if (mealId) {
+    const byId = meals.find((row) => row.id === mealId);
+    if (byId) return { id: byId.id, name: byId.name };
+  }
+  if (mealName) {
+    const byName = meals.find((row) => row.name === mealName);
+    if (byName) return { id: byName.id, name: byName.name };
+  }
+  return null;
+}
+
+export async function rewriteLastDiaryMealIds(mealIdMap: Record<string, string>): Promise<void> {
+  const saved = await readLastDiaryMeal();
+  if (!saved) return;
+  const nextId = mealIdMap[saved.mealId];
+  if (!nextId || nextId === saved.mealId) return;
+  await writeLastDiaryMeal({ ...saved, mealId: nextId });
+}
+
 export async function resolveMealForDate(date: string): Promise<Pick<DiaryMealGroup, "id" | "name"> | null> {
   const { openLocalDiaryDay } = await import("../offline/sync");
   const saved = await readLastDiaryMeal();

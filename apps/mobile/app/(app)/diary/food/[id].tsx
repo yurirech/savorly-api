@@ -11,6 +11,7 @@ import {
   formatDiaryNumber,
   resolveFoodGrams,
   scaleNutrition,
+  servingsFromGrams,
   type DiaryMealGroup,
   type FoodAmountUnit,
   type UserFood,
@@ -43,7 +44,7 @@ import DiaryMealPickerSheet from "../../../../src/diary/DiaryMealPickerSheet";
 import FoodAmountFields, { parseFoodAmount } from "../../../../src/diary/FoodAmountFields";
 import { getCachedFood } from "../../../../src/diary/foodDetailCache";
 import { writeLastLoggedFood } from "../../../../src/diary/lastLoggedFood";
-import { resolveMealForDate, writeLastDiaryMeal } from "../../../../src/diary/lastDiaryMealStorage";
+import { pickMealFromDay, resolveMealForDate, writeLastDiaryMeal } from "../../../../src/diary/lastDiaryMealStorage";
 import MealStaplesSection from "../../../../src/diary/MealStaplesSection";
 import { tokens } from "../../../../src/theme/tokens";
 import { confirmDestructive } from "../../../../src/utils/confirmDestructive";
@@ -59,6 +60,15 @@ function sourceLabel(source: UserFood["source"]): string {
 
 function firstParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function uniqueCategoryNames(foods: UserFood[]): string[] {
+  const names = new Set<string>();
+  for (const item of foods) {
+    const name = item.category?.trim();
+    if (name) names.add(name);
+  }
+  return [...names].sort((a, b) => a.localeCompare(b));
 }
 
 async function loadFoodFromList(id: string): Promise<UserFood | null> {
@@ -96,8 +106,12 @@ export default function DiaryFoodDetailScreen() {
   const [editingName, setEditingName] = useState(false);
   const [servingDraft, setServingDraft] = useState("");
   const [addingServing, setAddingServing] = useState(false);
+  const [categoryDraft, setCategoryDraft] = useState("");
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [categoryNames, setCategoryNames] = useState<string[]>([]);
   const [renaming, setRenaming] = useState(false);
   const [savingServing, setSavingServing] = useState(false);
+  const [savingCategory, setSavingCategory] = useState(false);
   const [deletingRecipe, setDeletingRecipe] = useState(false);
   const [recipeMenuOpen, setRecipeMenuOpen] = useState(false);
   const [recipeMenuAnchor, setRecipeMenuAnchor] = useState<ContextMenuAnchor | null>(null);
@@ -110,6 +124,7 @@ export default function DiaryFoodDetailScreen() {
   const previewGrams = amountGrams ?? 100;
   const nameDirty = Boolean(food && nameDraft.trim() && nameDraft.trim() !== food.name);
   const hasServing = food != null && food.servingWeightG != null && food.servingWeightG > 0;
+  const hasCategory = Boolean(food?.category?.trim());
 
   const scaled = useMemo(
     () => (food ? scaleNutrition(food.per100g, previewGrams) : null),
@@ -128,13 +143,24 @@ export default function DiaryFoodDetailScreen() {
       ]);
       setTodayMeals(day.meals);
       setFrequentGrams(freq.grams);
-      const bound = mealIdParam ? (day.meals.find((row) => row.id === mealIdParam) ?? null) : meal;
+      const bound =
+        pickMealFromDay(day.meals, mealIdParam, meal?.name) ??
+        pickMealFromDay(day.meals, undefined, meal?.name) ??
+        meal;
       setDefaultMeal(bound ? { id: bound.id, name: bound.name } : meal);
       if (entryId) {
         const entry = day.meals.flatMap((row) => row.entries).find((row) => row.id === entryId);
         if (entry && entry.kind !== "quick") {
-          setGrams(formatDiaryNumber(entry.grams));
-          setUnit("grams");
+          const nextUnit =
+            entry.amountUnit === "servings" && food.servingWeightG != null && food.servingWeightG > 0
+              ? "servings"
+              : "grams";
+          setUnit(nextUnit);
+          setGrams(
+            nextUnit === "servings" && food.servingWeightG
+              ? formatDiaryNumber(servingsFromGrams(entry.grams, food.servingWeightG))
+              : formatDiaryNumber(entry.grams),
+          );
         }
       } else if (!grams && freq.grams[0] != null) {
         setGrams(formatDiaryNumber(freq.grams[0]));
@@ -195,9 +221,9 @@ export default function DiaryFoodDetailScreen() {
     setError(null);
     try {
       if (entryId) {
-        await updateDiaryEntry(entryId, amount);
+        await updateDiaryEntry(entryId, amount, unit);
       } else {
-        await addDiaryEntry(targetMealId, food.id, amount, date);
+        await addDiaryEntry(targetMealId, food.id, amount, date, unit);
         await rememberMeal(targetMealId);
       }
       leaveAfterLog(targetMealId, amount);
@@ -262,7 +288,9 @@ export default function DiaryFoodDetailScreen() {
         setFood(cached);
         setNameDraft(cached.name);
         setServingDraft(cached.servingWeightG != null ? String(cached.servingWeightG) : "");
+        setCategoryDraft(cached.category ?? "");
         setAddingServing(false);
+        setAddingCategory(false);
         setError(null);
       }
 
@@ -272,6 +300,7 @@ export default function DiaryFoodDetailScreen() {
           setFood(live.food);
           setNameDraft(live.food.name);
           setServingDraft(live.food.servingWeightG != null ? String(live.food.servingWeightG) : "");
+          setCategoryDraft(live.food.category ?? "");
           setAttribution(live.attribution);
           setError(null);
         } catch {
@@ -285,6 +314,7 @@ export default function DiaryFoodDetailScreen() {
               setFood(fromList);
               setNameDraft(fromList.name);
               setServingDraft(fromList.servingWeightG != null ? String(fromList.servingWeightG) : "");
+              setCategoryDraft(fromList.category ?? "");
               setError(null);
               return;
             }
@@ -368,6 +398,54 @@ export default function DiaryFoodDetailScreen() {
       setError(err instanceof ApiRequestError ? err.message : "Could not save serving.");
     } finally {
       setSavingServing(false);
+    }
+  }
+
+  async function loadCategoryNames() {
+    const { listFoodsLocal } = await import("../../../../src/offline/store");
+    const local = await listFoodsLocal();
+    setCategoryNames(uniqueCategoryNames([...(food ? [food] : []), ...local]));
+    void listNutritionFoods()
+      .then((live) => {
+        setCategoryNames(uniqueCategoryNames([...(food ? [food] : []), ...live.foods]));
+      })
+      .catch(() => undefined);
+  }
+
+  async function onSaveCategory() {
+    if (!food) return;
+    const next = categoryDraft.trim() || null;
+    if (next && next.length > 40) {
+      setError("Category must be 1–40 characters.");
+      return;
+    }
+    setSavingCategory(true);
+    setError(null);
+    try {
+      const saved = await patchNutritionFood(food.id, { category: next });
+      setFood(saved.food);
+      setCategoryDraft(saved.food.category ?? "");
+      setAddingCategory(false);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : "Could not save category.");
+    } finally {
+      setSavingCategory(false);
+    }
+  }
+
+  async function onClearCategory() {
+    if (!food) return;
+    setSavingCategory(true);
+    setError(null);
+    try {
+      const saved = await patchNutritionFood(food.id, { category: null });
+      setFood(saved.food);
+      setCategoryDraft("");
+      setAddingCategory(false);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : "Could not clear category.");
+    } finally {
+      setSavingCategory(false);
     }
   }
 
@@ -477,6 +555,75 @@ export default function DiaryFoodDetailScreen() {
                 placeholder="e.g. 30"
               />
               <Button size="compact" label="Save serving" variant="secondary" loading={savingServing} onPress={() => void onSaveServing()} />
+            </>
+          ) : null}
+          {!hasCategory && !addingCategory ? (
+            <Button
+              size="compact"
+              label="Add category"
+              variant="secondary"
+              onPress={() => {
+                setAddingCategory(true);
+                void loadCategoryNames();
+              }}
+            />
+          ) : null}
+          {hasCategory && !addingCategory ? (
+            <View style={styles.actions}>
+              <Button
+                size="compact"
+                label={food.category ?? "Category"}
+                variant="secondary"
+                onPress={() => {
+                  setAddingCategory(true);
+                  void loadCategoryNames();
+                }}
+              />
+              <Button size="compact" label="Clear" variant="ghost" loading={savingCategory} onPress={() => void onClearCategory()} />
+            </View>
+          ) : null}
+          {addingCategory ? (
+            <>
+              <Field
+                label="Category"
+                value={categoryDraft}
+                onChangeText={setCategoryDraft}
+                placeholder="e.g. Bread"
+                autoCapitalize="sentences"
+              />
+              {categoryNames.length > 0 ? (
+                <View style={styles.categoryChips}>
+                  {categoryNames.map((name) => {
+                    const selected = categoryDraft.trim() === name;
+                    return (
+                      <Pressable
+                        key={name}
+                        onPress={() => setCategoryDraft(name)}
+                        style={[styles.categoryChip, selected && styles.categoryChipOn]}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                        accessibilityLabel={name}
+                      >
+                        <AppText variant="caption" style={selected ? styles.categoryChipLabelOn : undefined}>
+                          {name}
+                        </AppText>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : null}
+              <View style={styles.actions}>
+                <Button
+                  size="compact"
+                  label="Save category"
+                  variant="secondary"
+                  loading={savingCategory}
+                  onPress={() => void onSaveCategory()}
+                />
+                {hasCategory ? (
+                  <Button size="compact" label="Clear" variant="ghost" loading={savingCategory} onPress={() => void onClearCategory()} />
+                ) : null}
+              </View>
             </>
           ) : null}
           <MealStaplesSection foodId={food.id} />
@@ -613,6 +760,30 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     alignItems: "center",
     gap: tokens.space.sm,
+  },
+  categoryChips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: tokens.space.xs,
+  },
+  categoryChip: {
+    minHeight: 32,
+    borderRadius: tokens.radius.full,
+    borderWidth: 1,
+    borderColor: tokens.border,
+    backgroundColor: tokens.bgElevated,
+    paddingHorizontal: tokens.space.sm,
+    paddingVertical: tokens.space.xs,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  categoryChipOn: {
+    backgroundColor: tokens.accent,
+    borderColor: tokens.accent,
+  },
+  categoryChipLabelOn: {
+    color: tokens.bg,
+    fontFamily: tokens.font.bodyBold,
   },
   macros: {
     flexDirection: "row",

@@ -1,7 +1,7 @@
 import { type Href, router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Check, DotsThreeVertical, FunnelSimple } from "phosphor-react-native";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   foodMatchesQuery,
@@ -40,7 +40,7 @@ import { setCachedFood } from "../../../src/diary/foodDetailCache";
 import { takeLastLoggedFood } from "../../../src/diary/lastLoggedFood";
 import DiaryMealNameSheet from "../../../src/diary/DiaryMealNameSheet";
 import DiaryMealPickerSheet from "../../../src/diary/DiaryMealPickerSheet";
-import { resolveMealForDate, writeLastDiaryMeal } from "../../../src/diary/lastDiaryMealStorage";
+import { pickMealFromDay, resolveMealForDate, writeLastDiaryMeal } from "../../../src/diary/lastDiaryMealStorage";
 import { tokens } from "../../../src/theme/tokens";
 import { confirmDestructive } from "../../../src/utils/confirmDestructive";
 import { todayIsoDate } from "../../../src/utils/isoDate";
@@ -67,7 +67,9 @@ function sourceCaption(source: UserFood["source"]): string {
 }
 
 type CatalogFilter = "library" | "nevo" | "usda" | "fatsecret";
-type LibraryTab = "all" | "mine" | "recipes";
+type LibraryTab = string;
+
+const RESERVED_LIBRARY_TABS = new Set(["all", "mine", "recipes"]);
 
 const CATALOG_FILTERS: { value: CatalogFilter; label: string }[] = [
   { value: "library", label: "Library" },
@@ -81,6 +83,23 @@ const LIBRARY_TABS: { value: LibraryTab; label: string }[] = [
   { value: "mine", label: "My foods" },
   { value: "recipes", label: "My recipes" },
 ];
+
+function uniqueFoodCategories(foods: UserFood[]): string[] {
+  const names = new Set<string>();
+  for (const food of foods) {
+    const name = food.category?.trim();
+    if (!name || RESERVED_LIBRARY_TABS.has(name)) continue;
+    names.add(name);
+  }
+  return [...names].sort((a, b) => a.localeCompare(b));
+}
+
+function foodMatchesLibraryTab(food: UserFood, tab: string): boolean {
+  if (tab === "all") return true;
+  if (tab === "mine") return food.source !== "recipe";
+  if (tab === "recipes") return food.source === "recipe";
+  return food.category === tab;
+}
 
 export default function DiaryFoodsScreen() {
   const params = useLocalSearchParams<{ date?: string; mealId?: string; nutritionRecipeId?: string; itemId?: string }>();
@@ -111,6 +130,8 @@ export default function DiaryFoodsScreen() {
   const [fatsecretHits, setFatsecretHits] = useState<FatsecretFoodHit[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [importingKey, setImportingKey] = useState<string | null>(null);
+  const boundMealRef = useRef(boundMeal);
+  boundMealRef.current = boundMeal;
 
   const loadLibrary = useCallback(async () => {
     const { listFoodsLocal } = await import("../../../src/offline/store");
@@ -130,27 +151,33 @@ export default function DiaryFoodsScreen() {
 
   const loadMealContext = useCallback(async () => {
     const { openLocalDiaryDay } = await import("../../../src/offline/sync");
+    async function bindMeal(mealsForDay: DiaryMealGroup[]) {
+      const picked =
+        pickMealFromDay(mealsForDay, mealIdParam, boundMealRef.current?.name) ??
+        (await resolveMealForDate(date));
+      const next = picked ?? (mealIdParam ? boundMealRef.current ?? { id: mealIdParam, name: "Meal" } : null);
+      if (!next) return;
+      boundMealRef.current = next;
+      setBoundMeal(next);
+      if (picked) {
+        await writeLastDiaryMeal({ mealId: picked.id, mealName: picked.name, date });
+      }
+    }
     try {
       const local = await openLocalDiaryDay(date);
       setMeals(local.meals);
-      if (mealIdParam) {
-        const meal = local.meals.find((row) => row.id === mealIdParam);
-        setBoundMeal(meal ? { id: meal.id, name: meal.name } : null);
-      } else {
-        setBoundMeal(await resolveMealForDate(date));
-      }
+      await bindMeal(local.meals);
     } catch {
-      setBoundMeal(mealIdParam ? { id: mealIdParam, name: "Meal" } : null);
+      if (mealIdParam) {
+        const next = boundMealRef.current ?? { id: mealIdParam, name: "Meal" };
+        boundMealRef.current = next;
+        setBoundMeal(next);
+      }
     }
     void fetchDiaryDay(date)
       .then(async (day) => {
         setMeals(day.meals);
-        if (mealIdParam) {
-          const meal = day.meals.find((row) => row.id === mealIdParam);
-          setBoundMeal(meal ? { id: meal.id, name: meal.name } : null);
-          return;
-        }
-        setBoundMeal(await resolveMealForDate(date));
+        await bindMeal(day.meals);
       })
       .catch(() => undefined);
   }, [date, mealIdParam]);
@@ -234,8 +261,17 @@ export default function DiaryFoodsScreen() {
   }, [filter, query]);
 
   const searched = foods.filter((food) => foodMatchesQuery(food, query));
-  const visible =
-    tab === "all" ? searched : searched.filter((food) => (food.source === "recipe") === (tab === "recipes"));
+  const categoryTabs = useMemo(() => uniqueFoodCategories(foods), [foods]);
+  const libraryTabs = useMemo(
+    () => [...LIBRARY_TABS, ...categoryTabs.map((name) => ({ value: name, label: name }))],
+    [categoryTabs],
+  );
+  const visible = searched.filter((food) => foodMatchesLibraryTab(food, tab));
+
+  useEffect(() => {
+    if (RESERVED_LIBRARY_TABS.has(tab)) return;
+    if (!categoryTabs.includes(tab)) setTab("all");
+  }, [categoryTabs, tab]);
 
   function openFood(food: UserFood) {
     setCachedFood(food);
@@ -454,18 +490,49 @@ export default function DiaryFoodsScreen() {
             </View>
             <Pressable
               onPress={() => setFiltersOpen((open) => !open)}
-              style={[styles.filterButton, (filtersOpen || filter !== "library" || tab !== "all") && styles.filterButtonOn]}
+              style={[styles.filterButton, (filtersOpen || filter !== "library") && styles.filterButtonOn]}
               accessibilityRole="button"
               accessibilityState={{ expanded: filtersOpen }}
               accessibilityLabel="Filters"
             >
               <FunnelSimple
                 size={20}
-                color={filter !== "library" || tab !== "all" ? tokens.accent : tokens.text}
-                weight={filter !== "library" || tab !== "all" ? "fill" : "regular"}
+                color={filter !== "library" ? tokens.accent : tokens.text}
+                weight={filter !== "library" ? "fill" : "regular"}
               />
             </Pressable>
           </View>
+          {filter === "library" ? (
+            <ScrollView
+              horizontal
+              nestedScrollEnabled
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.libraryTabsContent}
+            >
+              <View style={styles.libraryTabsTrack}>
+                {libraryTabs.map((option) => {
+                  const selected = tab === option.value;
+                  return (
+                    <Pressable
+                      key={option.value}
+                      onPress={() => setTab(option.value)}
+                      style={[styles.libraryTab, selected && styles.libraryTabOn]}
+                      accessibilityRole="tab"
+                      accessibilityState={{ selected }}
+                      accessibilityLabel={option.label}
+                    >
+                      <AppText
+                        variant="caption"
+                        style={selected ? styles.libraryTabLabelOn : styles.libraryTabLabel}
+                      >
+                        {option.label}
+                      </AppText>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          ) : null}
           {filtersOpen ? (
             <View style={styles.filterPanel}>
               <View style={styles.filterGroup}>
@@ -487,27 +554,6 @@ export default function DiaryFoodsScreen() {
                   </Pressable>
                 ))}
               </View>
-              {filter === "library" ? (
-                <View style={styles.filterGroup}>
-                  {LIBRARY_TABS.map((option) => (
-                    <Pressable
-                      key={option.value}
-                      onPress={() => setTab(option.value)}
-                      style={[styles.filterChip, tab === option.value && styles.filterChipOn]}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: tab === option.value }}
-                      accessibilityLabel={option.label}
-                    >
-                      <AppText
-                        variant="caption"
-                        style={tab === option.value ? styles.filterChipLabelOn : styles.filterChipLabel}
-                      >
-                        {option.label}
-                      </AppText>
-                    </Pressable>
-                  ))}
-                </View>
-              ) : null}
             </View>
           ) : null}
         </>
@@ -821,6 +867,37 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: tokens.space.xs,
+  },
+  libraryTabsContent: {
+    flexGrow: 1,
+  },
+  libraryTabsTrack: {
+    flexDirection: "row",
+    alignItems: "center",
+    minWidth: "100%",
+    backgroundColor: tokens.bgElevated,
+    borderRadius: tokens.radius.full,
+    padding: tokens.space.xs,
+    gap: tokens.space.xs,
+  },
+  libraryTab: {
+    minHeight: 40,
+    borderRadius: tokens.radius.full,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: tokens.space.sm,
+    paddingVertical: tokens.space.xs,
+  },
+  libraryTabOn: {
+    backgroundColor: tokens.accent,
+  },
+  libraryTabLabel: {
+    color: tokens.textMuted,
+    fontFamily: tokens.font.bodyBold,
+  },
+  libraryTabLabelOn: {
+    color: tokens.bg,
+    fontFamily: tokens.font.bodyBold,
   },
   filterChip: {
     paddingHorizontal: tokens.space.sm,

@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { hasExtendedNutrients, listPresentNutrients, type DiaryDayResponse, type MicroTargets, type NutritionSex } from "@savorly/shared";
-import type { DiaryEntry } from "@savorly/shared";
+import type { DiaryEntry, FoodAmountUnit } from "@savorly/shared";
 import {
   addDiaryEntry,
   addQuickDiaryEntry,
@@ -316,7 +316,7 @@ export default function DiaryScreen() {
           if (!entry.foodId) {
             throw new Error("Could not restore that food.");
           }
-          setDay(await addDiaryEntry(entry.mealId, entry.foodId, entry.grams, entry.date));
+          setDay(await addDiaryEntry(entry.mealId, entry.foodId, entry.grams, entry.date, entry.amountUnit));
         },
       });
     } catch (err) {
@@ -372,11 +372,11 @@ export default function DiaryScreen() {
     scrollRef.current?.scrollToEnd({ animated: true });
   }
 
-  async function saveEntryAmount(entry: DiaryEntry, grams: number) {
+  async function saveEntryAmount(entry: DiaryEntry, grams: number, amountUnit: FoodAmountUnit) {
     setSavingAmount(true);
     setError(null);
     try {
-      setDay(await updateDiaryEntry(entry.id, grams));
+      setDay(await updateDiaryEntry(entry.id, grams, amountUnit));
       setAmountEntryId(null);
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : "Could not update that amount.");
@@ -633,12 +633,13 @@ export default function DiaryScreen() {
                 params: { date, mealId: meal.id, entryId: entry.id, returnTo: "diary" },
               } as Href);
             }}
-            onAddFood={() =>
+            onAddFood={() => {
+              void writeLastDiaryMeal({ mealId: meal.id, mealName: meal.name, date });
               router.push({
                 pathname: "/(app)/diary/foods",
                 params: { date, mealId: meal.id },
-              } as Href)
-            }
+              } as Href);
+            }}
             onDeleteEntry={(entry) => void onSwipeDeleteEntry(entry)}
             onCopyEntry={(entryIds) => {
               setRelocateError(null);

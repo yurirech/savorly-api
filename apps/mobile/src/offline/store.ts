@@ -5,6 +5,7 @@ import type {
   DiaryDayResponse,
   DiaryEntry,
   DiaryMealGroup,
+  FoodAmountUnit,
   NevoFoodHit,
   NutrientVector,
   NutritionProfileResponse,
@@ -120,6 +121,8 @@ export function applyRemoteDiaryDay(date: string, remote: DiaryDayResponse): Pro
     const local = await readDay(date);
     const { day, mealIdMap } = mergeRemoteDay(local, { ...remote, date });
     await rewriteOutboxMealIds(mealIdMap);
+    const { rewriteLastDiaryMealIds } = await import("../diary/lastDiaryMealStorage");
+    await rewriteLastDiaryMealIds(mealIdMap);
     await saveDay(day);
     return (await readDay(date)) ?? day;
   });
@@ -297,6 +300,13 @@ export async function setRecipeCookbookIds(recipeId: string, cookbookIds: string
   }
 }
 
+function hydrateFood(food: UserFood): UserFood {
+  return {
+    ...food,
+    category: food.category?.trim() ? food.category.trim() : null,
+  };
+}
+
 export async function saveFood(food: UserFood): Promise<void> {
   if (!useSqlite) {
     memory.foods.set(food.id, food);
@@ -316,8 +326,8 @@ export async function listFoodsLocal(query?: string): Promise<UserFood[]> {
   const foods = useSqlite
     ? (
         await (await openDb()).getAllAsync<{ payload: string }>("SELECT payload FROM foods ORDER BY name")
-      ).map((row) => JSON.parse(row.payload) as UserFood)
-    : [...memory.foods.values()].sort((a, b) => a.name.localeCompare(b.name));
+      ).map((row) => hydrateFood(JSON.parse(row.payload) as UserFood))
+    : [...memory.foods.values()].map(hydrateFood).sort((a, b) => a.name.localeCompare(b.name));
   if (!term) return foods;
   return foods.filter(
     (food) => food.name.toLowerCase().includes(term) || food.originalName.toLowerCase().includes(term),
@@ -325,10 +335,13 @@ export async function listFoodsLocal(query?: string): Promise<UserFood[]> {
 }
 
 export async function readFood(id: string): Promise<UserFood | null> {
-  if (!useSqlite) return memory.foods.get(id) ?? null;
+  if (!useSqlite) {
+    const food = memory.foods.get(id);
+    return food ? hydrateFood(food) : null;
+  }
   const db = await openDb();
   const row = await db.getFirstAsync<{ payload: string }>("SELECT payload FROM foods WHERE id = ?", [id]);
-  return row ? (JSON.parse(row.payload) as UserFood) : null;
+  return row ? hydrateFood(JSON.parse(row.payload) as UserFood) : null;
 }
 
 export async function removeFood(id: string): Promise<void> {
@@ -577,6 +590,7 @@ export function localFood(input: {
     nevoCode: input.nevoCode ?? null,
     nutritionRecipeId: null,
     servingWeightG: input.servingWeightG ?? null,
+    category: null,
     per100g: input.per100g,
     createdAt: now,
     updatedAt: now,
@@ -590,6 +604,7 @@ export function localEntry(input: {
   foodId: string | null;
   foodName: string;
   grams: number;
+  amountUnit?: FoodAmountUnit;
   nutrients: NutrientVector;
   kind: DiaryEntry["kind"];
   label?: string;
@@ -603,6 +618,7 @@ export function localEntry(input: {
     label: input.label,
     foodName: input.foodName,
     grams: input.grams,
+    amountUnit: input.amountUnit ?? "grams",
     nutrients: input.nutrients,
     createdAt: nowIso(),
   };
@@ -637,7 +653,14 @@ export function withMealFood(
   };
 }
 
-export function scaledFoodEntry(food: UserFood, grams: number, date: string, mealId: string, id: string): DiaryEntry {
+export function scaledFoodEntry(
+  food: UserFood,
+  grams: number,
+  date: string,
+  mealId: string,
+  id: string,
+  amountUnit: FoodAmountUnit = "grams",
+): DiaryEntry {
   return localEntry({
     id,
     date,
@@ -645,6 +668,7 @@ export function scaledFoodEntry(food: UserFood, grams: number, date: string, mea
     foodId: food.id,
     foodName: food.name,
     grams,
+    amountUnit,
     nutrients: scaleNutrition(food.per100g, grams),
     kind: "food",
   });

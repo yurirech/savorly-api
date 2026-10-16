@@ -14,6 +14,7 @@ import {
   remainingMacros,
   roundNutrition,
   scaleNutrition,
+  parseAmountUnit,
   type DiaryDayResponse,
   type DiaryEntry,
   type DiaryMealGroup,
@@ -23,6 +24,7 @@ import {
   type NutritionProfileInput,
   type NutritionProfileResponse,
   type NutritionProfileWrite,
+  type FoodAmountUnit,
   type QuickDiaryNutrientsInput,
   type UserFood,
   type UserFoodSource,
@@ -100,6 +102,7 @@ export function foodFromRow(row: FoodRow): UserFood {
     nevoCode: row.nevoCode,
     nutritionRecipeId: row.nutritionRecipeId,
     servingWeightG: row.servingWeightG ?? null,
+    category: row.category?.trim() ? row.category.trim() : null,
     per100g: requireNutrientVector(row.per100g, "Food nutrition"),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -117,6 +120,7 @@ export function diaryFromRow(row: DiaryRow, displayName: string): DiaryEntry {
     label: row.label ?? undefined,
     foodName: displayName,
     grams: row.grams,
+    amountUnit: parseAmountUnit(row.amountUnit),
     nutrients: requireNutrientVector(row.nutrients, "Diary nutrients"),
     createdAt: row.createdAt.toISOString(),
   };
@@ -425,10 +429,12 @@ export async function updateUserFood(
   db: Database,
   userId: string,
   foodId: string,
-  patch: { name?: string; servingWeightG?: number | null },
+  patch: { name?: string; servingWeightG?: number | null; category?: string | null },
 ): Promise<UserFood> {
   const food = await getOwnedUserFood(db, userId, foodId);
-  const next: { name?: string; servingWeightG?: number | null; updatedAt: Date } = { updatedAt: new Date() };
+  const next: { name?: string; servingWeightG?: number | null; category?: string | null; updatedAt: Date } = {
+    updatedAt: new Date(),
+  };
   if (patch.name != null) {
     const trimmed = patch.name.trim();
     if (!trimmed || trimmed.length > 120) {
@@ -441,6 +447,13 @@ export async function updateUserFood(
       throw new AppError("validation_error", "Serving weight must be between 0 and 5000 g.", 400);
     }
     next.servingWeightG = patch.servingWeightG;
+  }
+  if (patch.category !== undefined) {
+    const trimmed = patch.category?.trim() ?? "";
+    if (trimmed.length > 40) {
+      throw new AppError("validation_error", "Category must be 1–40 characters.", 400);
+    }
+    next.category = trimmed || null;
   }
   const [row] = await db
     .update(userFoods)
@@ -883,11 +896,12 @@ export async function deleteDiaryMeal(db: Database, userId: string, mealId: stri
 export async function addDiaryEntry(
   db: Database,
   userId: string,
-  input: { mealId: string; foodId: string; grams: number; date: string; id?: string },
+  input: { mealId: string; foodId: string; grams: number; date: string; id?: string; amountUnit?: FoodAmountUnit },
 ): Promise<DiaryDayResponse> {
   const isoDate = parseIsoDate(input.date);
   validateGrams(input.grams);
   const grams = roundNutrition(input.grams, 1);
+  const amountUnit = parseAmountUnit(input.amountUnit);
   const meal = await getOwnedDiaryMeal(db, userId, input.mealId);
   if (asIsoDate(meal.date) !== isoDate) {
     throw new AppError("validation_error", "Meal group belongs to a different day.", 400);
@@ -903,6 +917,7 @@ export async function addDiaryEntry(
       kind: "food",
       date: isoDate,
       grams,
+      amountUnit,
       nutrients,
       ...(input.id ? { id: input.id } : {}),
     })
@@ -937,6 +952,7 @@ async function insertCopiedDiaryEntry(db: Database, userId: string, entry: Diary
       label: entry.label,
       date: meal.date,
       grams: entry.grams,
+      amountUnit: "grams",
       nutrients: entry.nutrients,
     });
     return;
@@ -953,6 +969,7 @@ async function insertCopiedDiaryEntry(db: Database, userId: string, entry: Diary
     kind: "food",
     date: meal.date,
     grams: entry.grams,
+    amountUnit: parseAmountUnit(entry.amountUnit),
     nutrients: scaleNutrition(food.per100g, entry.grams),
   });
 }
@@ -1056,6 +1073,7 @@ export async function copyPreviousDiaryMeal(db: Database, userId: string, mealId
         label: entry.label,
         date: meal.date,
         grams: entry.grams,
+        amountUnit: "grams",
         nutrients: entry.nutrients,
       });
       continue;
@@ -1071,6 +1089,7 @@ export async function copyPreviousDiaryMeal(db: Database, userId: string, mealId
       kind: "food",
       date: meal.date,
       grams: entry.grams,
+      amountUnit: parseAmountUnit(entry.amountUnit),
       nutrients: scaleNutrition(food.per100g, entry.grams),
     });
   }
@@ -1130,6 +1149,7 @@ export async function logMealStaples(db: Database, userId: string, mealId: strin
       kind: "food",
       date: meal.date,
       grams,
+      amountUnit: "grams",
       nutrients: scaleNutrition(food.per100g, grams),
     });
   }
@@ -1167,6 +1187,7 @@ export async function addQuickDiaryEntry(
       label,
       date: isoDate,
       grams: QUICK_DIARY_ENTRY_GRAMS,
+      amountUnit: "grams",
       nutrients,
       ...(input.id ? { id: input.id } : {}),
     })
@@ -1195,7 +1216,7 @@ export async function updateDiaryEntry(
     return getDiaryDay(db, userId, asIsoDate(entry.date));
   }
 
-  const body = input as { grams?: number };
+  const body = input as { grams?: number; amountUnit?: FoodAmountUnit };
   if (body?.grams == null) {
     throw new AppError("validation_error", "Grams are required.", 400);
   }
@@ -1206,9 +1227,11 @@ export async function updateDiaryEntry(
   }
   const food = await getOwnedUserFood(db, userId, entry.foodId);
   const nutrients = scaleNutrition(food.per100g, grams);
+  const amountUnit =
+    body.amountUnit !== undefined ? parseAmountUnit(body.amountUnit) : parseAmountUnit(entry.amountUnit);
   await db
     .update(diaryEntries)
-    .set({ grams, nutrients })
+    .set({ grams, nutrients, amountUnit })
     .where(eq(diaryEntries.id, entry.id));
   return getDiaryDay(db, userId, asIsoDate(entry.date));
 }
