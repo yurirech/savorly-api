@@ -126,35 +126,43 @@ export default function DiaryScreen() {
 
   const dayMicroGroups = useMemo(() => (day?.totals ? listPresentNutrients(day.totals) : []), [day?.totals]);
 
-  const load = useCallback(async (nextDate: string, isActive: () => boolean = () => true, waitForLive = false) => {
-    const { openLocalDiaryDay } = await import("../../../src/offline/sync");
-    const { readProfile } = await import("../../../src/offline/store");
-    const local = await openLocalDiaryDay(nextDate);
+  const load = useCallback(async (nextDate: string, isActive: () => boolean = () => true) => {
+    const { readDay, readProfile } = await import("../../../src/offline/store");
+    const cached = await readDay(nextDate);
     if (!isActive()) return;
-    setDay(local);
-    setError(null);
+    if (cached) {
+      setDay(cached);
+      setError(null);
+    } else {
+      setDay(null);
+    }
     const cachedProfile = await readProfile();
     if (cachedProfile && isActive()) {
       setSex(cachedProfile.profile?.sex ?? null);
       setMicroTargets(cachedProfile.profile?.microTargets ?? null);
       setProfileKcal(cachedProfile.targets?.kcal ?? null);
     }
-    const livePromise = Promise.all([
-      fetchDiaryDay(nextDate),
-      fetchNutritionProfile().catch(() => null),
-    ])
-      .then(([live, profile]) => {
-        if (!isActive()) return;
-        setDay(live);
-        if (profile) {
-          setSex(profile.profile?.sex ?? null);
-          setMicroTargets(profile.profile?.microTargets ?? null);
-          setProfileKcal(profile.targets?.kcal ?? null);
-        }
+    try {
+      const [live, profile] = await Promise.all([
+        fetchDiaryDay(nextDate),
+        fetchNutritionProfile().catch(() => null),
+      ]);
+      if (!isActive()) return;
+      setDay(live);
+      if (profile) {
+        setSex(profile.profile?.sex ?? null);
+        setMicroTargets(profile.profile?.microTargets ?? null);
+        setProfileKcal(profile.targets?.kcal ?? null);
+      }
+      setError(null);
+    } catch {
+      if (!isActive()) return;
+      if (cached) {
         setError(null);
-      })
-      .catch(() => undefined);
-    if (waitForLive) await livePromise;
+        return;
+      }
+      setError("No day saved on this phone yet.");
+    }
   }, []);
 
   const dateSwipe = useRef(
@@ -193,7 +201,7 @@ export default function DiaryScreen() {
   async function onRefresh() {
     setRefreshing(true);
     try {
-      await load(date, () => true, true);
+      await load(date, () => true);
     } finally {
       setRefreshing(false);
     }

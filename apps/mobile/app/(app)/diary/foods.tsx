@@ -150,7 +150,7 @@ export default function DiaryFoodsScreen() {
   }, []);
 
   const loadMealContext = useCallback(async () => {
-    const { openLocalDiaryDay } = await import("../../../src/offline/sync");
+    const { readDay } = await import("../../../src/offline/store");
     async function bindMeal(mealsForDay: DiaryMealGroup[]) {
       const picked =
         pickMealFromDay(mealsForDay, mealIdParam, boundMealRef.current?.name) ??
@@ -163,23 +163,22 @@ export default function DiaryFoodsScreen() {
         await writeLastDiaryMeal({ mealId: picked.id, mealName: picked.name, date });
       }
     }
+    const cached = await readDay(date);
+    if (cached) {
+      setMeals(cached.meals);
+      await bindMeal(cached.meals);
+    }
     try {
-      const local = await openLocalDiaryDay(date);
-      setMeals(local.meals);
-      await bindMeal(local.meals);
+      const day = await fetchDiaryDay(date);
+      setMeals(day.meals);
+      await bindMeal(day.meals);
     } catch {
-      if (mealIdParam) {
+      if (mealIdParam && !cached) {
         const next = boundMealRef.current ?? { id: mealIdParam, name: "Meal" };
         boundMealRef.current = next;
         setBoundMeal(next);
       }
     }
-    void fetchDiaryDay(date)
-      .then(async (day) => {
-        setMeals(day.meals);
-        await bindMeal(day.meals);
-      })
-      .catch(() => undefined);
   }, [date, mealIdParam]);
 
   useFocusEffect(

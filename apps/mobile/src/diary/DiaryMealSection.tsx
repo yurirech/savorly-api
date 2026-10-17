@@ -488,9 +488,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   entryAmount: {
-    minHeight: 22,
-    justifyContent: "center",
-    paddingVertical: tokens.space.xs / 2,
     paddingLeft: 40 + tokens.space.sm,
   },
   check: {

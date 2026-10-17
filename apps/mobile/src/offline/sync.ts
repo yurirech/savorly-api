@@ -2,13 +2,12 @@ import type { DiaryDayResponse, NutritionProfileResponse, SavedRecipe, UserFood 
 import { ApiRequestError, apiRequest } from "../api/client";
 import { mergeRecipes, pruneRecipes, removeCachedRecipe, upsertCachedRecipe } from "../db/cache";
 import {
-  applyRemoteDiaryDay,
   deleteJob,
   enqueueJob,
-  ensureLocalDay,
   listJobs,
   removeFood,
   saveCookbook,
+  saveDay,
   saveFood,
   saveNutritionRecipe,
   saveProfile,
@@ -26,14 +25,6 @@ export function isUnavailable(err: unknown): boolean {
 
 export async function enqueue(method: string, path: string, body: unknown | null = null): Promise<void> {
   await enqueueJob({ method, path, body });
-}
-
-export async function openLocalDiaryDay(date: string): Promise<DiaryDayResponse> {
-  const { day, seededMeals } = await ensureLocalDay(date);
-  for (const meal of seededMeals) {
-    await enqueue("POST", "/nutrition/diary/meals", { id: meal.id, date, name: meal.name });
-  }
-  return day;
 }
 
 export async function flushOutbox(): Promise<void> {
@@ -94,7 +85,7 @@ async function absorb(data: unknown): Promise<void> {
   if (body.recipe?.id) await upsertCachedRecipe(body.recipe);
   if (body.cookbook?.id && "recipeCount" in body.cookbook) await saveCookbook(body.cookbook as never);
   if (body.food?.id) await saveFood(body.food);
-  if (body.date && Array.isArray(body.meals)) await applyRemoteDiaryDay(body.date, body as DiaryDayResponse);
+  if (body.date && Array.isArray(body.meals)) await saveDay(body as DiaryDayResponse);
   if ("profile" in body && "targets" in body && !body.date) await saveProfile(body as NutritionProfileResponse);
   if (body.id && Array.isArray(body.items)) await saveNutritionRecipe(body as { id: string });
 }

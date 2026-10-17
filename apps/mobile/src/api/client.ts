@@ -29,7 +29,6 @@ import { getToken, clearSession } from "../auth/session";
 import { shiftIsoDate, todayIsoDate } from "../utils/isoDate";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4000";
-const DEFAULT_TIMEOUT_MS = 3000;
 const LONG_TIMEOUT_MS = 120_000;
 
 export type ApiRequestInit = RequestInit & { timeoutMs?: number | null };
@@ -46,7 +45,7 @@ export class ApiRequestError extends Error {
 
 export async function request<T>(path: string, init: ApiRequestInit = {}): Promise<T> {
   const token = await getToken();
-  const { timeoutMs = DEFAULT_TIMEOUT_MS, signal: callerSignal, ...rest } = init;
+  const { timeoutMs = null, signal: callerSignal, ...rest } = init;
   const controller = new AbortController();
   const timer =
     timeoutMs == null || timeoutMs <= 0 ? null : setTimeout(() => controller.abort(), timeoutMs);
@@ -807,13 +806,14 @@ export async function deleteNutritionFood(id: string) {
 export async function fetchDiaryDay(date: string) {
   try {
     const live = await requestDiaryDay(`/nutrition/diary?date=${encodeURIComponent(date)}`);
-    const { applyRemoteDiaryDay } = await import("../offline/store");
-    return applyRemoteDiaryDay(date, live);
+    const { saveDay } = await import("../offline/store");
+    await saveDay(live);
+    return live;
   } catch (err) {
     return offline(err, async () => {
-      const { flushOutbox, openLocalDiaryDay } = await import("../offline/sync");
-      const day = await openLocalDiaryDay(date);
-      void flushOutbox();
+      const { readDay } = await import("../offline/store");
+      const day = await readDay(date);
+      if (!day) throw err;
       return day;
     });
   }
@@ -850,54 +850,64 @@ export async function setDiaryDayTarget(date: string, kcal: number) {
     method: "PUT",
     body: JSON.stringify({ date, kcal }),
   });
-  const { applyRemoteDiaryDay } = await import("../offline/store");
-  return applyRemoteDiaryDay(date, live);
+  const { saveDay } = await import("../offline/store");
+  await saveDay(live);
+  return live;
 }
 
 export async function clearDiaryDayTarget(date: string) {
   const live = await requestDiaryDay(`/nutrition/diary/target?date=${encodeURIComponent(date)}`, {
     method: "DELETE",
   });
-  const { applyRemoteDiaryDay } = await import("../offline/store");
-  return applyRemoteDiaryDay(date, live);
+  const { saveDay } = await import("../offline/store");
+  await saveDay(live);
+  return live;
 }
 
 export async function createDiaryMeal(date: string, name: string) {
-  const { enqueue, flushOutbox } = await import("../offline/sync");
-  const { mutateDay, newId } = await import("../offline/store");
-  const trimmed = name.trim();
-  const id = newId();
-  let created = false;
-  const day = await mutateDay(date, (current) => {
-    if (current.meals.some((meal) => meal.name === trimmed)) return current;
-    created = true;
-    const sortOrder = current.meals.reduce((max, meal) => Math.max(max, meal.sortOrder), -1) + 1;
-    return {
-      ...current,
-      meals: [
-        ...current.meals,
-        {
-          id,
-          date,
-          name: trimmed,
-          sortOrder,
-          totals: { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 },
-          entries: [],
-        },
-      ],
-    };
-  });
-  if (created) {
-    await enqueue("POST", "/nutrition/diary/meals", { id, date, name: trimmed });
-    void flushOutbox();
+  try {
+    const live = await requestDiaryDay("/nutrition/diary/meals", {
+      method: "POST",
+      body: JSON.stringify({ date, name }),
+    });
+    const { saveDay } = await import("../offline/store");
+    await saveDay(live);
+    return live;
+  } catch (err) {
+    return offline(err, async () => {
+      const { enqueue, flushOutbox } = await import("../offline/sync");
+      const { mutateDay, newId } = await import("../offline/store");
+      const id = newId();
+      const day = await mutateDay(date, (current) => {
+        if (current.meals.some((meal) => meal.name === name.trim())) return current;
+        const sortOrder = current.meals.reduce((max, meal) => Math.max(max, meal.sortOrder), -1) + 1;
+        return {
+          ...current,
+          meals: [
+            ...current.meals,
+            {
+              id,
+              date,
+              name: name.trim(),
+              sortOrder,
+              totals: { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0 },
+              entries: [],
+            },
+          ],
+        };
+      });
+      await enqueue("POST", "/nutrition/diary/meals", { id, date, name: name.trim() });
+      void flushOutbox();
+      return day;
+    });
   }
-  return day;
 }
 
-async function persistDay(path: string, init: ApiRequestInit, dateHint?: string) {
+async function persistDay(path: string, init: ApiRequestInit) {
   const live = await requestDiaryDay(path, init);
-  const { applyRemoteDiaryDay } = await import("../offline/store");
-  return applyRemoteDiaryDay(dateHint ?? live.date, live);
+  const { saveDay } = await import("../offline/store");
+  await saveDay(live);
+  return live;
 }
 
 async function dayContainingMeal(mealId: string) {
@@ -986,41 +996,47 @@ export async function copyPreviousDiaryMeal(id: string) {
 }
 
 export async function logMealStaples(id: string) {
-  const { enqueue, flushOutbox } = await import("../offline/sync");
-  const { listDays, mutateDay, newId, readFood, scaledFoodEntry, stapleFoodIds } = await import("../offline/store");
-  const target = await dayContainingMeal(id);
-  const meal = target?.meals.find((item) => item.id === id);
-  if (!target || !meal) throw new Error("Those staples are not on this phone yet.");
-  const foodIds = await stapleFoodIds(meal.name);
-  if (foodIds.length === 0) throw new Error("Those staples are not on this phone yet.");
-  const days = await listDays();
-  const entries: DiaryEntry[] = [];
-  for (const foodId of foodIds) {
-    const food = await readFood(foodId);
-    if (!food) continue;
-    const previous = days
-      .flatMap((row) => row.meals.flatMap((group) => group.entries))
-      .filter((entry) => entry.foodId === foodId)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-    entries.push(
-      scaledFoodEntry(
-        food,
-        previous?.grams ?? 0,
-        target.date,
-        id,
-        newId(),
-        parseAmountUnit(previous?.amountUnit),
-      ),
-    );
+  try {
+    return await persistDay(`/nutrition/diary/meals/${id}/staples`, { method: "POST" });
+  } catch (err) {
+    return offline(err, async () => {
+      const { enqueue, flushOutbox } = await import("../offline/sync");
+      const { listDays, mutateDay, newId, readFood, scaledFoodEntry, stapleFoodIds } = await import("../offline/store");
+      const target = await dayContainingMeal(id);
+      const meal = target?.meals.find((item) => item.id === id);
+      if (!target || !meal) throw err;
+      const foodIds = await stapleFoodIds(meal.name);
+      if (foodIds.length === 0) throw new Error("Those staples are not on this phone yet.");
+      const days = await listDays();
+      const entries: DiaryEntry[] = [];
+      for (const foodId of foodIds) {
+        const food = await readFood(foodId);
+        if (!food) continue;
+        const previous = days
+          .flatMap((row) => row.meals.flatMap((group) => group.entries))
+          .filter((entry) => entry.foodId === foodId)
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+        entries.push(
+          scaledFoodEntry(
+            food,
+            previous?.grams ?? 0,
+            target.date,
+            id,
+            newId(),
+            parseAmountUnit(previous?.amountUnit),
+          ),
+        );
+      }
+      if (entries.length === 0) throw new Error("Those staples are not on this phone yet.");
+      const filled = await mutateDay(target.date, (current) => ({
+        ...current,
+        meals: current.meals.map((item) => (item.id === id ? { ...item, entries } : item)),
+      }));
+      await enqueue("POST", `/nutrition/diary/meals/${id}/staples`, null);
+      void flushOutbox();
+      return filled;
+    });
   }
-  if (entries.length === 0) throw new Error("Those staples are not on this phone yet.");
-  const filled = await mutateDay(target.date, (current) => ({
-    ...current,
-    meals: current.meals.map((item) => (item.id === id ? { ...item, entries } : item)),
-  }));
-  await enqueue("POST", `/nutrition/diary/meals/${id}/staples`, null);
-  void flushOutbox();
-  return filled;
 }
 
 export async function fetchMealStaples(foodId: string) {
@@ -1078,10 +1094,8 @@ export async function addDiaryEntry(
   date: string,
   amountUnit: FoodAmountUnit = "grams",
 ) {
-  const { enqueue, flushOutbox } = await import("../offline/sync");
-  const { mutateDay, newId, readDay, readFood, scaledFoodEntry } = await import("../offline/store");
+  const { readDay, readFood } = await import("../offline/store");
   const { readLastDiaryMeal } = await import("../diary/lastDiaryMealStorage");
-  const food = await readFood(foodId);
   const current = await readDay(date);
   const saved = await readLastDiaryMeal();
   const meal =
@@ -1089,77 +1103,78 @@ export async function addDiaryEntry(
     (saved?.mealName ? current?.meals.find((row) => row.name === saved.mealName) : undefined);
   const liveMealId = meal?.id ?? mealId;
   const unit = parseAmountUnit(amountUnit);
-  if (!food || !meal) {
-    try {
-      return await persistDay("/nutrition/diary", {
-        method: "POST",
-        body: JSON.stringify({ mealId: liveMealId, foodId, grams, date, amountUnit: unit }),
-      });
-    } catch (err) {
-      return offline(err, async () => {
+  try {
+    return await persistDay("/nutrition/diary", {
+      method: "POST",
+      body: JSON.stringify({ mealId: liveMealId, foodId, grams, date, amountUnit: unit }),
+    });
+  } catch (err) {
+    return offline(err, async () => {
+      const { enqueue, flushOutbox } = await import("../offline/sync");
+      const { mutateDay, newId, scaledFoodEntry } = await import("../offline/store");
+      const food = await readFood(foodId);
+      if (!food || !meal) {
         throw food ? new Error("That meal is not on this phone yet.") : err;
+      }
+      const entryId = newId();
+      const day = await mutateDay(date, (row) => ({
+        ...row,
+        meals: row.meals.map((item) =>
+          item.id === liveMealId
+            ? { ...item, entries: [...item.entries, scaledFoodEntry(food, grams, date, liveMealId, entryId, unit)] }
+            : item,
+        ),
+      }));
+      await enqueue("POST", "/nutrition/diary", {
+        id: entryId,
+        mealId: liveMealId,
+        foodId,
+        grams,
+        date,
+        amountUnit: unit,
       });
-    }
+      void flushOutbox();
+      return day;
+    });
   }
-  const entryId = newId();
-  const day = await mutateDay(date, (row) => ({
-    ...row,
-    meals: row.meals.map((item) =>
-      item.id === liveMealId
-        ? { ...item, entries: [...item.entries, scaledFoodEntry(food, grams, date, liveMealId, entryId, unit)] }
-        : item,
-    ),
-  }));
-  await enqueue("POST", "/nutrition/diary", {
-    id: entryId,
-    mealId: liveMealId,
-    foodId,
-    grams,
-    date,
-    amountUnit: unit,
-  });
-  void flushOutbox();
-  return day;
 }
 
 export async function updateDiaryEntry(id: string, grams: number, amountUnit?: FoodAmountUnit) {
   const roundedGrams = roundNutrition(grams, 1);
   const unit = amountUnit === undefined ? undefined : parseAmountUnit(amountUnit);
-  const { enqueue, flushOutbox } = await import("../offline/sync");
-  const { listDays, mutateDay, readFood } = await import("../offline/store");
-  const { scaleNutrition } = await import("@savorly/shared");
-  const days = await listDays();
-  const host = days.find((day) => day.meals.some((meal) => meal.entries.some((row) => row.id === id)));
   const patch = { grams: roundedGrams, ...(unit ? { amountUnit: unit } : {}) };
-  if (!host) {
-    try {
-      return await persistDay(`/nutrition/diary/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
-    } catch (err) {
-      return offline(err, async () => {
-        throw err;
-      });
-    }
+  try {
+    return await persistDay(`/nutrition/diary/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+  } catch (err) {
+    return offline(err, async () => {
+      const { enqueue, flushOutbox } = await import("../offline/sync");
+      const { listDays, mutateDay, readFood } = await import("../offline/store");
+      const { scaleNutrition } = await import("@savorly/shared");
+      const days = await listDays();
+      const host = days.find((day) => day.meals.some((meal) => meal.entries.some((row) => row.id === id)));
+      if (!host) throw err;
+      const currentEntry = host.meals.flatMap((meal) => meal.entries).find((item) => item.id === id);
+      const food = currentEntry?.foodId ? await readFood(currentEntry.foodId) : null;
+      const day = await mutateDay(host.date, (current) => ({
+        ...current,
+        meals: current.meals.map((meal) => ({
+          ...meal,
+          entries: meal.entries.map((item) => {
+            if (item.id !== id) return item;
+            return {
+              ...item,
+              grams: roundedGrams,
+              amountUnit: unit ?? item.amountUnit ?? "grams",
+              nutrients: food ? scaleNutrition(food.per100g, roundedGrams) : item.nutrients,
+            };
+          }),
+        })),
+      }));
+      await enqueue("PATCH", `/nutrition/diary/${id}`, patch);
+      void flushOutbox();
+      return day;
+    });
   }
-  const currentEntry = host.meals.flatMap((meal) => meal.entries).find((item) => item.id === id);
-  const food = currentEntry?.foodId ? await readFood(currentEntry.foodId) : null;
-  const day = await mutateDay(host.date, (current) => ({
-    ...current,
-    meals: current.meals.map((meal) => ({
-      ...meal,
-      entries: meal.entries.map((item) => {
-        if (item.id !== id) return item;
-        return {
-          ...item,
-          grams: roundedGrams,
-          amountUnit: unit ?? item.amountUnit ?? "grams",
-          nutrients: food ? scaleNutrition(food.per100g, roundedGrams) : item.nutrients,
-        };
-      }),
-    })),
-  }));
-  await enqueue("PATCH", `/nutrition/diary/${id}`, patch);
-  void flushOutbox();
-  return day;
 }
 
 export async function addQuickDiaryEntry(body: {
@@ -1171,47 +1186,43 @@ export async function addQuickDiaryEntry(body: {
   carbsG?: number;
   fatG?: number;
 }) {
-  const { buildQuickDiaryNutrients } = await import("@savorly/shared");
-  const { enqueue, flushOutbox } = await import("../offline/sync");
-  const { localEntry, mutateDay, newId, readDay } = await import("../offline/store");
-  const current = await readDay(body.date);
-  if (!current?.meals.some((meal) => meal.id === body.mealId)) {
-    try {
-      return await persistDay("/nutrition/diary/quick", { method: "POST", body: JSON.stringify(body) });
-    } catch (err) {
-      return offline(err, async () => {
-        throw err;
-      });
-    }
+  try {
+    return await persistDay("/nutrition/diary/quick", { method: "POST", body: JSON.stringify(body) });
+  } catch (err) {
+    return offline(err, async () => {
+      const { buildQuickDiaryNutrients } = await import("@savorly/shared");
+      const { enqueue, flushOutbox } = await import("../offline/sync");
+      const { localEntry, mutateDay, newId } = await import("../offline/store");
+      const entryId = newId();
+      const day = await mutateDay(body.date, (current) => ({
+        ...current,
+        meals: current.meals.map((meal) =>
+          meal.id === body.mealId
+            ? {
+                ...meal,
+                entries: [
+                  ...meal.entries,
+                  localEntry({
+                    id: entryId,
+                    date: body.date,
+                    mealId: body.mealId,
+                    foodId: null,
+                    foodName: body.label?.trim() || "Quick add",
+                    label: body.label?.trim() || "Quick add",
+                    grams: 0,
+                    nutrients: buildQuickDiaryNutrients(body),
+                    kind: "quick",
+                  }),
+                ],
+              }
+            : meal,
+        ),
+      }));
+      await enqueue("POST", "/nutrition/diary/quick", { id: entryId, ...body });
+      void flushOutbox();
+      return day;
+    });
   }
-  const entryId = newId();
-  const day = await mutateDay(body.date, (row) => ({
-    ...row,
-    meals: row.meals.map((meal) =>
-      meal.id === body.mealId
-        ? {
-            ...meal,
-            entries: [
-              ...meal.entries,
-              localEntry({
-                id: entryId,
-                date: body.date,
-                mealId: body.mealId,
-                foodId: null,
-                foodName: body.label?.trim() || "Quick add",
-                label: body.label?.trim() || "Quick add",
-                grams: 0,
-                nutrients: buildQuickDiaryNutrients(body),
-                kind: "quick",
-              }),
-            ],
-          }
-        : meal,
-    ),
-  }));
-  await enqueue("POST", "/nutrition/diary/quick", { id: entryId, ...body });
-  void flushOutbox();
-  return day;
 }
 
 export function updateQuickDiaryEntry(
@@ -1231,25 +1242,25 @@ export function updateQuickDiaryEntry(
 }
 
 export async function deleteDiaryEntry(id: string) {
-  const { enqueue, flushOutbox } = await import("../offline/sync");
-  const { listDays, mutateDay } = await import("../offline/store");
-  const host = (await listDays()).find((day) => day.meals.some((meal) => meal.entries.some((entry) => entry.id === id)));
-  if (!host) {
-    try {
-      return await persistDay(`/nutrition/diary/${id}`, { method: "DELETE" });
-    } catch (err) {
-      return offline(err, async () => {
-        throw err;
-      });
-    }
+  try {
+    return await persistDay(`/nutrition/diary/${id}`, { method: "DELETE" });
+  } catch (err) {
+    return offline(err, async () => {
+      const { enqueue, flushOutbox } = await import("../offline/sync");
+      const { listDays, mutateDay } = await import("../offline/store");
+      const host = (await listDays()).find((day) =>
+        day.meals.some((meal) => meal.entries.some((entry) => entry.id === id)),
+      );
+      if (!host) throw err;
+      const day = await mutateDay(host.date, (current) => ({
+        ...current,
+        meals: current.meals.map((meal) => ({ ...meal, entries: meal.entries.filter((entry) => entry.id !== id) })),
+      }));
+      await enqueue("DELETE", `/nutrition/diary/${id}`, null);
+      void flushOutbox();
+      return day;
+    });
   }
-  const day = await mutateDay(host.date, (current) => ({
-    ...current,
-    meals: current.meals.map((meal) => ({ ...meal, entries: meal.entries.filter((entry) => entry.id !== id) })),
-  }));
-  await enqueue("DELETE", `/nutrition/diary/${id}`, null);
-  void flushOutbox();
-  return day;
 }
 
 export async function copyDiaryEntry(id: string, mealId: string) {

@@ -61,13 +61,11 @@ export async function rewriteLastDiaryMealIds(mealIdMap: Record<string, string>)
 }
 
 export async function resolveMealForDate(date: string): Promise<Pick<DiaryMealGroup, "id" | "name"> | null> {
-  const { openLocalDiaryDay } = await import("../offline/sync");
+  const { fetchDiaryDay } = await import("../api/client");
   const saved = await readLastDiaryMeal();
-  const day = await openLocalDiaryDay(date);
+  const day = await fetchDiaryDay(date);
   if (saved) {
-    const meal =
-      (saved.date === date ? day.meals.find((row) => row.id === saved.mealId) : undefined) ??
-      day.meals.find((row) => row.name === saved.mealName);
+    const meal = pickMealFromDay(day.meals, saved.date === date ? saved.mealId : undefined, saved.mealName);
     if (meal) {
       return { id: meal.id, name: meal.name };
     }
