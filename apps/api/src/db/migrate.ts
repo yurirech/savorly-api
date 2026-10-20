@@ -3,8 +3,6 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { MIGRATIONS } from "./migrations";
-import { createDb } from "./client";
-import { ensureNevoReferenceSynced } from "../nutrition/nevoSeed";
 
 async function main() {
   const url = process.env.DATABASE_URL;
@@ -19,12 +17,6 @@ async function main() {
     await client.unsafe(sql);
   }
   await client.end();
-
-  const db = createDb(url);
-  const synced = await ensureNevoReferenceSynced(db);
-  if (synced > 0) {
-    console.log(`Synced ${synced} NEVO reference foods from bundled JSON.`);
-  }
 }
 
 void main();
