@@ -13,7 +13,7 @@ async function main() {
   }
   const dir = path.dirname(fileURLToPath(import.meta.url));
   const drizzleDir = path.resolve(dir, "../../drizzle");
-  const client = postgres(url, { max: 1, prepare: false, fetch_types: false });
+  const client = postgres(url, { max: 1, prepare: false, fetch_types: false, onnotice: () => undefined });
   for (const file of MIGRATIONS) {
     const sql = await readFile(path.join(drizzleDir, file), "utf8");
     await client.unsafe(sql);
