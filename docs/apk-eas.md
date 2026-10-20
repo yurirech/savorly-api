@@ -15,7 +15,7 @@ fly launch --no-deploy --copy-config --name savorly-api --region ams --yes
 
 Refuse extra Machines and any “Add Postgres?” prompt. `fly.toml` already sets port 4000, `auto_stop_machines = "stop"`, and `min_machines_running = 0`. There is no HTTP health check on purpose: proxy checks can keep the Machine awake.
 
-Copy the live secrets from the previous host. Use the Neon **pooled** URL (`sslmode=require`). Keep the same `JWT_SECRET` or existing sessions log out. Never commit these:
+Copy the live secrets from the previous host. Use the Neon **direct** URL (`sslmode=require`), not the `-pooler` host — `postgres.js` stalls on the pooler. Keep the same `JWT_SECRET` or existing sessions log out. Never commit these:
 
 ```bash
 fly secrets set \

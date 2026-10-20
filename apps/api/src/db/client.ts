@@ -3,7 +3,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import * as schema from "./schema";
 
 export function createDb(url: string) {
-  const client = postgres(url);
+  const client = postgres(url, { prepare: false, fetch_types: false });
   return drizzle(client, { schema });
 }
 
