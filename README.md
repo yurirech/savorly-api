@@ -50,7 +50,7 @@ npx expo start
 
 Point `EXPO_PUBLIC_API_URL` at the API. Android emulator: `http://10.0.2.2:4000`. Physical device on the same Wi-Fi: your machine LAN IP.
 
-To use it on the phone **without this laptop**, host the API and install an APK. See `docs/apk-eas.md`.
+To use it on the phone **without this laptop**, the API runs on Fly.io (scale-to-zero) against Neon Postgres. See `docs/apk-eas.md`.
 
 Sign in with **admin** and the `ADMIN_PASSWORD` from `apps/api/.env` (seeded/rotated on API start). You can still create another account. Imports and the recipe library require a signed-in session.
 

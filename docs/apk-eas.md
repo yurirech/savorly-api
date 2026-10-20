@@ -2,35 +2,53 @@
 
 The phone must talk to a **public HTTPS API**. The APK bakes that URL in at build time. No GitHub required. Expo Go is not this path.
 
+Production is **Fly.io** (one `shared-cpu-1x` / 512MB Machine in `ams`, scale-to-zero) plus **Neon Postgres**. Gemini and Apify stay on their free tiers. Do not add Fly Postgres, a volume, or a dedicated IPv4.
+
 ## 1. Host the API
 
-On a VPS (or any Docker host) in the Savorly folder:
+Install [flyctl](https://fly.io/docs/flyctl/install/), then from the Savorly root (where `Dockerfile` and `fly.toml` live):
 
 ```bash
-cp .env.production.example .env.production
+fly auth login
+fly launch --no-deploy --copy-config --name savorly-api --region ams --yes
 ```
 
-Put a real `POSTGRES_PASSWORD`, `JWT_SECRET`, and `ADMIN_PASSWORD` in `.env.production`. Then:
+Refuse extra Machines and any “Add Postgres?” prompt. `fly.toml` already sets port 4000, `auto_stop_machines = "stop"`, and `min_machines_running = 0`. There is no HTTP health check on purpose: proxy checks can keep the Machine awake.
+
+Copy the live secrets from the previous host. Use the Neon **pooled** URL (`sslmode=require`). Keep the same `JWT_SECRET` or existing sessions log out. Never commit these:
 
 ```bash
-docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+fly secrets set \
+  DATABASE_URL="postgres://…@….neon.tech/neondb?sslmode=require" \
+  JWT_SECRET="…" \
+  ADMIN_PASSWORD="…" \
+  GEMINI_API_KEY="…" \
+  APIFY_TOKEN="…" \
+  USDA_FDC_API_KEY="…" \
+  FATSECRET_CLIENT_ID="…" \
+  FATSECRET_CLIENT_SECRET="…" \
+  USE_MOCK_IMPORTS="false" \
+  PORT="4000"
 ```
 
-Put HTTPS in front of port 4000 (Caddy, nginx, or the host’s reverse proxy). Confirm:
+Do not attach Google Cloud billing to the Gemini project, and do not turn on Apify auto-refill. Free-tier quota failures should stop the feature, not bill you.
 
 ```bash
-curl https://YOUR-API-HOST/health
+fly deploy
+fly scale count 1
+fly machines list
+curl https://savorly-api.fly.dev/health
 ```
 
-should return `{"ok":true}`.
+`fly machines list` must show **one** Machine. `/health` returns `{"ok":true}`. The first request after idle takes a few seconds (VM boot, migrate, Neon wake). A second request is immediate.
 
-Login: **admin** and the `ADMIN_PASSWORD` you set on the server.
+Login: **admin** and the `ADMIN_PASSWORD` secret.
 
-Keep `GEMINI_API_KEY`, `APIFY_TOKEN`, `DATABASE_URL`, and `JWT_SECRET` on the server. Never put them in the APK.
+Keep `GEMINI_API_KEY`, `APIFY_TOKEN`, `DATABASE_URL`, and `JWT_SECRET` on Fly. Never put them in the APK.
 
 ## 2. Point the APK at that URL
 
-In `apps/mobile/eas.json`, set `EXPO_PUBLIC_API_URL` to that HTTPS origin (no trailing slash), for example `https://savorly.example.com`.
+`apps/mobile/eas.json` preview profile sets `EXPO_PUBLIC_API_URL` to `https://savorly-api.fly.dev` (no trailing slash). An already-installed APK keeps the URL it was built with until you install a new preview build.
 
 ## 3. Build the APK
 
@@ -38,12 +56,11 @@ Needs a free [Expo](https://expo.dev) account. From `apps/mobile`:
 
 ```bash
 npx eas-cli login
-npx eas-cli build:configure
 npx eas-cli build -p android --profile preview
 ```
 
-EAS uploads the project (still no GitHub). When the build finishes, download the APK and install it. Allow installs from the browser if Android asks.
+When the build finishes, download the APK and install it. Allow installs from the browser if Android asks.
 
 ## 4. Open the app
 
-Sign in with **admin** and the API `ADMIN_PASSWORD`. Imports work against the hosted API. With `USE_MOCK_IMPORTS=true` on the server, imports return fixtures until Gemini/Apify keys are set. Live Instagram and YouTube imports need `APIFY_TOKEN` and `GEMINI_API_KEY` on the API; YouTube uses `APIFY_YOUTUBE_ACTOR` (default `autofacts/youtube-subtitle-transcript-scraper`).
+Sign in with **admin** and the API `ADMIN_PASSWORD`. Log a diary item before suspending the old host. Live Instagram and YouTube imports need `APIFY_TOKEN` and `GEMINI_API_KEY` on the API; YouTube uses `APIFY_YOUTUBE_ACTOR` (default `autofacts/youtube-subtitle-transcript-scraper`). Pasting a food label uses Gemini only.
