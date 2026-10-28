@@ -182,6 +182,49 @@ export async function createNutritionRecipe(db: Database, userId: string, title:
   return loadDetail(db, userId, created.id);
 }
 
+function copiedRecipeTitle(title: string): string {
+  return `Copy of ${title.trim()}`.slice(0, 120);
+}
+
+export async function copyNutritionRecipe(db: Database, userId: string, sourceId: string, id?: string) {
+  if (id) {
+    const [existing] = await db
+      .select({ id: nutritionRecipes.id })
+      .from(nutritionRecipes)
+      .where(and(eq(nutritionRecipes.id, id), eq(nutritionRecipes.userId, userId)))
+      .limit(1);
+    if (existing) return loadDetail(db, userId, id);
+  }
+
+  const source = await loadDetail(db, userId, sourceId);
+  const [created] = await db
+    .insert(nutritionRecipes)
+    .values({
+      ...(id ? { id } : {}),
+      userId,
+      sourceRecipeId: source.sourceRecipeId,
+      title: copiedRecipeTitle(source.title),
+      servings: source.servings,
+      cookedWeightG: source.cookedWeightG,
+    })
+    .returning();
+  if (!created) {
+    throw new AppError("internal_error", "Could not copy recipe.", 500);
+  }
+  if (source.items.length > 0) {
+    await db.insert(nutritionRecipeItems).values(
+      source.items.map((item, index) => ({
+        nutritionRecipeId: created.id,
+        sourceLine: item.sourceLine,
+        foodId: item.foodId,
+        grams: item.grams,
+        sortOrder: index,
+      })),
+    );
+  }
+  return loadDetail(db, userId, created.id);
+}
+
 export async function createNutritionRecipeFromCookbook(db: Database, userId: string, recipeId: string) {
   const cookbook = await getRecipe(db, userId, recipeId);
   const foods = await listUserFoods(db, userId);

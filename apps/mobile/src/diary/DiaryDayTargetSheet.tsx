@@ -1,3 +1,4 @@
+import { useThemedStyles, type ThemeColors } from "../theme/theme";
 import { useEffect, useState } from "react";
 import { Modal, Pressable, StyleSheet, View } from "react-native";
 import { AppText } from "../components/AppText";
@@ -18,6 +19,8 @@ interface DiaryDayTargetSheetProps {
 }
 
 function DiaryDayTargetSheet(props: DiaryDayTargetSheetProps) {
+  const styles = useThemedStyles(createStyles);
+
   const { visible, date, currentKcal, canClear, saving, error, onClose, onSave, onClear } = props;
   const [draft, setDraft] = useState("");
 
@@ -70,15 +73,16 @@ function DiaryDayTargetSheet(props: DiaryDayTargetSheetProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: tokens.scrim,
+    backgroundColor: colors.scrim,
     justifyContent: "center",
     padding: tokens.space.lg,
   },
   sheet: {
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
     borderRadius: tokens.radius.lg,
     padding: tokens.space.lg,
     gap: tokens.space.sm,
@@ -90,5 +94,7 @@ const styles = StyleSheet.create({
     gap: tokens.space.sm,
   },
 });
+}
+
 
 export default DiaryDayTargetSheet;

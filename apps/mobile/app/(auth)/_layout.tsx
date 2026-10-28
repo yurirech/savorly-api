@@ -1,14 +1,17 @@
+import { useTheme } from "../../src/theme/theme";
 import { Stack } from "expo-router";
 import { tokens } from "../../src/theme/tokens";
 
 export default function AuthLayout() {
+  const colors = useTheme();
+
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: tokens.bg },
-        headerTintColor: tokens.text,
+        headerStyle: { backgroundColor: colors.bg },
+        headerTintColor: colors.text,
         headerShadowVisible: false,
-        contentStyle: { backgroundColor: tokens.bg },
+        contentStyle: { backgroundColor: colors.bg },
       }}
     >
       <Stack.Screen name="login" options={{ headerShown: false }} />

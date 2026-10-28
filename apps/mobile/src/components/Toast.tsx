@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { tokens } from "../theme/tokens";
+import { useThemedStyles, type ThemeColors } from "../theme/theme";
 import { AppText } from "./AppText";
 
 type ToastProps = {
@@ -14,8 +15,11 @@ type ToastProps = {
 };
 
 function Toast(props: ToastProps) {
-  const { visible, message, actionLabel, onAction, onHide, offset = 0 } = props;
+  const styles = useThemedStyles(createStyles);
+
+  const { visible, message, actionLabel, onAction, onHide, offset } = props;
   const insets = useSafeAreaInsets();
+  const bottom = offset == null ? tokens.space.md + insets.bottom : offset;
 
   useEffect(() => {
     if (!visible) return;
@@ -27,7 +31,7 @@ function Toast(props: ToastProps) {
 
   return (
     <View
-      style={[styles.toast, { bottom: tokens.space.md + insets.bottom + offset }]}
+      style={[styles.toast, { bottom }]}
       accessibilityLiveRegion="polite"
     >
       <AppText variant="body" style={styles.message} numberOfLines={2}>
@@ -49,7 +53,8 @@ function Toast(props: ToastProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   toast: {
     position: "absolute",
     left: tokens.space.lg,
@@ -62,9 +67,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: tokens.space.md,
     paddingVertical: tokens.space.sm,
     borderRadius: tokens.radius.md,
-    backgroundColor: tokens.bgElevated,
+    backgroundColor: colors.bgElevated,
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
     ...tokens.shadow.card,
   },
   message: {
@@ -72,5 +77,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
 });
+}
+
 
 export default Toast;

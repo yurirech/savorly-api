@@ -13,8 +13,12 @@ import { Screen } from "../../src/components/Screen";
 import { upsertCachedRecipe } from "../../src/db/cache";
 import { clearReviewDraft, getReviewDraft } from "../../src/store/reviewDraft";
 import { tokens } from "../../src/theme/tokens";
+import { useThemedStyles, type ThemeColors } from "../../src/theme/theme";
+import { openExternalUrl } from "../../src/utils/openUrl";
 
 export default function ReviewScreen() {
+  const styles = useThemedStyles(createStyles);
+
   const initial = useMemo(() => getReviewDraft(), []);
   const [recipe, setRecipe] = useState<GeneratedRecipe | null>(initial?.recipe ?? null);
   const [ingredientsDraft, setIngredientsDraft] = useState(() =>
@@ -244,10 +248,21 @@ export default function ReviewScreen() {
           <Text style={styles.source}>Create a cookbook to file this recipe when you save.</Text>
         )}
       </View>
-      <Text style={styles.source}>
-        Source: {recipe.source.author || recipe.source.sourceName || recipe.source.type}
-        {recipe.source.originalUrl ? `\n${recipe.source.originalUrl}` : ""}
-      </Text>
+      {recipe.source.originalUrl ? (
+        <Pressable
+          onPress={() => void openExternalUrl(recipe.source.originalUrl ?? "")}
+          accessibilityRole="link"
+          accessibilityLabel={`Open source, ${recipe.source.author || recipe.source.sourceName || recipe.source.type}`}
+        >
+          <Text style={styles.sourceLink}>
+            {recipe.source.author || recipe.source.sourceName || recipe.source.type}
+          </Text>
+        </Pressable>
+      ) : (
+        <Text style={styles.source}>
+          Source: {recipe.source.author || recipe.source.sourceName || recipe.source.type}
+        </Text>
+      )}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <Button label="Save recipe" onPress={() => void onSave()} loading={saving} />
     </Screen>
@@ -267,41 +282,47 @@ function parseStepsDraft(text: string, previous: GeneratedRecipe["steps"]): Gene
     }));
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   hero: {
     width: "100%",
     height: 180,
     borderRadius: tokens.radius.md,
   },
   kicker: {
-    color: tokens.accent,
+    color: colors.accent,
     fontSize: tokens.type.caption.fontSize,
     fontFamily: tokens.font.bodyBold,
     textTransform: "uppercase",
   },
   title: {
-    color: tokens.text,
+    color: colors.text,
     fontSize: tokens.type.title.fontSize,
     fontFamily: tokens.font.display,
   },
   label: {
-    color: tokens.textMuted,
+    color: colors.textMuted,
     fontSize: tokens.type.caption.fontSize,
     fontFamily: tokens.font.bodyBold,
     textTransform: "uppercase",
   },
   source: {
-    color: tokens.textMuted,
+    color: colors.textMuted,
     lineHeight: 20,
   },
+  sourceLink: {
+    color: colors.accent,
+    lineHeight: 20,
+    textDecorationLine: "underline",
+  },
   hint: {
-    color: tokens.textMuted,
+    color: colors.textMuted,
     fontSize: tokens.type.caption.fontSize,
     fontFamily: tokens.font.body,
     lineHeight: 18,
   },
   error: {
-    color: tokens.danger,
+    color: colors.danger,
   },
   cookbookBlock: {
     gap: tokens.space.sm,
@@ -314,23 +335,25 @@ const styles = StyleSheet.create({
   chip: {
     borderRadius: tokens.radius.full,
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
     paddingHorizontal: tokens.space.md,
     paddingVertical: tokens.space.sm,
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
   },
   chipSelected: {
-    backgroundColor: tokens.accent,
-    borderColor: tokens.accent,
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
   chipLabel: {
-    color: tokens.text,
+    color: colors.text,
     fontFamily: tokens.font.body,
     fontSize: tokens.type.caption.fontSize,
   },
   chipSelectedLabel: {
-    color: tokens.bg,
+    color: colors.bg,
     fontFamily: tokens.font.bodyBold,
     fontSize: tokens.type.caption.fontSize,
   },
 });
+}
+

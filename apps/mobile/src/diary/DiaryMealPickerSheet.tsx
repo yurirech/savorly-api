@@ -1,3 +1,4 @@
+import { useThemedStyles, type ThemeColors } from "../theme/theme";
 import { Modal, Pressable, StyleSheet, View } from "react-native";
 import type { DiaryMealGroup } from "@savorly/shared";
 import { AppText } from "../components/AppText";
@@ -14,6 +15,8 @@ interface DiaryMealPickerSheetProps {
 }
 
 function DiaryMealPickerSheet(props: DiaryMealPickerSheetProps) {
+  const styles = useThemedStyles(createStyles);
+
   const { visible, meals, title = "Log in which meal?", onClose, onSelectMeal, onCreateMeal } = props;
 
   return (
@@ -39,15 +42,16 @@ function DiaryMealPickerSheet(props: DiaryMealPickerSheetProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: tokens.scrim,
+    backgroundColor: colors.scrim,
     justifyContent: "center",
     padding: tokens.space.lg,
   },
   sheet: {
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
     borderRadius: tokens.radius.lg,
     padding: tokens.space.lg,
     gap: tokens.space.sm,
@@ -59,5 +63,7 @@ const styles = StyleSheet.create({
     gap: tokens.space.sm,
   },
 });
+}
+
 
 export default DiaryMealPickerSheet;

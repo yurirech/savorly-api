@@ -1,15 +1,4 @@
 export const tokens = {
-  bg: "#0E1116",
-  bgElevated: "#141A22",
-  surface: "#1C232E",
-  border: "#2C3440",
-  text: "#F4F1EA",
-  textMuted: "#A8A093",
-  accent: "#E8A87C",
-  accentMuted: "rgba(232, 168, 124, 0.16)",
-  scrim: "rgba(14, 17, 22, 0.78)",
-  danger: "#E26D5A",
-  success: "#8FBF9F",
   space: {
     1: 4,
     2: 8,
@@ -54,6 +43,3 @@ export const tokens = {
   },
   tabBarHeight: 64,
 } as const;
-
-export const background = tokens.bg;
-export const muted = tokens.textMuted;

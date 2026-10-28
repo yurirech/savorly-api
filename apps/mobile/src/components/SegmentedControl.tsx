@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, View } from "react-native";
 import { tokens } from "../theme/tokens";
+import { useThemedStyles, type ThemeColors } from "../theme/theme";
 import { softWrapSegmentLabel } from "../utils/textWrap";
 import { AppText } from "./AppText";
 
@@ -16,6 +17,7 @@ type SegmentedControlProps<T extends string> = {
 };
 
 export function SegmentedControl<T extends string>(props: SegmentedControlProps<T>) {
+  const styles = useThemedStyles(createStyles);
   const { value, options, onChange, disabled } = props;
   return (
     <View style={[styles.track, disabled && styles.disabled]}>
@@ -41,10 +43,11 @@ export function SegmentedControl<T extends string>(props: SegmentedControlProps<
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   track: {
     flexDirection: "row",
-    backgroundColor: tokens.bgElevated,
+    backgroundColor: colors.bgElevated,
     borderRadius: tokens.radius.full,
     padding: tokens.space.xs,
     gap: tokens.space.xs,
@@ -61,7 +64,7 @@ const styles = StyleSheet.create({
     paddingVertical: tokens.space.xs,
   },
   selected: {
-    backgroundColor: tokens.accent,
+    backgroundColor: colors.accent,
   },
   segmentLabel: {
     width: "100%",
@@ -71,12 +74,14 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   label: {
-    color: tokens.textMuted,
+    color: colors.textMuted,
   },
   selectedLabel: {
-    color: tokens.bg,
+    color: colors.onAccent,
   },
   disabled: {
     opacity: 0.45,
   },
 });
+}
+

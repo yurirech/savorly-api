@@ -2,6 +2,7 @@ import { Image, Pressable, StyleSheet, View } from "react-native";
 import type { SavedRecipe } from "@savorly/shared";
 import { imageForCategory } from "../assets/categoryImages";
 import { tokens } from "../theme/tokens";
+import { useThemedStyles, type ThemeColors } from "../theme/theme";
 import { AppText } from "./AppText";
 import RecipeSourceLabel from "./RecipeSourceLabel";
 import { RecipePantryBadge } from "./RecipePantryStatus";
@@ -14,6 +15,8 @@ type RecipeCardProps = {
 };
 
 export function RecipeCard(props: RecipeCardProps) {
+  const styles = useThemedStyles(createStyles);
+
   const { recipe, onPress, layout = "grid", pantryComplete = null } = props;
   const pantryBadge =
     pantryComplete != null ? (
@@ -58,7 +61,8 @@ export function RecipeCard(props: RecipeCardProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   pantryBadge: {
     position: "absolute",
     top: tokens.space.sm,
@@ -66,7 +70,7 @@ const styles = StyleSheet.create({
     zIndex: 2,
     padding: tokens.space.xs,
     borderRadius: tokens.radius.sm,
-    backgroundColor: tokens.bg,
+    backgroundColor: colors.bg,
     opacity: 0.92,
   },
   gridCard: {
@@ -74,7 +78,7 @@ const styles = StyleSheet.create({
     minHeight: 200,
     borderRadius: tokens.radius.lg,
     overflow: "hidden",
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
     position: "relative",
   },
   gridImage: {
@@ -92,7 +96,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     left: 0,
-    backgroundColor: tokens.bg,
+    backgroundColor: colors.bg,
     opacity: 0.45,
   },
   gridMeta: {
@@ -103,11 +107,11 @@ const styles = StyleSheet.create({
   },
   rowCard: {
     flexDirection: "row",
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
     borderRadius: tokens.radius.md,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
     position: "relative",
   },
   rowImage: {
@@ -124,3 +128,5 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.98 }],
   },
 });
+}
+

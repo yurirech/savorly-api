@@ -17,6 +17,7 @@ import { Field } from "../../src/components/Field";
 import { Screen } from "../../src/components/Screen";
 import { PANTRY_ENABLED } from "../../src/config/features";
 import { tokens } from "../../src/theme/tokens";
+import { useTheme, useThemedStyles, type ThemeColors } from "../../src/theme/theme";
 
 function parseAliasInput(value: string): string[] {
   return value
@@ -52,6 +53,9 @@ export default function PantryRoute() {
 }
 
 function PantryScreen() {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   const [pantry, setPantry] = useState<PantryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -180,7 +184,7 @@ function PantryScreen() {
     <Screen onRefresh={() => loadPantry(true)} refreshing={refreshing}>
       <View style={styles.header}>
         <View style={styles.titleRow}>
-          <Jar size={28} color={tokens.accent} weight="fill" />
+          <Jar size={28} color={colors.accent} weight="fill" />
           <AppText variant="title">My pantry</AppText>
         </View>
         <AppText variant="body" color="muted">
@@ -220,9 +224,9 @@ function PantryScreen() {
                     accessibilityLabel={starter.defaultName}
                   >
                     {starter.inPantry ? (
-                      <CheckCircle size={22} color={tokens.accent} weight="fill" />
+                      <CheckCircle size={22} color={colors.accent} weight="fill" />
                     ) : (
-                      <CircleDashed size={22} color={tokens.textMuted} weight="regular" />
+                      <CircleDashed size={22} color={colors.textMuted} weight="regular" />
                     )}
                     <View style={styles.rowMain}>
                       <AppText variant="body">{starter.defaultName}</AppText>
@@ -247,7 +251,7 @@ function PantryScreen() {
                     accessibilityState={{ checked: true }}
                     accessibilityLabel={`Remove ${item.displayName} from pantry`}
                   >
-                    <CheckCircle size={22} color={tokens.accent} weight="fill" />
+                    <CheckCircle size={22} color={colors.accent} weight="fill" />
                   </Pressable>
                   <View style={styles.rowMain}>
                     <AppText variant="body">{item.displayName}</AppText>
@@ -263,7 +267,7 @@ function PantryScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={`Edit ${item.displayName}`}
                   >
-                    <PencilSimple size={18} color={tokens.textMuted} />
+                    <PencilSimple size={18} color={colors.textMuted} />
                   </Pressable>
                 </View>
               );
@@ -306,7 +310,8 @@ function PantryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   header: {
     gap: tokens.space.sm,
   },
@@ -316,10 +321,10 @@ const styles = StyleSheet.create({
     gap: tokens.space.sm,
   },
   card: {
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
     borderRadius: tokens.radius.md,
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
     padding: tokens.space.sm,
     gap: tokens.space.xs,
   },
@@ -336,14 +341,16 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: colors.scrim,
     justifyContent: "flex-end",
   },
   modalCard: {
-    backgroundColor: tokens.bgElevated,
+    backgroundColor: colors.bgElevated,
     borderTopLeftRadius: tokens.radius.lg,
     borderTopRightRadius: tokens.radius.lg,
     padding: tokens.space.lg,
     gap: tokens.space.md,
   },
 });
+}
+

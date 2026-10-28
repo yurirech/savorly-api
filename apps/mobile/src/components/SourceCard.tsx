@@ -1,3 +1,4 @@
+import { useTheme, useThemedStyles, type ThemeColors } from "../theme/theme";
 import type { ReactNode } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { CaretRight } from "phosphor-react-native";
@@ -12,6 +13,9 @@ type SourceCardProps = {
 };
 
 export function SourceCard(props: SourceCardProps) {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   const { title, subtitle, onPress, icon } = props;
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
@@ -22,32 +26,33 @@ export function SourceCard(props: SourceCardProps) {
           {subtitle}
         </AppText>
       </View>
-      <CaretRight size={20} color={tokens.accent} weight="bold" />
+      <CaretRight size={20} color={colors.accent} weight="bold" />
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   card: {
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
     borderRadius: tokens.radius.md,
     padding: tokens.space.md,
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
     flexDirection: "row",
     alignItems: "center",
     gap: tokens.space.md,
     minHeight: 80,
   },
   pressed: {
-    borderColor: tokens.accent,
-    backgroundColor: tokens.bgElevated,
+    borderColor: colors.accent,
+    backgroundColor: colors.bgElevated,
   },
   icon: {
     width: 44,
     height: 44,
     borderRadius: tokens.radius.sm,
-    backgroundColor: tokens.accentMuted,
+    backgroundColor: colors.accentMuted,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -56,3 +61,5 @@ const styles = StyleSheet.create({
     gap: tokens.space.xs,
   },
 });
+}
+

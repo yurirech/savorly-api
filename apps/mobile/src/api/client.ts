@@ -1,3 +1,4 @@
+import { alreadyInGroupMessage } from "@savorly/shared";
 import type {
   ApiErrorBody,
   AuthResponse,
@@ -24,7 +25,7 @@ import type {
   UserFood,
   UserPantryItem,
 } from "@savorly/shared";
-import { coerceDiaryDayResponse, parseAmountUnit, roundNutrition } from "@savorly/shared";
+import { coerceDiaryDayResponse, computeNutritionRecipe, parseAmountUnit, roundNutrition } from "@savorly/shared";
 import { getToken, clearSession } from "../auth/session";
 import { shiftIsoDate, todayIsoDate } from "../utils/isoDate";
 
@@ -995,6 +996,58 @@ export async function copyPreviousDiaryMeal(id: string) {
   }
 }
 
+export async function logSelectedMealStaples(id: string, foodIds: string[]) {
+  try {
+    return await persistDay(`/nutrition/diary/meals/${id}/staples/log`, {
+      method: "POST",
+      body: JSON.stringify({ foodIds }),
+    });
+  } catch (err) {
+    return offline(err, async () => {
+      const { enqueue, flushOutbox } = await import("../offline/sync");
+      const { listDays, mutateDay, newId, readFood, scaledFoodEntry } = await import("../offline/store");
+      const target = await dayContainingMeal(id);
+      const meal = target?.meals.find((item) => item.id === id);
+      if (!target || !meal) throw err;
+      const days = await listDays();
+      const added: DiaryEntry[] = [];
+      const skippedNames: string[] = [];
+      const freshIds: string[] = [];
+      for (const foodId of foodIds) {
+        const existing = meal.entries.find((entry) => entry.foodId === foodId);
+        if (existing) {
+          skippedNames.push(existing.foodName);
+          continue;
+        }
+        freshIds.push(foodId);
+        const food = await readFood(foodId);
+        if (!food) continue;
+        const previous = days
+          .flatMap((row) => row.meals.flatMap((group) => group.entries))
+          .filter((entry) => entry.foodId === foodId)
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+        const grams = previous && previous.grams > 0 ? previous.grams : 100;
+        added.push(scaledFoodEntry(food, grams, target.date, id, newId(), parseAmountUnit(previous?.amountUnit)));
+      }
+      if (added.length === 0) {
+        if (skippedNames.length > 0) {
+          throw new ApiRequestError("validation_error", alreadyInGroupMessage(skippedNames));
+        }
+        throw new Error("Those staples are not on this phone yet.");
+      }
+      const filled = await mutateDay(target.date, (current) => ({
+        ...current,
+        meals: current.meals.map((item) =>
+          item.id === id ? { ...item, entries: [...item.entries, ...added] } : item,
+        ),
+      }));
+      await enqueue("POST", `/nutrition/diary/meals/${id}/staples/log`, { foodIds: freshIds });
+      void flushOutbox();
+      return filled;
+    });
+  }
+}
+
 export async function logMealStaples(id: string) {
   try {
     return await persistDay(`/nutrition/diary/meals/${id}/staples`, { method: "POST" });
@@ -1053,6 +1106,26 @@ export async function fetchMealStaples(foodId: string) {
   }
 }
 
+async function syncCachedMealStaples(foodId: string, mealName: string, enabled: boolean) {
+  const { listDays, mutateDay, stapleFoodIds } = await import("../offline/store");
+  const count = (await stapleFoodIds(mealName)).length;
+  for (const day of await listDays()) {
+    if (!day.meals.some((meal) => meal.name === mealName)) continue;
+    await mutateDay(day.date, (current) => ({
+      ...current,
+      meals: current.meals.map((meal) =>
+        meal.name === mealName
+          ? {
+              ...meal,
+              stapleCount: count,
+              staples: enabled ? meal.staples : meal.staples?.filter((staple) => staple.foodId !== foodId),
+            }
+          : meal,
+      ),
+    }));
+  }
+}
+
 export async function setMealStaple(foodId: string, body: { mealName: string; enabled: boolean; date: string }) {
   try {
     const live = await request<{ mealNames: string[] }>(`/nutrition/foods/${foodId}/meal-staples`, {
@@ -1061,25 +1134,18 @@ export async function setMealStaple(foodId: string, body: { mealName: string; en
     });
     const { replaceFoodStaples } = await import("../offline/store");
     await replaceFoodStaples(foodId, live.mealNames);
+    await syncCachedMealStaples(foodId, body.mealName, body.enabled);
     return live;
   } catch (err) {
     return offline(err, async () => {
-      const { replaceFoodStaples, stapleFoodIds, stapleNamesForFood } = await import("../offline/store");
+      const { replaceFoodStaples, stapleNamesForFood } = await import("../offline/store");
       const { enqueue, flushOutbox } = await import("../offline/sync");
       const names = new Set(await stapleNamesForFood(foodId));
       if (body.enabled) names.add(body.mealName);
       else names.delete(body.mealName);
       const mealNames = [...names];
       await replaceFoodStaples(foodId, mealNames);
-      const count = (await stapleFoodIds(body.mealName)).length;
-      const { listDays, mutateDay } = await import("../offline/store");
-      for (const day of await listDays()) {
-        if (!day.meals.some((meal) => meal.name === body.mealName)) continue;
-        await mutateDay(day.date, (current) => ({
-          ...current,
-          meals: current.meals.map((meal) => (meal.name === body.mealName ? { ...meal, stapleCount: count } : meal)),
-        }));
-      }
+      await syncCachedMealStaples(foodId, body.mealName, body.enabled);
       await enqueue("PUT", `/nutrition/foods/${foodId}/meal-staples`, body);
       void flushOutbox();
       return { mealNames };
@@ -1102,6 +1168,10 @@ export async function addDiaryEntry(
     current?.meals.find((row) => row.id === mealId) ??
     (saved?.mealName ? current?.meals.find((row) => row.name === saved.mealName) : undefined);
   const liveMealId = meal?.id ?? mealId;
+  const duplicate = meal?.entries.find((entry) => entry.foodId === foodId);
+  if (duplicate) {
+    throw new ApiRequestError("validation_error", alreadyInGroupMessage(duplicate.foodName));
+  }
   const unit = parseAmountUnit(amountUnit);
   try {
     return await persistDay("/nutrition/diary", {
@@ -1445,6 +1515,48 @@ export async function createNutritionRecipe(title: string) {
       const detail = blankNutritionRecipe(newId(), title.trim());
       await saveNutritionRecipe(detail);
       await enqueue("POST", "/nutrition/recipes", { id: detail.id, title: detail.title });
+      void flushOutbox();
+      return detail;
+    });
+  }
+}
+
+function copiedRecipeTitle(title: string): string {
+  return `Copy of ${title.trim()}`.slice(0, 120);
+}
+
+export async function copyNutritionRecipe(id: string) {
+  try {
+    return await rememberRecipe(
+      await request<NutritionRecipeDetail>(`/nutrition/recipes/${id}/copy`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      }),
+    );
+  } catch (err) {
+    return offline(err, async () => {
+      const { newId, readNutritionRecipe, saveNutritionRecipe } = await import("../offline/store");
+      const { enqueue, flushOutbox } = await import("../offline/sync");
+      const current = await readNutritionRecipe<NutritionRecipeDetail>(id);
+      if (!current) throw err;
+      const copyId = newId();
+      const items = current.items.map((item) => ({ ...item, id: newId() }));
+      const detail: NutritionRecipeDetail = {
+        id: copyId,
+        sourceRecipeId: current.sourceRecipeId,
+        title: copiedRecipeTitle(current.title),
+        servings: current.servings,
+        cookedWeightG: current.cookedWeightG,
+        items,
+        ...computeNutritionRecipe({
+          servings: current.servings,
+          cookedWeightG: current.cookedWeightG,
+          items,
+        }),
+        libraryFood: null,
+      };
+      await saveNutritionRecipe(detail);
+      await enqueue("POST", `/nutrition/recipes/${id}/copy`, { id: copyId });
       void flushOutbox();
       return detail;
     });

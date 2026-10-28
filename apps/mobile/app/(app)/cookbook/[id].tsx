@@ -20,9 +20,13 @@ import { Screen } from "../../../src/components/Screen";
 import { searchCachedRecipes } from "../../../src/db/cache";
 import { usePantryMatchForRecipes } from "../../../src/hooks/useRecipePantry";
 import { tokens } from "../../../src/theme/tokens";
+import { useTheme, useThemedStyles, type ThemeColors } from "../../../src/theme/theme";
 import { confirmDestructive } from "../../../src/utils/confirmDestructive";
 
 export default function CookbookDetailScreen() {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   const { id } = useLocalSearchParams<{ id: string }>();
   const cookbookId = Array.isArray(id) ? id[0] : id;
   const [cookbook, setCookbook] = useState<CookbookDetail | null>(null);
@@ -188,7 +192,7 @@ export default function CookbookDetailScreen() {
                     {recipe.category}
                   </AppText>
                 </View>
-                {selected ? <Check size={20} color={tokens.accent} weight="bold" /> : <View style={styles.unchecked} />}
+                {selected ? <Check size={20} color={colors.accent} weight="bold" /> : <View style={styles.unchecked} />}
               </Pressable>
             );
           })
@@ -238,19 +242,20 @@ export default function CookbookDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   pickRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: tokens.space.md,
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
     borderRadius: tokens.radius.md,
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
     padding: tokens.space.sm,
   },
   pickRowSelected: {
-    borderColor: tokens.accent,
+    borderColor: colors.accent,
   },
   pickImage: {
     width: 56,
@@ -266,6 +271,8 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: tokens.radius.full,
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
   },
 });
+}
+

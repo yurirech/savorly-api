@@ -16,12 +16,15 @@ import { fetchDiaryDay, fetchNutritionProfile } from "../../../src/api/client";
 import { AppText } from "../../../src/components/AppText";
 import { Screen } from "../../../src/components/Screen";
 import { tokens } from "../../../src/theme/tokens";
+import { useThemedStyles, type ThemeColors } from "../../../src/theme/theme";
 
 function firstParam(value: string | string[] | undefined): string {
   return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
 }
 
 export default function NutrientGroupScreen() {
+  const styles = useThemedStyles(createStyles);
+
   const params = useLocalSearchParams<{ date?: string; group?: string }>();
   const date = firstParam(params.date);
   const group = findHealthGroup(firstParam(params.group));
@@ -109,7 +112,8 @@ export default function NutrientGroupScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   block: {
     gap: tokens.space.md,
   },
@@ -125,12 +129,14 @@ const styles = StyleSheet.create({
   track: {
     height: 8,
     borderRadius: tokens.radius.full,
-    backgroundColor: tokens.border,
+    backgroundColor: colors.border,
     overflow: "hidden",
   },
   fill: {
     height: 8,
     borderRadius: tokens.radius.full,
-    backgroundColor: tokens.accent,
+    backgroundColor: colors.accent,
   },
 });
+}
+

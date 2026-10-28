@@ -7,6 +7,7 @@ import { AppText } from "../components/AppText";
 import { Button } from "../components/Button";
 import { SegmentedControl } from "../components/SegmentedControl";
 import { tokens } from "../theme/tokens";
+import { useTheme, useThemedStyles, type ThemeColors } from "../theme/theme";
 import { shiftIsoDate } from "../utils/isoDate";
 
 export type RelocateMode = "copy" | "move";
@@ -28,6 +29,9 @@ function foodCountLabel(count: number): string {
 }
 
 function DiaryMoveSheet(props: DiaryMoveSheetProps) {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   const { visible, entryCount, sourceDate, created, saving, error, onClose, onCreateMeal, onConfirm } = props;
   const [mode, setMode] = useState<RelocateMode>("copy");
   const [date, setDate] = useState(sourceDate);
@@ -96,11 +100,11 @@ function DiaryMoveSheet(props: DiaryMoveSheetProps) {
           />
           <View style={styles.dateRow}>
             <Pressable onPress={() => changeDate(-1)} accessibilityRole="button" accessibilityLabel="Previous day">
-              <CaretLeft size={22} color={tokens.text} />
+              <CaretLeft size={22} color={colors.text} />
             </Pressable>
             <AppText variant="title">{date}</AppText>
             <Pressable onPress={() => changeDate(1)} accessibilityRole="button" accessibilityLabel="Next day">
-              <CaretRight size={22} color={tokens.text} />
+              <CaretRight size={22} color={colors.text} />
             </Pressable>
           </View>
           {loading ? (
@@ -159,15 +163,16 @@ function DiaryMoveSheet(props: DiaryMoveSheetProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: tokens.scrim,
+    backgroundColor: colors.scrim,
     justifyContent: "center",
     padding: tokens.space.lg,
   },
   sheet: {
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
     borderRadius: tokens.radius.lg,
     padding: tokens.space.lg,
     gap: tokens.space.sm,
@@ -189,13 +194,13 @@ const styles = StyleSheet.create({
     paddingVertical: tokens.space.xs,
     borderRadius: tokens.radius.sm,
     borderWidth: 1,
-    borderColor: tokens.border,
-    backgroundColor: tokens.bgElevated,
+    borderColor: colors.border,
+    backgroundColor: colors.bgElevated,
     justifyContent: "center",
   },
   groupSelected: {
-    borderColor: tokens.accent,
-    backgroundColor: tokens.accentMuted,
+    borderColor: colors.accent,
+    backgroundColor: colors.accentMuted,
   },
   actions: {
     flexDirection: "row",
@@ -204,5 +209,7 @@ const styles = StyleSheet.create({
     gap: tokens.space.sm,
   },
 });
+}
+
 
 export default DiaryMoveSheet;

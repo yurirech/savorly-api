@@ -221,6 +221,7 @@ export type {
   DiaryEntry,
   DiaryEntryKind,
   DiaryMealGroup,
+  DiaryMealStaple,
   FatsecretFoodHit,
   NevoFoodHit,
   NutritionProfile,
@@ -233,6 +234,7 @@ export type {
 } from "./nutrition/types";
 export { FATSECRET_ATTRIBUTION, NEVO_ATTRIBUTION } from "./nutrition/types";
 export {
+  alreadyInGroupMessage,
   buildDiaryMeals,
   coerceDiaryDayResponse,
   dayTotalsFromMeals,

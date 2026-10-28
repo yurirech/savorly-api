@@ -27,15 +27,18 @@ import { Screen } from "../../../src/components/Screen";
 import { SegmentedControl } from "../../../src/components/SegmentedControl";
 import { setReviewDraft } from "../../../src/store/reviewDraft";
 import { tokens } from "../../../src/theme/tokens";
-
-const AGENTS: { value: CreateAgent; label: string; subtitle: string; icon: ReactNode }[] = [
-  { value: "creami", label: "Creami", subtitle: "Ninja Creami ice cream", icon: <IceCream size={22} color={tokens.accent} weight="fill" /> },
-  { value: "bread", label: "Bread", subtitle: "Machine loaves and doughs", icon: <Bread size={22} color={tokens.accent} weight="fill" /> },
-  { value: "bake", label: "Bake", subtitle: "Cakes, muffins, cupcakes", icon: <Cake size={22} color={tokens.accent} weight="fill" /> },
-  { value: "chef", label: "Chef", subtitle: "Savory or dessert", icon: <ChefHat size={22} color={tokens.accent} weight="fill" /> },
-];
+import { useTheme, useThemedStyles, type ThemeColors } from "../../../src/theme/theme";
 
 export default function CreateScreen() {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
+  const agents: { value: CreateAgent; label: string; subtitle: string; icon: ReactNode }[] = [
+    { value: "creami", label: "Creami", subtitle: "Ninja Creami ice cream", icon: <IceCream size={22} color={colors.accent} weight="fill" /> },
+    { value: "bread", label: "Bread", subtitle: "Machine loaves and doughs", icon: <Bread size={22} color={colors.accent} weight="fill" /> },
+    { value: "bake", label: "Bake", subtitle: "Cakes, muffins, cupcakes", icon: <Cake size={22} color={colors.accent} weight="fill" /> },
+    { value: "chef", label: "Chef", subtitle: "Savory or dessert", icon: <ChefHat size={22} color={colors.accent} weight="fill" /> },
+  ];
+
   const [agent, setAgent] = useState<CreateAgent>("creami");
   const [size, setSize] = useState<"big" | "small">("big");
   const [macros, setMacros] = useState<"lean" | "balanced">("balanced");
@@ -162,7 +165,7 @@ export default function CreateScreen() {
       </AppText>
 
       <View style={styles.agentGrid}>
-        {AGENTS.map((item) => {
+        {agents.map((item) => {
           const selected = agent === item.value;
           return (
             <Pressable
@@ -461,7 +464,8 @@ function OptionLabel(props: { label: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   agentGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -470,23 +474,23 @@ const styles = StyleSheet.create({
   agentCard: {
     width: "48%",
     flexGrow: 1,
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
     borderRadius: tokens.radius.md,
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
     padding: tokens.space.md,
     gap: tokens.space.xs,
     minHeight: 108,
   },
   agentSelected: {
-    borderColor: tokens.accent,
-    backgroundColor: tokens.bgElevated,
+    borderColor: colors.accent,
+    backgroundColor: colors.bgElevated,
   },
   agentIcon: {
     width: 36,
     height: 36,
     borderRadius: tokens.radius.sm,
-    backgroundColor: tokens.accentMuted,
+    backgroundColor: colors.accentMuted,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: tokens.space.xs,
@@ -499,17 +503,19 @@ const styles = StyleSheet.create({
   },
   result: {
     gap: tokens.space.sm,
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
     borderRadius: tokens.radius.md,
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
     padding: tokens.space.md,
   },
   adaptSummaryBox: {
     gap: tokens.space.xs,
-    backgroundColor: tokens.bgElevated,
+    backgroundColor: colors.bgElevated,
     borderRadius: tokens.radius.sm,
     padding: tokens.space.sm,
     marginBottom: tokens.space.xs,
   },
 });
+}
+

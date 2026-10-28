@@ -8,8 +8,11 @@ import { Button } from "../../src/components/Button";
 import { Field } from "../../src/components/Field";
 import { Screen } from "../../src/components/Screen";
 import { tokens } from "../../src/theme/tokens";
+import { useThemedStyles, type ThemeColors } from "../../src/theme/theme";
 
 export default function LoginScreen() {
+  const styles = useThemedStyles(createStyles);
+
   const [email, setEmail] = useState("admin");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -53,11 +56,14 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   link: {
-    color: tokens.accent,
+    color: colors.accent,
     textAlign: "center",
     fontSize: tokens.type.body.fontSize,
     fontFamily: tokens.font.bodyMedium,
   },
 });
+}
+

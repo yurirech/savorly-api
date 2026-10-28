@@ -1,4 +1,4 @@
-import { Pressable } from "react-native";
+import { Pressable, StyleSheet } from "react-native";
 import type { SavedRecipe } from "@savorly/shared";
 import { openExternalUrl } from "../utils/openUrl";
 import { AppText } from "./AppText";
@@ -20,7 +20,7 @@ function RecipeSourceLabel(props: RecipeSourceLabelProps) {
         accessibilityRole="link"
         accessibilityLabel={`Open source, ${label}`}
       >
-        <AppText variant="caption" color="accent" numberOfLines={numberOfLines}>
+        <AppText variant="caption" color="accent" numberOfLines={numberOfLines} style={styles.link}>
           {label}
         </AppText>
       </Pressable>
@@ -33,5 +33,11 @@ function RecipeSourceLabel(props: RecipeSourceLabelProps) {
     </AppText>
   );
 }
+
+const styles = StyleSheet.create({
+  link: {
+    textDecorationLine: "underline",
+  },
+});
 
 export default RecipeSourceLabel;

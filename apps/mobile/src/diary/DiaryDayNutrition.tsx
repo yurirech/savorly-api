@@ -15,6 +15,7 @@ import {
 } from "@savorly/shared";
 import { AppText } from "../components/AppText";
 import { tokens } from "../theme/tokens";
+import { useTheme, useThemedStyles, type ThemeColors } from "../theme/theme";
 
 interface DiaryDayNutritionProps {
   date: string;
@@ -35,6 +36,9 @@ const GROUP_ICONS = {
 } as const;
 
 function DiaryDayNutrition(props: DiaryDayNutritionProps) {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   const { date, totals, targets, sex, microTargets, remaining, targetKcal } = props;
   const [showGroups, setShowGroups] = useState(false);
   const hasTargets = targetKcal != null;
@@ -45,31 +49,31 @@ function DiaryDayNutrition(props: DiaryDayNutritionProps) {
       label: "Carbs",
       amount: formatNutrientAmount(totals.carbsG, "g"),
       percent: percentOf(totals.carbsG, intakes.carbsG),
-      color: tokens.accent,
+      color: colors.violet,
     },
     {
       label: "Protein",
       amount: formatNutrientAmount(totals.proteinG, "g"),
       percent: percentOf(totals.proteinG, intakes.proteinG),
-      color: tokens.success,
+      color: colors.mint,
     },
     {
       label: "Fat",
       amount: formatNutrientAmount(totals.fatG, "g"),
       percent: percentOf(totals.fatG, intakes.fatG),
-      color: tokens.danger,
+      color: colors.orange,
     },
     {
       label: "Saturated fat",
       amount: formatNutrientAmount(totals.saturatedFatG ?? 0, "g"),
       percent: percentOf(totals.saturatedFatG ?? 0, intakes.saturatedFatG),
-      color: tokens.textMuted,
+      color: colors.textMuted,
     },
     {
       label: "Fiber",
       amount: formatNutrientAmount(totals.fiberG ?? 0, "g"),
       percent: percentOf(totals.fiberG ?? 0, intakes.fiberG),
-      color: tokens.accent,
+      color: colors.yellow,
     },
   ];
 
@@ -105,7 +109,7 @@ function DiaryDayNutrition(props: DiaryDayNutritionProps) {
           accessibilityRole="button"
           accessibilityLabel={showGroups ? "Hide health groups" : "Show health groups"}
         >
-          <Shield size={22} color={showGroups ? tokens.accent : tokens.text} />
+          <Shield size={22} color={showGroups ? colors.accent : colors.text} />
         </Pressable>
       </View>
       <View style={styles.meters}>
@@ -114,7 +118,7 @@ function DiaryDayNutrition(props: DiaryDayNutritionProps) {
             label="Calories"
             detail={`${formatDiaryNumber(totals.kcal)} kcal · ${caloriePercent}%`}
             percent={caloriePercent}
-            color={tokens.accent}
+            color={colors.accent}
             trackHeight={16}
           />
         ) : null}
@@ -146,7 +150,7 @@ function DiaryDayNutrition(props: DiaryDayNutritionProps) {
               accessibilityRole="button"
               accessibilityLabel={percent == null ? group.label : `${group.label}, ${percent} percent`}
             >
-              <Icon size={22} color={tokens.accent} />
+              <Icon size={22} color={colors.accent} />
               <View style={styles.groupCopy}>
                 <View style={styles.groupLabel}>
                   <AppText variant="body">{group.label}</AppText>
@@ -154,7 +158,7 @@ function DiaryDayNutrition(props: DiaryDayNutritionProps) {
                     {percent == null ? "—" : `${percent}%`}
                   </AppText>
                 </View>
-                <IntakeMeter label="" detail="" percent={percent ?? 0} color={tokens.accent} hideCopy />
+                <IntakeMeter label="" detail="" percent={percent ?? 0} color={colors.accent} hideCopy />
               </View>
             </Pressable>
           );
@@ -182,6 +186,8 @@ interface IntakeMeterProps {
 }
 
 function IntakeMeter(props: IntakeMeterProps) {
+  const styles = useThemedStyles(createStyles);
+
   const { label, detail, percent, color, hideCopy = false, trackHeight = 8 } = props;
   const width = `${Math.min(100, Math.max(0, percent))}%` as const;
 
@@ -202,12 +208,13 @@ function IntakeMeter(props: IntakeMeterProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   card: {
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
     borderRadius: tokens.radius.md,
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
     padding: tokens.space.md,
     gap: tokens.space.md,
   },
@@ -254,7 +261,7 @@ const styles = StyleSheet.create({
   track: {
     height: 8,
     borderRadius: tokens.radius.full,
-    backgroundColor: tokens.border,
+    backgroundColor: colors.border,
     overflow: "hidden",
   },
   fill: {
@@ -262,5 +269,7 @@ const styles = StyleSheet.create({
     borderRadius: tokens.radius.full,
   },
 });
+}
+
 
 export default DiaryDayNutrition;

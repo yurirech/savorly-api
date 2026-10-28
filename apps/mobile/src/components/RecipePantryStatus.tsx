@@ -1,3 +1,4 @@
+import { useTheme, useThemedStyles, type ThemeColors } from "../theme/theme";
 import { Jar } from "phosphor-react-native";
 import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
 import type { RecipePantryMatchResult } from "@savorly/shared";
@@ -12,8 +13,10 @@ type RecipePantryBadgeProps = {
 };
 
 export function RecipePantryBadge(props: RecipePantryBadgeProps) {
+  const colors = useTheme();
+
   const { isComplete, size = 22, interactive = false, onPressMissing } = props;
-  const jarColor = tokens.text;
+  const jarColor = colors.text;
 
   if (isComplete) {
     return (
@@ -71,12 +74,15 @@ export function RecipePantryStatusHint(props: Pick<RecipePantryStatusProps, "loa
 }
 
 export function RecipePantryStatus(props: RecipePantryStatusProps) {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   const { match, loading, hasStaples, onPressMissing } = props;
 
   if (loading) {
     return (
       <View style={styles.iconSlotInline}>
-        <ActivityIndicator size="small" color={tokens.textMuted} />
+        <ActivityIndicator size="small" color={colors.textMuted} />
       </View>
     );
   }
@@ -96,10 +102,13 @@ export function RecipePantryStatus(props: RecipePantryStatusProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   iconSlotInline: {
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
   },
 });
+}
+

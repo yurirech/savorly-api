@@ -8,6 +8,7 @@ import { Button } from "../../src/components/Button";
 import { Screen } from "../../src/components/Screen";
 import { setReviewDraft } from "../../src/store/reviewDraft";
 import { tokens } from "../../src/theme/tokens";
+import { useTheme, useThemedStyles, type ThemeColors } from "../../src/theme/theme";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -22,6 +23,9 @@ const CHAT_PRESETS = [
 ] as const;
 
 export default function RecipeChatScreen() {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   const params = useLocalSearchParams<{ id?: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const [title, setTitle] = useState("");
@@ -136,7 +140,7 @@ export default function RecipeChatScreen() {
               value={input}
               onChangeText={setInput}
               placeholder="Ask about this recipe"
-              placeholderTextColor={tokens.textMuted}
+              placeholderTextColor={colors.textMuted}
               accessibilityLabel="Ask about this recipe"
               editable={!sending}
               onFocus={scrollChatToEnd}
@@ -189,7 +193,8 @@ export default function RecipeChatScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   footer: {
     gap: tokens.space.sm,
   },
@@ -200,10 +205,10 @@ const styles = StyleSheet.create({
   chip: {
     borderRadius: tokens.radius.full,
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
     paddingHorizontal: tokens.space.md,
     paddingVertical: tokens.space.sm,
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
   },
   composer: {
     flexDirection: "row",
@@ -212,12 +217,12 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    color: tokens.text,
+    color: colors.text,
     fontSize: tokens.type.body.fontSize,
     fontFamily: tokens.font.body,
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
     borderRadius: tokens.radius.sm,
     paddingHorizontal: tokens.space.sm,
     paddingVertical: tokens.space.xs,
@@ -226,14 +231,14 @@ const styles = StyleSheet.create({
   userBubble: {
     alignSelf: "flex-end",
     maxWidth: "85%",
-    backgroundColor: tokens.accentMuted,
+    backgroundColor: colors.accentMuted,
     borderRadius: tokens.radius.md,
     padding: tokens.space.sm,
   },
   assistantBubble: {
     alignSelf: "flex-start",
     maxWidth: "85%",
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
     borderRadius: tokens.radius.md,
     padding: tokens.space.sm,
     gap: tokens.space.sm,
@@ -242,3 +247,5 @@ const styles = StyleSheet.create({
     gap: tokens.space.xs,
   },
 });
+}
+

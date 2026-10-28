@@ -14,8 +14,12 @@ import { SectionHeader } from "../../../src/components/SectionHeader";
 import { PANTRY_ENABLED } from "../../../src/config/features";
 import { searchCachedRecipes } from "../../../src/db/cache";
 import { tokens } from "../../../src/theme/tokens";
+import { useTheme, useThemedStyles, type ThemeColors } from "../../../src/theme/theme";
 
 export default function HomeScreen() {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   const [recipes, setRecipes] = useState<SavedRecipe[]>([]);
   const [day, setDay] = useState<DiaryDayResponse | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -71,7 +75,7 @@ export default function HomeScreen() {
           style={styles.avatar}
           accessibilityLabel="Account"
         >
-          <User size={22} color={tokens.text} weight="regular" />
+          <User size={22} color={colors.text} weight="regular" />
         </Pressable>
       </View>
 
@@ -106,7 +110,8 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -121,9 +126,9 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: tokens.radius.full,
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -137,3 +142,5 @@ const styles = StyleSheet.create({
     minHeight: 210,
   },
 });
+}
+

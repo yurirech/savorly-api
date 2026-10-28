@@ -1,6 +1,7 @@
 import type { PropsWithChildren, ReactNode, RefObject } from "react";
 import {
   KeyboardAvoidingView,
+  type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   Platform,
@@ -11,6 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { tokens } from "../theme/tokens";
+import { useTheme, useThemedStyles, type ThemeColors } from "../theme/theme";
 
 type ScreenProps = PropsWithChildren<{
   scroll?: boolean;
@@ -24,9 +26,13 @@ type ScreenProps = PropsWithChildren<{
   overlay?: ReactNode;
   scrollRef?: RefObject<ScrollView | null>;
   onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
+  onFooterLayout?: (height: number) => void;
 }>;
 
 export function Screen(props: ScreenProps) {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   const {
     children,
     scroll = true,
@@ -40,6 +46,7 @@ export function Screen(props: ScreenProps) {
     overlay,
     scrollRef,
     onScroll,
+    onFooterLayout,
   } = props;
   const insets = useSafeAreaInsets();
   const bottomInset = safeBottom && !footer ? insets.bottom : 0;
@@ -50,6 +57,7 @@ export function Screen(props: ScreenProps) {
   ];
   const footerNode = footer ? (
     <View
+      onLayout={(event: LayoutChangeEvent) => onFooterLayout?.(event.nativeEvent.layout.height)}
       style={[
         styles.footer,
         padded && styles.footerPadded,
@@ -71,7 +79,7 @@ export function Screen(props: ScreenProps) {
       scrollEventThrottle={onScroll ? 16 : undefined}
       refreshControl={
         onRefresh ? (
-          <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={tokens.accent} />
+          <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.accent} />
         ) : undefined
       }
     >
@@ -113,10 +121,11 @@ export function Screen(props: ScreenProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: tokens.bg,
+    backgroundColor: colors.bg,
   },
   flex: {
     flex: 1,
@@ -144,8 +153,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: tokens.space.sm,
     borderTopWidth: 1,
-    borderTopColor: tokens.border,
-    backgroundColor: tokens.bg,
+    borderTopColor: colors.border,
+    backgroundColor: colors.bg,
     paddingTop: tokens.space.sm,
   },
   footerPadded: {
@@ -153,7 +162,7 @@ const styles = StyleSheet.create({
   },
   header: {
     gap: tokens.space.sm,
-    backgroundColor: tokens.bg,
+    backgroundColor: colors.bg,
     paddingBottom: tokens.space.sm,
   },
   headerPadded: {
@@ -164,3 +173,5 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
 });
+}
+

@@ -1,3 +1,4 @@
+import { useThemedStyles, type ThemeColors } from "../theme/theme";
 import { StyleSheet, View } from "react-native";
 
 import {
@@ -13,6 +14,8 @@ interface NutrientDetailListProps {
 }
 
 function NutrientDetailList(props: NutrientDetailListProps) {
+  const styles = useThemedStyles(createStyles);
+
   const { groups } = props;
 
   return (
@@ -34,7 +37,8 @@ function NutrientDetailList(props: NutrientDetailListProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   group: {
     gap: tokens.space.sm,
     marginTop: tokens.space.md,
@@ -45,8 +49,10 @@ const styles = StyleSheet.create({
     alignItems: "baseline",
     paddingVertical: tokens.space.xs,
     borderBottomWidth: 1,
-    borderBottomColor: tokens.border,
+    borderBottomColor: colors.border,
   },
 });
+}
+
 
 export default NutrientDetailList;

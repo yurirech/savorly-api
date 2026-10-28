@@ -2,6 +2,7 @@ import type { RefObject } from "react";
 import { Dimensions, Modal, Pressable, StyleSheet, View } from "react-native";
 import { AppText } from "./AppText";
 import { tokens } from "../theme/tokens";
+import { useThemedStyles, type ThemeColors } from "../theme/theme";
 
 export type ContextMenuAnchor = {
   x: number;
@@ -34,6 +35,8 @@ export function measureContextMenuAnchor(
 }
 
 function ContextMenu(props: ContextMenuProps) {
+  const styles = useThemedStyles(createStyles);
+
   const { visible, anchor, onClose, items } = props;
 
   if (!visible || !anchor) {
@@ -79,17 +82,18 @@ function ContextMenu(props: ContextMenuProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   root: {
     flex: 1,
   },
   panel: {
     position: "absolute",
     minWidth: 220,
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
     borderRadius: tokens.radius.md,
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
     overflow: "hidden",
   },
   row: {
@@ -100,8 +104,10 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: tokens.border,
+    backgroundColor: colors.border,
   },
 });
+}
+
 
 export default ContextMenu;

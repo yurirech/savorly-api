@@ -39,6 +39,7 @@ import {
   copyPreviousDiaryMeal,
   listMealStapleNames,
   logMealStaples,
+  logSelectedMealStaples,
   setMealStaple,
   createDiaryMeal,
   createManualFood,
@@ -67,6 +68,7 @@ import {
 import { nevoDisplayName } from "./nutrition/nevoNames";
 import {
   addNutritionRecipeItem,
+  copyNutritionRecipe,
   createNutritionRecipe,
   createNutritionRecipeFromCookbook,
   createNutritionRecipeFromIngredients,
@@ -740,6 +742,12 @@ export function createApp(db: Database, env: Env) {
     return c.json(await publishNutritionRecipe(db, user.id, c.req.param("id"), c.req.query("from")));
   });
 
+  app.post("/nutrition/recipes/:id/copy", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = z.object({ id: z.string().uuid().optional() }).parse(await c.req.json());
+    return c.json(await copyNutritionRecipe(db, user.id, c.req.param("id"), body.id), 201);
+  });
+
   app.delete("/nutrition/recipes/:id", async (c) => {
     const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
     await deleteNutritionRecipe(db, user.id, c.req.param("id"));
@@ -952,6 +960,12 @@ export function createApp(db: Database, env: Env) {
   app.post("/nutrition/diary/meals/:id/staples", async (c) => {
     const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
     return c.json(await logMealStaples(db, user.id, c.req.param("id")));
+  });
+
+  app.post("/nutrition/diary/meals/:id/staples/log", async (c) => {
+    const user = await requireUser(c.req.header("authorization"), env.jwtSecret);
+    const body = z.object({ foodIds: z.array(z.string().uuid()).min(1).max(40) }).parse(await c.req.json());
+    return c.json(await logSelectedMealStaples(db, user.id, c.req.param("id"), body.foodIds));
   });
 
   app.get("/nutrition/foods/:id/meal-staples", async (c) => {

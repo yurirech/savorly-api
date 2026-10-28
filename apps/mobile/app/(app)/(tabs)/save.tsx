@@ -4,9 +4,11 @@ import { AppText } from "../../../src/components/AppText";
 import { Screen } from "../../../src/components/Screen";
 import { SourceCard } from "../../../src/components/SourceCard";
 import { setImportReturnTo } from "../../../src/store/reviewDraft";
-import { tokens } from "../../../src/theme/tokens";
+import { useTheme } from "../../../src/theme/theme";
 
 export default function ImportHubScreen() {
+  const colors = useTheme();
+
   return (
     <Screen safeBottom={false}>
       <AppText variant="label" color="accent">
@@ -19,7 +21,7 @@ export default function ImportHubScreen() {
       <SourceCard
         title="Instagram or YouTube"
         subtitle="Reel, video, or Shorts URL"
-        icon={<Video size={22} color={tokens.accent} weight="fill" />}
+        icon={<Video size={22} color={colors.accent} weight="fill" />}
         onPress={() => {
           setImportReturnTo("/(app)/(tabs)/save");
           router.push("/(app)/import/instagram");
@@ -28,7 +30,7 @@ export default function ImportHubScreen() {
       <SourceCard
         title="Recipe website"
         subtitle="JSON-LD first, then readable text"
-        icon={<Globe size={22} color={tokens.accent} weight="regular" />}
+        icon={<Globe size={22} color={colors.accent} weight="regular" />}
         onPress={() => {
           setImportReturnTo("/(app)/(tabs)/save");
           router.push("/(app)/import/website");
@@ -37,7 +39,7 @@ export default function ImportHubScreen() {
       <SourceCard
         title="Paste text"
         subtitle="Caption, notes, or a full recipe"
-        icon={<NotePencil size={22} color={tokens.accent} weight="regular" />}
+        icon={<NotePencil size={22} color={colors.accent} weight="regular" />}
         onPress={() => {
           setImportReturnTo("/(app)/(tabs)/save");
           router.push("/(app)/import/text");

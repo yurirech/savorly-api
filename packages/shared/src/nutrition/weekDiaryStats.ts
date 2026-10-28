@@ -4,12 +4,12 @@ export type WeekStatDay = {
   complete: boolean;
 };
 
-export function isCountableWeekDay(day: WeekStatDay, today: string, selected: ReadonlySet<string>): boolean {
-  return selected.has(day.date) && day.date <= today && day.complete && day.eatenKcal > 0;
+export function isCountableWeekDay(day: WeekStatDay, _today: string, selected: ReadonlySet<string>): boolean {
+  return selected.has(day.date);
 }
 
-export function defaultSelectedWeekDays(days: WeekStatDay[], today: string): string[] {
-  return days.filter((day) => day.date <= today && day.complete && day.eatenKcal > 0).map((day) => day.date);
+export function defaultSelectedWeekDays(days: WeekStatDay[], _today: string): string[] {
+  return days.map((day) => day.date);
 }
 
 export function weekCountedStats(days: WeekStatDay[], today: string, selected: Iterable<string>) {

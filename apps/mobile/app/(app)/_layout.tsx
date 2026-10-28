@@ -3,8 +3,11 @@ import { useEffect } from "react";
 import { ensureNevoSnapshot, fetchNutritionProfile, listCookbooks, listNutritionFoods, listRecipes, prefetchDiaryDays } from "../../src/api/client";
 import { flushOutbox } from "../../src/offline/sync";
 import { tokens } from "../../src/theme/tokens";
+import { useTheme } from "../../src/theme/theme";
 
 export default function AppLayout() {
+  const colors = useTheme();
+
   useEffect(() => {
     void (async () => {
       await flushOutbox();
@@ -22,11 +25,11 @@ export default function AppLayout() {
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: tokens.bg },
-        headerTintColor: tokens.text,
+        headerStyle: { backgroundColor: colors.bg },
+        headerTintColor: colors.text,
         headerTitleStyle: { fontFamily: tokens.font.bodyBold },
         headerShadowVisible: false,
-        contentStyle: { backgroundColor: tokens.bg },
+        contentStyle: { backgroundColor: colors.bg },
       }}
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -35,7 +38,7 @@ export default function AppLayout() {
       <Stack.Screen name="import/website" options={{ title: "Website" }} />
       <Stack.Screen name="import/text" options={{ title: "Paste text" }} />
       <Stack.Screen name="review" options={{ title: "Review recipe" }} />
-      <Stack.Screen name="recipe/[id]" options={{ title: "Recipe", headerTransparent: true, headerTintColor: tokens.text }} />
+      <Stack.Screen name="recipe/[id]" options={{ title: "Recipe", headerTransparent: true, headerTintColor: colors.text }} />
       <Stack.Screen name="recipe-chat" options={{ title: "This recipe" }} />
       <Stack.Screen name="new-cookbook" options={{ title: "New cookbook" }} />
       <Stack.Screen name="cookbook/[id]" options={{ title: "Cookbook" }} />

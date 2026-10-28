@@ -10,6 +10,11 @@ describe("foodMatchesQuery", () => {
     expect(foodMatchesQuery(food, "yogurt")).toBe(false);
   });
 
+  it("matches the category", () => {
+    expect(foodMatchesQuery({ ...food, category: "Dairy" }, "dai")).toBe(true);
+    expect(foodMatchesQuery({ ...food, category: null }, "dai")).toBe(false);
+  });
+
   it("treats a blank query as a match", () => {
     expect(foodMatchesQuery(food, "  ")).toBe(true);
   });

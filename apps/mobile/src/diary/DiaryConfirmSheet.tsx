@@ -1,3 +1,4 @@
+import { useThemedStyles, type ThemeColors } from "../theme/theme";
 import { Modal, Pressable, StyleSheet, View } from "react-native";
 import { AppText } from "../components/AppText";
 import { Button } from "../components/Button";
@@ -14,6 +15,8 @@ interface DiaryConfirmSheetProps {
 }
 
 function DiaryConfirmSheet(props: DiaryConfirmSheetProps) {
+  const styles = useThemedStyles(createStyles);
+
   const { visible, title, message, confirmLabel, onClose, onConfirm, loading } = props;
 
   return (
@@ -32,15 +35,16 @@ function DiaryConfirmSheet(props: DiaryConfirmSheetProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: tokens.scrim,
+    backgroundColor: colors.scrim,
     justifyContent: "center",
     padding: tokens.space.lg,
   },
   sheet: {
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
     borderRadius: tokens.radius.lg,
     padding: tokens.space.lg,
     gap: tokens.space.md,
@@ -52,5 +56,7 @@ const styles = StyleSheet.create({
     gap: tokens.space.sm,
   },
 });
+}
+
 
 export default DiaryConfirmSheet;

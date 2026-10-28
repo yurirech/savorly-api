@@ -1,3 +1,4 @@
+import { useTheme, useThemedStyles, type ThemeColors } from "../theme/theme";
 import { Platform, StyleSheet, TextInput, View } from "react-native";
 import { MagnifyingGlass } from "phosphor-react-native";
 import { tokens } from "../theme/tokens";
@@ -18,6 +19,9 @@ type FieldProps = {
 };
 
 export function Field(props: FieldProps) {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   const {
     label,
     value,
@@ -36,12 +40,12 @@ export function Field(props: FieldProps) {
     <View style={styles.wrap}>
       {!isSearch ? <AppText variant="label" color="muted">{label}</AppText> : null}
       <View style={[styles.inputWrap, isSearch && styles.searchWrap]}>
-        {isSearch ? <MagnifyingGlass size={18} color={tokens.textMuted} weight="regular" /> : null}
+        {isSearch ? <MagnifyingGlass size={18} color={colors.textMuted} weight="regular" /> : null}
         <TextInput
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder ?? (isSearch ? label : undefined)}
-          placeholderTextColor={tokens.textMuted}
+          placeholderTextColor={colors.textMuted}
           multiline={multiline}
           secureTextEntry={secureTextEntry}
           autoCapitalize={autoCapitalize ?? (isSearch ? "none" : "sentences")}
@@ -57,15 +61,16 @@ export function Field(props: FieldProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   wrap: {
     gap: tokens.space.sm,
   },
   inputWrap: {
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
     borderRadius: tokens.radius.md,
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
     paddingHorizontal: tokens.space.md,
     minHeight: 52,
     justifyContent: "center",
@@ -75,10 +80,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: tokens.space.sm,
     borderRadius: tokens.radius.full,
-    backgroundColor: tokens.bgElevated,
+    backgroundColor: colors.bgElevated,
   },
   input: {
-    color: tokens.text,
+    color: colors.text,
     fontSize: tokens.type.body.fontSize,
     fontFamily: tokens.font.body,
     paddingVertical: 14,
@@ -92,3 +97,5 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
   },
 });
+}
+

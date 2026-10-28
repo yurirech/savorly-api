@@ -43,6 +43,7 @@ export function seedDayFromSource(
         totals: emptyTotals(),
         entries: [] as DiaryEntry[],
         stapleCount: meal.stapleCount,
+        staples: meal.staples,
         canCopyPrevious: Boolean(meal.canCopyPrevious) || meal.entries.length > 0,
       };
     });
@@ -90,7 +91,8 @@ export function mergeRemoteDay(
     }
     meals.push({
       ...remoteMeal,
-      stapleCount: localMeal.stapleCount ?? remoteMeal.stapleCount,
+      stapleCount: remoteMeal.stapleCount ?? localMeal.stapleCount,
+      staples: remoteMeal.staples ?? localMeal.staples,
       canCopyPrevious: remoteMeal.canCopyPrevious ?? localMeal.canCopyPrevious,
       entries: mergeMealEntries(localMeal.entries, remoteMeal.entries, remoteMeal.id),
     });

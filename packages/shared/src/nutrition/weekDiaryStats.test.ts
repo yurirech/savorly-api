@@ -27,20 +27,21 @@ describe("weekDiaryStats", () => {
     day("2026-10-04", 0, false),
   ];
 
-  it("defaults to complete non-zero days through today", () => {
-    expect(defaultSelectedWeekDays(days, today)).toEqual(["2026-09-28", "2026-10-01", "2026-10-02"]);
+  it("defaults to every day in the week", () => {
+    expect(defaultSelectedWeekDays(days, today)).toEqual(days.map((day) => day.date));
   });
 
-  it("excludes future, incomplete, zero, and unselected days from the average", () => {
+  it("counts every selected day, including incomplete, zero, and future days", () => {
     const selected = new Set(["2026-09-28", "2026-09-29", "2026-09-30", "2026-10-01", "2026-10-03"]);
     expect(isCountableWeekDay(days[0]!, today, selected)).toBe(true);
-    expect(isCountableWeekDay(days[1]!, today, selected)).toBe(false);
-    expect(isCountableWeekDay(days[2]!, today, selected)).toBe(false);
-    expect(isCountableWeekDay(days[5]!, today, selected)).toBe(false);
+    expect(isCountableWeekDay(days[1]!, today, selected)).toBe(true);
+    expect(isCountableWeekDay(days[2]!, today, selected)).toBe(true);
+    expect(isCountableWeekDay(days[5]!, today, selected)).toBe(true);
+    expect(isCountableWeekDay(days[4]!, today, selected)).toBe(false);
     expect(weekCountedStats(days, today, selected)).toEqual({
-      eatenKcal: 3700,
-      countedDays: 2,
-      averageKcal: 1850,
+      eatenKcal: 7800,
+      countedDays: 5,
+      averageKcal: 1560,
     });
   });
 

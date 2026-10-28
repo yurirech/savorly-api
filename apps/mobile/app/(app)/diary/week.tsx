@@ -7,6 +7,7 @@ import { ApiRequestError, fetchDiaryWeek, type DiaryWeek } from "../../../src/ap
 import { AppText } from "../../../src/components/AppText";
 import { Screen } from "../../../src/components/Screen";
 import { tokens } from "../../../src/theme/tokens";
+import { useTheme, useThemedStyles, type ThemeColors } from "../../../src/theme/theme";
 import { shiftIsoDate, startOfIsoWeek, todayIsoDate } from "../../../src/utils/isoDate";
 
 const BAR_HEIGHT = 160;
@@ -21,6 +22,9 @@ function kcalLabel(value: number | null | undefined): string {
 }
 
 export default function DiaryWeekScreen() {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   const params = useLocalSearchParams<{ date?: string }>();
   const opened = Array.isArray(params.date) ? params.date[0] : params.date;
   const [start, setStart] = useState(() => startOfIsoWeek(opened ?? todayIsoDate()));
@@ -77,7 +81,7 @@ export default function DiaryWeekScreen() {
           accessibilityRole="button"
           accessibilityLabel="Previous week"
         >
-          <CaretLeft size={22} color={tokens.text} />
+          <CaretLeft size={22} color={colors.text} />
         </Pressable>
         <AppText variant="title">
           {start} – {shiftIsoDate(start, 6)}
@@ -92,7 +96,7 @@ export default function DiaryWeekScreen() {
           accessibilityRole="button"
           accessibilityLabel="Next week"
         >
-          <CaretRight size={22} color={tokens.text} />
+          <CaretRight size={22} color={colors.text} />
         </Pressable>
       </View>
 
@@ -110,7 +114,6 @@ export default function DiaryWeekScreen() {
               const targetHeight = ((day.targetKcal ?? 0) / scale) * BAR_HEIGHT;
               const isToday = day.date === today;
               const isSelected = selected.includes(day.date);
-              const dimmed = !day.complete || day.eatenKcal === 0;
               return (
                 <Pressable
                   key={day.date}
@@ -131,16 +134,15 @@ export default function DiaryWeekScreen() {
                       styles.track,
                       isToday && styles.trackToday,
                       isSelected && styles.trackSelected,
-                      dimmed && styles.trackDimmed,
                     ]}
                   >
                     <View style={[styles.targetBar, { height: targetHeight }]} />
-                    <View style={[styles.eatenBar, dimmed && styles.eatenBarDimmed, { height: eatenHeight }]} />
+                    <View style={[styles.eatenBar, { height: eatenHeight }]} />
                   </View>
                   <AppText variant="caption" color={isSelected || isToday ? "accent" : "muted"}>
                     {weekdayLabel(day.date, index)}
                   </AppText>
-                  <AppText variant="caption" color={dimmed ? "muted" : "text"}>
+                  <AppText variant="caption">
                     {day.eatenKcal}
                   </AppText>
                 </Pressable>
@@ -162,8 +164,8 @@ export default function DiaryWeekScreen() {
             </View>
             <AppText variant="caption" color="muted">
               {counted.countedDays === 1
-                ? "Average from 1 complete day"
-                : `Average from ${counted.countedDays} complete days`}
+                ? "Average from 1 day"
+                : `Average from ${counted.countedDays} days`}
             </AppText>
           </View>
         </>
@@ -179,6 +181,8 @@ type StatCardProps = {
 };
 
 function StatCard(props: StatCardProps) {
+  const styles = useThemedStyles(createStyles);
+
   const { label, value, hint } = props;
   return (
     <View style={styles.statCard}>
@@ -192,7 +196,8 @@ function StatCard(props: StatCardProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   nav: {
     flexDirection: "row",
     alignItems: "center",
@@ -220,36 +225,30 @@ const styles = StyleSheet.create({
     width: "100%",
     justifyContent: "flex-end",
     alignItems: "center",
-    backgroundColor: tokens.bgElevated,
+    backgroundColor: colors.bgElevated,
     borderRadius: tokens.radius.sm,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "transparent",
   },
   trackToday: {
-    borderColor: tokens.accentMuted,
+    borderColor: colors.accentMuted,
   },
   trackSelected: {
-    borderColor: tokens.accent,
-  },
-  trackDimmed: {
-    opacity: 0.55,
+    borderColor: colors.accent,
   },
   targetBar: {
     position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: tokens.accentMuted,
+    backgroundColor: colors.accentMuted,
   },
   eatenBar: {
     width: "55%",
-    backgroundColor: tokens.accent,
+    backgroundColor: colors.accent,
     borderTopLeftRadius: tokens.radius.sm,
     borderTopRightRadius: tokens.radius.sm,
-  },
-  eatenBarDimmed: {
-    backgroundColor: tokens.textMuted,
   },
   stats: {
     gap: tokens.space.sm,
@@ -260,11 +259,13 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
     borderRadius: tokens.radius.md,
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
     padding: tokens.space.md,
     gap: tokens.space.xs,
   },
 });
+}
+

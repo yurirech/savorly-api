@@ -1,6 +1,7 @@
 import { StyleSheet, View } from "react-native";
 import type { RecipeMacros, RecipeNutrition } from "@savorly/shared";
 import { tokens } from "../theme/tokens";
+import { useThemedStyles, type ThemeColors } from "../theme/theme";
 import { softWrapText } from "../utils/textWrap";
 import { AppText } from "./AppText";
 
@@ -9,6 +10,8 @@ type RecipeNutritionSummaryProps = {
 };
 
 export function RecipeNutritionSummary(props: RecipeNutritionSummaryProps) {
+  const styles = useThemedStyles(createStyles);
+
   const { nutrition } = props;
   return (
     <View style={styles.wrap}>
@@ -39,6 +42,8 @@ export function RecipeNutritionSummary(props: RecipeNutritionSummaryProps) {
 }
 
 function MacroColumn(props: { title: string; macros: RecipeMacros }) {
+  const styles = useThemedStyles(createStyles);
+
   const { title, macros } = props;
   return (
     <View style={styles.column}>
@@ -79,7 +84,8 @@ function formatGrams(value: number): string {
   return `${Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1)} g`;
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   wrap: {
     gap: tokens.space.sm,
   },
@@ -92,10 +98,10 @@ const styles = StyleSheet.create({
     flexBasis: 0,
     minWidth: 0,
     gap: tokens.space.xs,
-    backgroundColor: tokens.bgElevated,
+    backgroundColor: colors.bgElevated,
     borderRadius: tokens.radius.md,
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
     padding: tokens.space.md,
   },
   columnTitle: {
@@ -105,3 +111,5 @@ const styles = StyleSheet.create({
     width: "100%",
   },
 });
+}
+

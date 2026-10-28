@@ -1,3 +1,4 @@
+import { useThemedStyles, type ThemeColors } from "../theme/theme";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
@@ -11,6 +12,8 @@ interface MealStaplesSectionProps {
 }
 
 function MealStaplesSection(props: MealStaplesSectionProps) {
+  const styles = useThemedStyles(createStyles);
+
   const { foodId } = props;
   const [meals, setMeals] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
@@ -84,7 +87,8 @@ function MealStaplesSection(props: MealStaplesSectionProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   section: {
     gap: tokens.space.sm,
   },
@@ -95,16 +99,18 @@ const styles = StyleSheet.create({
   },
   chip: {
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
     borderRadius: tokens.radius.full,
     paddingHorizontal: tokens.space.md,
     paddingVertical: tokens.space.xs,
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
   },
   chipOn: {
-    borderColor: tokens.accent,
-    backgroundColor: tokens.accentMuted,
+    borderColor: colors.accent,
+    backgroundColor: colors.accentMuted,
   },
 });
+}
+
 
 export default MealStaplesSection;

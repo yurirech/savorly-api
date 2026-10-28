@@ -1,3 +1,4 @@
+import { useTheme, useThemedStyles, type ThemeColors } from "../theme/theme";
 import { Plus } from "phosphor-react-native";
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -17,6 +18,9 @@ type RecipePantryMissingSheetProps = {
 };
 
 export function RecipePantryMissingSheet(props: RecipePantryMissingSheetProps) {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   const { visible, match, addingIndex, suggesting, onClose, onQuickAdd, onSuggestSwaps } = props;
   const insets = useSafeAreaInsets();
   const missingRows = match?.ingredients.filter((row) => !row.matched) ?? [];
@@ -42,9 +46,9 @@ export function RecipePantryMissingSheet(props: RecipePantryMissingSheetProps) {
                     accessibilityLabel={`Add ${row.name} to pantry`}
                   >
                     {addingIndex === row.index ? (
-                      <ActivityIndicator size="small" color={tokens.accent} />
+                      <ActivityIndicator size="small" color={colors.accent} />
                     ) : (
-                      <Plus size={20} color={tokens.accent} weight="bold" />
+                      <Plus size={20} color={colors.accent} weight="bold" />
                     )}
                   </Pressable>
                 ) : null}
@@ -64,17 +68,18 @@ export function RecipePantryMissingSheet(props: RecipePantryMissingSheetProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   frame: {
     flex: 1,
     justifyContent: "flex-end",
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: colors.scrim,
   },
   sheet: {
-    backgroundColor: tokens.bgElevated,
+    backgroundColor: colors.bgElevated,
     borderTopLeftRadius: tokens.radius.lg,
     borderTopRightRadius: tokens.radius.lg,
     padding: tokens.space.lg,
@@ -90,7 +95,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: tokens.space.sm,
     borderBottomWidth: 1,
-    borderBottomColor: tokens.border,
+    borderBottomColor: colors.border,
   },
   rowLabel: {
     flex: 1,
@@ -103,3 +108,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 });
+}
+

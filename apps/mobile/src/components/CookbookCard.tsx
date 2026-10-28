@@ -1,3 +1,4 @@
+import { useTheme, useThemedStyles, type ThemeColors } from "../theme/theme";
 import { BookOpen } from "phosphor-react-native";
 import { Image, Pressable, StyleSheet, View } from "react-native";
 import type { CookbookSummary } from "@savorly/shared";
@@ -11,6 +12,9 @@ type CookbookCardProps = {
 };
 
 export function CookbookCard(props: CookbookCardProps) {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   const { cookbook, onPress } = props;
   const tiles = [0, 1, 2, 3].map((index) => cookbook.previewRecipes[index] ?? null);
   const countLabel = cookbook.recipeCount === 1 ? "1 recipe" : `${cookbook.recipeCount} recipes`;
@@ -24,7 +28,7 @@ export function CookbookCard(props: CookbookCardProps) {
           ) : (
             <View key={`${cookbook.id}-empty-${index}`} style={styles.emptyTile}>
               {index === 0 && cookbook.recipeCount === 0 ? (
-                <BookOpen size={22} color={tokens.textMuted} weight="regular" />
+                <BookOpen size={22} color={colors.textMuted} weight="regular" />
               ) : null}
             </View>
           ),
@@ -42,15 +46,16 @@ export function CookbookCard(props: CookbookCardProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   card: {
     flex: 1,
     minHeight: 210,
     borderRadius: tokens.radius.lg,
     overflow: "hidden",
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
   },
   mosaic: {
     height: 128,
@@ -64,7 +69,7 @@ const styles = StyleSheet.create({
   emptyTile: {
     width: "50%",
     height: 64,
-    backgroundColor: tokens.bgElevated,
+    backgroundColor: colors.bgElevated,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -78,3 +83,5 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.98 }],
   },
 });
+}
+

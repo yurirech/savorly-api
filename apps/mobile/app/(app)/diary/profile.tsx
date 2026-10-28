@@ -24,6 +24,7 @@ import { Field } from "../../../src/components/Field";
 import { Screen } from "../../../src/components/Screen";
 import { SegmentedControl } from "../../../src/components/SegmentedControl";
 import { tokens } from "../../../src/theme/tokens";
+import { useThemedStyles, type ThemeColors } from "../../../src/theme/theme";
 
 function parseNumber(value: string): number | null {
   const parsed = Number(value.replace(",", "."));
@@ -59,6 +60,8 @@ function overridesFromDrafts(
 }
 
 export default function DiaryProfileScreen() {
+  const styles = useThemedStyles(createStyles);
+
   const [sex, setSex] = useState<NutritionSex>("male");
   const [age, setAge] = useState("30");
   const [heightCm, setHeightCm] = useState("180");
@@ -234,7 +237,8 @@ export default function DiaryProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   microGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -246,15 +250,17 @@ const styles = StyleSheet.create({
     gap: tokens.space.xs,
   },
   microInput: {
-    color: tokens.text,
+    color: colors.text,
     fontSize: tokens.type.body.fontSize,
     fontFamily: tokens.font.body,
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
     borderRadius: tokens.radius.sm,
     paddingHorizontal: tokens.space.sm,
     paddingVertical: tokens.space.xs,
     minHeight: 44,
   },
 });
+}
+

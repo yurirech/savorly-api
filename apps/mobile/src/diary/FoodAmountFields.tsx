@@ -4,6 +4,7 @@ import { AppText } from "../components/AppText";
 import { Field } from "../components/Field";
 import { SegmentedControl } from "../components/SegmentedControl";
 import { tokens } from "../theme/tokens";
+import { useThemedStyles, type ThemeColors } from "../theme/theme";
 
 export function parseFoodAmount(value: string): number | null {
   const amount = Number(value.replace(",", "."));
@@ -24,6 +25,8 @@ interface FoodAmountFieldsProps {
 }
 
 function FoodAmountFields(props: FoodAmountFieldsProps) {
+  const styles = useThemedStyles(createStyles);
+
   const { unit, amount, servingWeightG, frequentGrams, onUnitChange, onAmountChange } = props;
   const hasServing = servingWeightG != null && servingWeightG > 0;
 
@@ -138,7 +141,8 @@ function FoodAmountFields(props: FoodAmountFieldsProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   quickRow: {
     gap: tokens.space.sm,
   },
@@ -149,11 +153,13 @@ const styles = StyleSheet.create({
   },
   chip: {
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
     borderRadius: tokens.radius.full,
     paddingHorizontal: tokens.space.md,
     paddingVertical: tokens.space.xs,
   },
 });
+}
+
 
 export default FoodAmountFields;

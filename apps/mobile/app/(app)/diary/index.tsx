@@ -1,5 +1,5 @@
 import { type Href, router, useFocusEffect, useSegments } from "expo-router";
-import { CaretDown, CaretLeft, CaretRight, CaretUp, ChartPie, DotsThreeVertical } from "phosphor-react-native";
+import { CaretDown, CaretLeft, CaretRight, CaretUp, DotsThreeVertical } from "phosphor-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
@@ -14,8 +14,7 @@ import {
   UIManager,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { hasExtendedNutrients, listPresentNutrients, type DiaryDayResponse, type MicroTargets, type NutritionSex } from "@savorly/shared";
+import { alreadyInGroupMessage, hasExtendedNutrients, listPresentNutrients, type DiaryDayResponse, type DiaryMealStaple, type MicroTargets, type NutritionSex } from "@savorly/shared";
 import type { DiaryEntry, FoodAmountUnit } from "@savorly/shared";
 import {
   addDiaryEntry,
@@ -30,6 +29,8 @@ import {
   fetchDiaryDay,
   relocateDiaryEntries,
   logMealStaples,
+  logSelectedMealStaples,
+  setMealStaple,
   fetchNutritionProfile,
   setDiaryDayTarget,
   clearDiaryDayTarget,
@@ -52,8 +53,10 @@ import DiaryDayNutrition from "../../../src/diary/DiaryDayNutrition";
 import DiaryMealNameSheet from "../../../src/diary/DiaryMealNameSheet";
 import DiaryMoveSheet from "../../../src/diary/DiaryMoveSheet";
 import DiaryMealSection from "../../../src/diary/DiaryMealSection";
+import DiaryStaplesSheet from "../../../src/diary/DiaryStaplesSheet";
 import { writeLastDiaryMeal } from "../../../src/diary/lastDiaryMealStorage";
 import { tokens } from "../../../src/theme/tokens";
+import { useTheme, useThemedStyles, type ThemeColors } from "../../../src/theme/theme";
 import { shiftIsoDate, todayIsoDate } from "../../../src/utils/isoDate";
 
 type NameSheetMode =
@@ -69,8 +72,10 @@ if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 export default function DiaryScreen() {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   const inTabs = (useSegments() as string[]).includes("(tabs)");
-  const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
   const dayFade = useRef(new Animated.Value(1)).current;
   const [date, setDate] = useState(todayIsoDate);
@@ -109,6 +114,16 @@ export default function DiaryScreen() {
   const [profileKcal, setProfileKcal] = useState<number | null>(null);
   const [scrollY, setScrollY] = useState(0);
   const [scrollSpan, setScrollSpan] = useState(0);
+  const [footerHeight, setFooterHeight] = useState(0);
+  const [staplePicker, setStaplePicker] = useState<{ mealId: string; staples: DiaryMealStaple[] } | null>(null);
+  const [stapleManage, setStapleManage] = useState<{
+    mealId: string;
+    mealName: string;
+    staples: DiaryMealStaple[];
+  } | null>(null);
+  const [removingStapleId, setRemovingStapleId] = useState<string | null>(null);
+  const [stapleSelection, setStapleSelection] = useState<Set<string>>(() => new Set());
+  const [stapleSaving, setStapleSaving] = useState(false);
   const [savingAmount, setSavingAmount] = useState(false);
   const [amountEntryId, setAmountEntryId] = useState<string | null>(null);
 
@@ -361,6 +376,55 @@ export default function DiaryScreen() {
     }
   }
 
+  async function addChosenStaples() {
+    if (!staplePicker || stapleSelection.size === 0 || stapleSaving) return;
+    const meal = day?.meals.find((row) => row.id === staplePicker.mealId);
+    const present = new Set(meal?.entries.map((entry) => entry.foodId).filter((id): id is string => id != null) ?? []);
+    const skipped = staplePicker.staples.filter((staple) => stapleSelection.has(staple.foodId) && present.has(staple.foodId));
+    const fresh = [...stapleSelection].filter((id) => !present.has(id));
+    if (fresh.length === 0) {
+      setError(alreadyInGroupMessage(skipped.map((staple) => staple.name)));
+      return;
+    }
+    setStapleSaving(true);
+    setError(null);
+    try {
+      setDay(await logSelectedMealStaples(staplePicker.mealId, fresh));
+      setStaplePicker(null);
+      setStapleSelection(new Set());
+      if (skipped.length > 0) {
+        setError(alreadyInGroupMessage(skipped.map((staple) => staple.name)));
+      }
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : "Could not add those staples.");
+    } finally {
+      setStapleSaving(false);
+    }
+  }
+
+  async function removeManagedStaple(foodId: string) {
+    if (!stapleManage || removingStapleId) return;
+    const { mealId, mealName } = stapleManage;
+    setRemovingStapleId(foodId);
+    setError(null);
+    try {
+      await setMealStaple(foodId, { mealName, enabled: false, date });
+      const next = await fetchDiaryDay(date);
+      setDay(next);
+      const meal = next.meals.find((row) => row.id === mealId) ?? next.meals.find((row) => row.name === mealName);
+      const staples = meal?.staples ?? [];
+      if (!meal || staples.length === 0) {
+        setStapleManage(null);
+      } else {
+        setStapleManage({ mealId: meal.id, mealName: meal.name, staples });
+      }
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : "Could not remove that staple.");
+    } finally {
+      setRemovingStapleId(null);
+    }
+  }
+
   function startSelect(entry: DiaryEntry) {
     setAmountEntryId(null);
     setSelectedIds((current) => (current?.includes(entry.id) ? current : [...(current ?? []), entry.id]));
@@ -472,6 +536,7 @@ export default function DiaryScreen() {
       safeBottom={!inTabs}
       scrollRef={scrollRef}
       onScroll={onDiaryScroll}
+      onFooterLayout={setFooterHeight}
       onRefresh={() => void onRefresh()}
       refreshing={refreshing}
       overlay={
@@ -479,7 +544,7 @@ export default function DiaryScreen() {
           <Toast
             visible={toast != null}
             message={toast?.message ?? ""}
-            offset={inTabs ? tokens.tabBarHeight : 0}
+            offset={footerHeight + tokens.space.sm}
             actionLabel={toast?.undo ? "Undo" : undefined}
             onAction={
               toast?.undo
@@ -498,22 +563,14 @@ export default function DiaryScreen() {
           {jumpVisible ? (
             <Pressable
               onPress={jumpDiary}
-              style={[
-                styles.jump,
-                {
-                  bottom:
-                    tokens.space.lg +
-                    72 +
-                    (inTabs ? tokens.tabBarHeight : insets.bottom),
-                },
-              ]}
+              style={[styles.jump, { bottom: footerHeight + tokens.space.sm }]}
               accessibilityRole="button"
               accessibilityLabel={jumpToTop ? "Scroll to top" : "Scroll to bottom"}
             >
               {jumpToTop ? (
-                <CaretUp size={22} color={tokens.bg} weight="bold" />
+                <CaretUp size={22} color={colors.bg} weight="bold" />
               ) : (
-                <CaretDown size={22} color={tokens.bg} weight="bold" />
+                <CaretDown size={22} color={colors.bg} weight="bold" />
               )}
             </Pressable>
           ) : null}
@@ -522,11 +579,11 @@ export default function DiaryScreen() {
       header={
         <View style={styles.dateRow} {...dateSwipe.panHandlers}>
           <Pressable onPress={() => setDate((current) => shiftIsoDate(current, -1))} accessibilityLabel="Previous day">
-            <CaretLeft size={22} color={tokens.text} />
+            <CaretLeft size={22} color={colors.text} />
           </Pressable>
           <AppText variant="title">{date}</AppText>
           <Pressable onPress={() => setDate((current) => shiftIsoDate(current, 1))} accessibilityLabel="Next day">
-            <CaretRight size={22} color={tokens.text} />
+            <CaretRight size={22} color={colors.text} />
           </Pressable>
           <Pressable
             ref={menuButtonRef}
@@ -535,7 +592,7 @@ export default function DiaryScreen() {
             accessibilityRole="button"
             accessibilityLabel="Diary menu"
           >
-            <DotsThreeVertical size={22} color={tokens.text} weight="bold" />
+            <DotsThreeVertical size={22} color={colors.text} weight="bold" />
           </Pressable>
         </View>
       }
@@ -568,6 +625,12 @@ export default function DiaryScreen() {
               <Button size="compact" label="Add meal group" onPress={() => setNameSheet({ kind: "create" })} />
             ) : null}
             <Button size="compact" label="Quick calories" variant="secondary" onPress={openQuickCal} />
+            <Button
+              size="compact"
+              label="My foods"
+              variant="secondary"
+              onPress={() => router.push("/(app)/diary/foods" as Href)}
+            />
             <Button size="compact" label="📝 New recipe" variant="secondary" onPress={() => setNameSheet({ kind: "recipe" })} />
           </>
         )
@@ -592,20 +655,6 @@ export default function DiaryScreen() {
         </AppText>
       ) : null}
 
-      <View style={styles.actionRow}>
-        <Button size="compact" label="My foods" variant="secondary" onPress={() => router.push("/(app)/diary/foods" as Href)} />
-        <Button size="compact" label="Targets" variant="ghost" onPress={() => router.push("/(app)/diary/profile" as Href)} />
-        {totals && hasExtendedNutrients(totals) ? (
-          <Pressable
-            onPress={() => setShowMicronutrients((current) => !current)}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={showMicronutrients ? "Hide today's micronutrients" : "Show today's micronutrients"}
-          >
-            <ChartPie size={22} color={showMicronutrients ? tokens.accent : tokens.text} />
-          </Pressable>
-        ) : null}
-      </View>
       {showMicronutrients && totals && hasExtendedNutrients(totals) ? (
         <View style={styles.microSection}>
           <NutrientDetailList groups={dayMicroGroups} />
@@ -660,8 +709,25 @@ export default function DiaryScreen() {
                 : undefined
             }
             onAddStaples={
-              (meal.stapleCount ?? 0) > 0 && meal.entries.length === 0
-                ? () => void fillMeal(() => logMealStaples(meal.id))
+              (meal.staples?.length ?? 0) > 0 || ((meal.stapleCount ?? 0) > 0 && meal.entries.length === 0)
+                ? () => {
+                    if (meal.entries.length === 0) {
+                      void fillMeal(() => logMealStaples(meal.id));
+                      return;
+                    }
+                    setStapleSelection(new Set());
+                    setStaplePicker({ mealId: meal.id, staples: meal.staples ?? [] });
+                  }
+                : undefined
+            }
+            onManageStaples={
+              (meal.staples?.length ?? 0) > 0 || ((meal.stapleCount ?? 0) > 0 && meal.entries.length === 0)
+                ? () =>
+                    setStapleManage({
+                      mealId: meal.id,
+                      mealName: meal.name,
+                      staples: meal.staples ?? [],
+                    })
                 : undefined
             }
             onRename={() => setNameSheet({ kind: "rename", mealId: meal.id, initialName: meal.name })}
@@ -749,6 +815,22 @@ export default function DiaryScreen() {
             },
           },
           {
+            label: "Targets",
+            onPress: () => {
+              router.push("/(app)/diary/profile" as Href);
+            },
+          },
+          ...(totals && hasExtendedNutrients(totals)
+            ? [
+                {
+                  label: showMicronutrients ? "Hide metrics" : "Metrics",
+                  onPress: () => {
+                    setShowMicronutrients((current) => !current);
+                  },
+                },
+              ]
+            : []),
+          {
             label: "Calorie target",
             onPress: () => {
               setTargetError(null);
@@ -774,6 +856,37 @@ export default function DiaryScreen() {
         onSave={(kcal) => void saveDayTarget(kcal)}
         onClear={() => void clearDayTarget()}
       />
+      <DiaryStaplesSheet
+        visible={staplePicker != null}
+        staples={staplePicker?.staples ?? []}
+        selectedIds={stapleSelection}
+        loading={stapleSaving}
+        onToggle={(foodId) => {
+          setStapleSelection((current) => {
+            const next = new Set(current);
+            if (next.has(foodId)) next.delete(foodId);
+            else next.add(foodId);
+            return next;
+          });
+        }}
+        onClose={() => {
+          if (stapleSaving) return;
+          setStaplePicker(null);
+          setStapleSelection(new Set());
+        }}
+        onConfirm={() => void addChosenStaples()}
+      />
+      <DiaryStaplesSheet
+        mode="manage"
+        visible={stapleManage != null}
+        staples={stapleManage?.staples ?? []}
+        removingId={removingStapleId}
+        onRemove={(foodId) => void removeManagedStaple(foodId)}
+        onClose={() => {
+          if (removingStapleId) return;
+          setStapleManage(null);
+        }}
+      />
       <DiaryMoveSheet
         visible={relocateRequest != null && nameSheet == null}
         entryCount={relocateRequest?.entryIds.length ?? 0}
@@ -794,6 +907,8 @@ export default function DiaryScreen() {
 }
 
 function DiaryDaySkeleton() {
+  const styles = useThemedStyles(createStyles);
+
   return (
     <View style={styles.skeleton}>
       <View style={styles.macros}>
@@ -809,7 +924,8 @@ function DiaryDaySkeleton() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   skeleton: {
     gap: tokens.space.md,
   },
@@ -840,22 +956,18 @@ const styles = StyleSheet.create({
   meals: {
     gap: tokens.space.md,
   },
-  actionRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: tokens.space.sm,
-  },
   jump: {
     position: "absolute",
     right: tokens.space.lg,
     width: 48,
     height: 48,
     borderRadius: tokens.radius.full,
-    backgroundColor: tokens.accent,
+    backgroundColor: colors.accent,
     alignItems: "center",
     justifyContent: "center",
     zIndex: 20,
     ...tokens.shadow.card,
   },
 });
+}
+

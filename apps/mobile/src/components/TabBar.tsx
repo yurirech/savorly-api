@@ -4,6 +4,7 @@ import { Tabs } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BookOpen, House, Notebook, Plus, Sparkle } from "phosphor-react-native";
 import { tokens } from "../theme/tokens";
+import { useTheme, useThemedStyles, type ThemeColors } from "../theme/theme";
 import { AppText } from "./AppText";
 
 type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>["tabBar"]>>[0];
@@ -33,6 +34,9 @@ interface TabButtonProps {
 }
 
 function TabButton(props: TabButtonProps) {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   const { label, focused, icon: Icon, onPress } = props;
 
   return (
@@ -46,7 +50,7 @@ function TabButton(props: TabButtonProps) {
       <View style={[styles.iconWrap, focused && styles.raised]}>
         <Icon
           size={focused ? 26 : 24}
-          color={focused ? tokens.bg : tokens.textMuted}
+          color={focused ? colors.onAccent : colors.textMuted}
           weight={focused ? "fill" : "regular"}
         />
       </View>
@@ -58,6 +62,8 @@ function TabButton(props: TabButtonProps) {
 }
 
 export function TabBar(props: TabBarProps) {
+  const styles = useThemedStyles(createStyles);
+
   const { state, descriptors, navigation } = props;
   const insets = useSafeAreaInsets();
   return (
@@ -86,12 +92,13 @@ export function TabBar(props: TabBarProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   bar: {
     flexDirection: "row",
-    backgroundColor: tokens.bgElevated,
+    backgroundColor: colors.bgElevated,
     borderTopWidth: 1,
-    borderTopColor: tokens.border,
+    borderTopColor: colors.border,
     paddingTop: tokens.space.sm,
     paddingHorizontal: tokens.space.sm,
   },
@@ -107,7 +114,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   raised: {
-    backgroundColor: tokens.accent,
+    backgroundColor: colors.accent,
     borderRadius: tokens.radius.full,
     ...tokens.shadow.card,
   },
@@ -115,3 +122,5 @@ const styles = StyleSheet.create({
     fontFamily: tokens.font.bodyMedium,
   },
 });
+}
+

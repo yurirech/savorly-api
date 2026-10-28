@@ -1,5 +1,6 @@
+import { useTheme, useThemedStyles, type ThemeColors } from "../theme/theme";
 import type { ReactNode } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Pressable, View, StyleSheet } from "react-native";
 import { tokens } from "../theme/tokens";
 import { AppText } from "./AppText";
 
@@ -14,6 +15,9 @@ type ButtonProps = {
 };
 
 export function Button(props: ButtonProps) {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   const { label, onPress, variant = "primary", size = "default", loading, disabled, icon } = props;
   const compact = size === "compact";
   return (
@@ -31,7 +35,7 @@ export function Button(props: ButtonProps) {
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={variant === "primary" ? tokens.bg : tokens.text} size={compact ? "small" : "large"} />
+        <ActivityIndicator color={variant === "primary" ? colors.onAccent : colors.text} size={compact ? "small" : "large"} />
       ) : (
         <View style={styles.row}>
           {icon}
@@ -47,7 +51,8 @@ export function Button(props: ButtonProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   base: {
     minHeight: 52,
     borderRadius: tokens.radius.md,
@@ -63,12 +68,12 @@ const styles = StyleSheet.create({
     paddingVertical: tokens.space.xs,
   },
   primary: {
-    backgroundColor: tokens.accent,
+    backgroundColor: colors.accent,
   },
   secondary: {
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
   },
   ghost: {
     backgroundColor: "transparent",
@@ -86,10 +91,12 @@ const styles = StyleSheet.create({
   },
   label: {
     fontFamily: tokens.font.bodyBold,
-    color: tokens.text,
+    color: colors.text,
   },
   primaryLabel: {
-    color: tokens.bg,
+    color: colors.onAccent,
     fontFamily: tokens.font.bodyBold,
   },
 });
+}
+

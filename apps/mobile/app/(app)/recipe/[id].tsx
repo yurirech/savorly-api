@@ -40,9 +40,13 @@ import { PANTRY_ENABLED } from "../../../src/config/features";
 import { useRecipePantry } from "../../../src/hooks/useRecipePantry";
 import { setReviewDraft } from "../../../src/store/reviewDraft";
 import { tokens } from "../../../src/theme/tokens";
+import { useTheme, useThemedStyles, type ThemeColors } from "../../../src/theme/theme";
 import { confirmDestructive } from "../../../src/utils/confirmDestructive";
 
 export default function RecipeDetailScreen() {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   const { id } = useLocalSearchParams<{ id: string }>();
   const navigation = useNavigation();
   const [recipe, setRecipe] = useState<SavedRecipe | null>(null);
@@ -156,7 +160,7 @@ export default function RecipeDetailScreen() {
           accessibilityRole="button"
           accessibilityLabel="Recipe menu"
         >
-          <DotsThreeVertical size={22} color={tokens.text} weight="bold" />
+          <DotsThreeVertical size={22} color={colors.text} weight="bold" />
         </Pressable>
       ),
     });
@@ -386,7 +390,7 @@ export default function RecipeDetailScreen() {
             accessibilityRole="button"
             accessibilityLabel={savedCookbookIds.length > 0 ? "Edit cookbooks" : "Add to cookbooks"}
           >
-            <Books size={18} color={tokens.text} />
+            <Books size={18} color={colors.text} />
           </Pressable>
         </View>
         <View style={styles.heroCopy}>
@@ -422,7 +426,7 @@ export default function RecipeDetailScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Fewer servings"
               >
-                <Minus size={18} color={tokens.text} />
+                <Minus size={18} color={colors.text} />
               </Pressable>
               <AppText variant="title">{String(servingsForMath)}</AppText>
               <Pressable
@@ -431,7 +435,7 @@ export default function RecipeDetailScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="More servings"
               >
-                <Plus size={18} color={tokens.text} />
+                <Plus size={18} color={colors.text} />
               </Pressable>
             </View>
           ) : (
@@ -463,7 +467,7 @@ export default function RecipeDetailScreen() {
               accessibilityRole="button"
               accessibilityLabel="Copy ingredients"
             >
-              {copied ? <Check size={18} color={tokens.accent} /> : <Copy size={18} color={tokens.textMuted} />}
+              {copied ? <Check size={18} color={colors.accent} /> : <Copy size={18} color={colors.textMuted} />}
             </Pressable>
           </View>
           {PANTRY_ENABLED && <RecipePantryStatusHint loading={pantryLoading} hasStaples={activeStapleCount > 0} />}
@@ -576,7 +580,7 @@ export default function RecipeDetailScreen() {
         accessibilityRole="button"
         accessibilityLabel="Ask about this recipe"
       >
-        <Sparkle size={24} color={tokens.bg} weight="fill" />
+        <Sparkle size={24} color={colors.bg} weight="fill" />
       </Pressable>
       <ContextMenu
         visible={actionsOpen}
@@ -641,7 +645,8 @@ export default function RecipeDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   recipeActions: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -680,7 +685,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: tokens.radius.full,
-    backgroundColor: tokens.accent,
+    backgroundColor: colors.accent,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -690,7 +695,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     left: 0,
-    backgroundColor: tokens.bg,
+    backgroundColor: colors.bg,
     opacity: 0.4,
   },
   heroCopy: {
@@ -724,14 +729,14 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: tokens.radius.full,
     borderWidth: 1,
-    borderColor: tokens.border,
-    backgroundColor: tokens.surface,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     alignItems: "center",
     justifyContent: "center",
   },
   ingredient: {
     borderBottomWidth: 1,
-    borderBottomColor: tokens.border,
+    borderBottomColor: colors.border,
     paddingVertical: tokens.space.sm,
   },
   ingredientsBlock: {
@@ -746,11 +751,11 @@ const styles = StyleSheet.create({
   step: {
     flexDirection: "row",
     gap: tokens.space.md,
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
     borderRadius: tokens.radius.md,
     padding: tokens.space.md,
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
   },
   stepIndex: {
     width: 32,
@@ -770,9 +775,11 @@ const styles = StyleSheet.create({
   chip: {
     borderRadius: tokens.radius.full,
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
     paddingHorizontal: tokens.space.md,
     paddingVertical: tokens.space.sm,
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
   },
 });
+}
+

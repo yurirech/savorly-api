@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
+  alreadyInGroupMessage,
   hasExtendedNutrients,
   listPresentNutrients,
   FATSECRET_ATTRIBUTION,
@@ -22,6 +23,7 @@ import {
   createDiaryMeal,
   fetchDiaryDay,
   fetchFrequentGrams,
+  copyNutritionRecipe,
   deleteNutritionRecipe,
   fetchNutritionFood,
   listNutritionFoods,
@@ -47,7 +49,8 @@ import { writeLastLoggedFood } from "../../../../src/diary/lastLoggedFood";
 import { pickMealFromDay, resolveMealForDate, writeLastDiaryMeal } from "../../../../src/diary/lastDiaryMealStorage";
 import MealStaplesSection from "../../../../src/diary/MealStaplesSection";
 import { tokens } from "../../../../src/theme/tokens";
-import { confirmDestructive } from "../../../../src/utils/confirmDestructive";
+import { useTheme, useThemedStyles, type ThemeColors } from "../../../../src/theme/theme";
+import { confirmChoice, confirmDestructive } from "../../../../src/utils/confirmDestructive";
 import { todayIsoDate } from "../../../../src/utils/isoDate";
 
 function sourceLabel(source: UserFood["source"]): string {
@@ -77,6 +80,9 @@ async function loadFoodFromList(id: string): Promise<UserFood | null> {
 }
 
 export default function DiaryFoodDetailScreen() {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   const params = useLocalSearchParams<{
     id?: string;
     date?: string;
@@ -113,6 +119,7 @@ export default function DiaryFoodDetailScreen() {
   const [savingServing, setSavingServing] = useState(false);
   const [savingCategory, setSavingCategory] = useState(false);
   const [deletingRecipe, setDeletingRecipe] = useState(false);
+  const [copyingRecipe, setCopyingRecipe] = useState(false);
   const [recipeMenuOpen, setRecipeMenuOpen] = useState(false);
   const [recipeMenuAnchor, setRecipeMenuAnchor] = useState<ContextMenuAnchor | null>(null);
   const recipeMenuRef = useRef<View>(null);
@@ -216,6 +223,15 @@ export default function DiaryFoodDetailScreen() {
     if (amount == null) {
       setError(unit === "servings" ? "Enter servings eaten." : "Enter grams eaten.");
       return;
+    }
+    const meal = todayMeals.find((row) => row.id === targetMealId);
+    if (!entryId && meal?.entries.some((entry) => entry.foodId === food.id)) {
+      setError(alreadyInGroupMessage(food.name));
+      return;
+    }
+    if (!entryId && date !== todayIsoDate()) {
+      const confirmed = await confirmChoice("Not today", `Log this on ${date}? This isn't today.`, "Log");
+      if (!confirmed) return;
     }
     setLogging(true);
     setError(null);
@@ -356,6 +372,23 @@ export default function DiaryFoodDetailScreen() {
     });
   }
 
+  function copyThisRecipe() {
+    if (!food?.nutritionRecipeId || copyingRecipe || deletingRecipe) return;
+    const recipeId = food.nutritionRecipeId;
+    void (async () => {
+      setCopyingRecipe(true);
+      setError(null);
+      try {
+        const created = await copyNutritionRecipe(recipeId);
+        router.push(`/(app)/diary/nutrition-recipe/${created.id}` as Href);
+      } catch (err) {
+        setError(err instanceof ApiRequestError ? err.message : "Could not copy this recipe.");
+      } finally {
+        setCopyingRecipe(false);
+      }
+    })();
+  }
+
   function confirmDeleteRecipe() {
     if (!food?.nutritionRecipeId || deletingRecipe) return;
     const recipeId = food.nutritionRecipeId;
@@ -466,7 +499,7 @@ export default function DiaryFoodDetailScreen() {
             accessibilityLabel="LOG"
           >
             {logging ? (
-              <ActivityIndicator color={tokens.bg} />
+              <ActivityIndicator color={colors.bg} />
             ) : (
               <AppText variant="body" style={styles.fabLabel}>
                 LOG
@@ -504,7 +537,7 @@ export default function DiaryFoodDetailScreen() {
               accessibilityRole="button"
               accessibilityLabel="Recipe menu"
             >
-              <DotsThreeVertical size={22} color={tokens.text} weight="bold" />
+              <DotsThreeVertical size={22} color={colors.text} weight="bold" />
             </Pressable>
           ) : null}
         </View>
@@ -673,9 +706,14 @@ export default function DiaryFoodDetailScreen() {
             },
           },
           {
+            label: "Copy recipe",
+            disabled: copyingRecipe || deletingRecipe,
+            onPress: copyThisRecipe,
+          },
+          {
             label: "Delete recipe",
             destructive: true,
-            disabled: deletingRecipe,
+            disabled: deletingRecipe || copyingRecipe,
             onPress: confirmDeleteRecipe,
           },
         ]}
@@ -701,6 +739,8 @@ type MacroCellProps = {
 };
 
 function FoodProfileSkeleton() {
+  const styles = useThemedStyles(createStyles);
+
   return (
     <View style={styles.skeleton}>
       <Skeleton width="70%" height={34} />
@@ -716,6 +756,8 @@ function FoodProfileSkeleton() {
 }
 
 function MacroCell(props: MacroCellProps) {
+  const styles = useThemedStyles(createStyles);
+
   const { label, value } = props;
   return (
     <View style={styles.macro}>
@@ -727,7 +769,8 @@ function MacroCell(props: MacroCellProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   titleRow: {
     flexDirection: "row",
     alignItems: "flex-end",
@@ -770,19 +813,19 @@ const styles = StyleSheet.create({
     minHeight: 32,
     borderRadius: tokens.radius.full,
     borderWidth: 1,
-    borderColor: tokens.border,
-    backgroundColor: tokens.bgElevated,
+    borderColor: colors.border,
+    backgroundColor: colors.bgElevated,
     paddingHorizontal: tokens.space.sm,
     paddingVertical: tokens.space.xs,
     alignItems: "center",
     justifyContent: "center",
   },
   categoryChipOn: {
-    backgroundColor: tokens.accent,
-    borderColor: tokens.accent,
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
   categoryChipLabelOn: {
-    color: tokens.bg,
+    color: colors.bg,
     fontFamily: tokens.font.bodyBold,
   },
   macros: {
@@ -793,10 +836,10 @@ const styles = StyleSheet.create({
   macro: {
     flexGrow: 1,
     minWidth: "40%",
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
     borderRadius: tokens.radius.md,
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
     padding: tokens.space.md,
     gap: tokens.space.xs,
   },
@@ -806,7 +849,7 @@ const styles = StyleSheet.create({
     minHeight: 56,
     paddingHorizontal: tokens.space.lg,
     borderRadius: tokens.radius.full,
-    backgroundColor: tokens.accent,
+    backgroundColor: colors.accent,
     alignItems: "center",
     justifyContent: "center",
     zIndex: 20,
@@ -819,10 +862,12 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   fabLabel: {
-    color: tokens.bg,
+    color: colors.bg,
     fontFamily: tokens.font.bodyBold,
   },
   fabClearance: {
     height: 72,
   },
 });
+}
+

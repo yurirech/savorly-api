@@ -3,6 +3,7 @@ import { ActivityIndicator, StyleSheet, View, Pressable } from "react-native";
 import type { Ingredient } from "@savorly/shared";
 import { formatIngredientLine, isMixInIngredient } from "@savorly/shared";
 import { tokens } from "../theme/tokens";
+import { useTheme, useThemedStyles, type ThemeColors } from "../theme/theme";
 import { softWrapText } from "../utils/textWrap";
 import { AppText } from "./AppText";
 
@@ -16,6 +17,9 @@ type RecipeIngredientLineProps = {
 };
 
 export function RecipeIngredientLine(props: RecipeIngredientLineProps) {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   const { ingredient, line, pantryMatched, showPantryActions, quickAddLoading, onQuickAdd } = props;
   return (
     <View style={styles.row}>
@@ -30,7 +34,7 @@ export function RecipeIngredientLine(props: RecipeIngredientLineProps) {
         ) : null}
         {showPantryActions && pantryMatched === false ? (
           <View style={styles.missingActions}>
-            <X size={16} color={tokens.danger} weight="bold" />
+            <X size={16} color={colors.danger} weight="bold" />
             {onQuickAdd ? (
               <Pressable
                 onPress={onQuickAdd}
@@ -40,9 +44,9 @@ export function RecipeIngredientLine(props: RecipeIngredientLineProps) {
                 accessibilityLabel={`Add ${ingredient.name} to pantry`}
               >
                 {quickAddLoading ? (
-                  <ActivityIndicator size="small" color={tokens.accent} />
+                  <ActivityIndicator size="small" color={colors.accent} />
                 ) : (
-                  <Plus size={18} color={tokens.accent} weight="bold" />
+                  <Plus size={18} color={colors.accent} weight="bold" />
                 )}
               </Pressable>
             ) : null}
@@ -53,7 +57,8 @@ export function RecipeIngredientLine(props: RecipeIngredientLineProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -75,3 +80,4 @@ const styles = StyleSheet.create({
     gap: tokens.space.sm,
   },
 });
+}

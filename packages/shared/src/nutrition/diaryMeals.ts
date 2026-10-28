@@ -116,3 +116,11 @@ export function coerceDiaryDayResponse(raw: unknown): DiaryDayResponse {
     targets: body.targets ?? null,
   };
 }
+
+export function alreadyInGroupMessage(names: string | readonly string[]): string {
+  const list = (typeof names === "string" ? [names] : names).filter((name) => name.trim());
+  if (list.length <= 1) {
+    return `${list[0] ?? "That food"} is already in this group.`;
+  }
+  return `${list.join(", ")} are already in this group.`;
+}

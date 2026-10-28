@@ -74,10 +74,16 @@ export type DiaryEntry = {
   foodId: string | null;
   label?: string;
   foodName: string;
+  category?: string | null;
   grams: number;
   amountUnit?: FoodAmountUnit;
   nutrients: NutrientVector;
   createdAt: string;
+};
+
+export type DiaryMealStaple = {
+  foodId: string;
+  name: string;
 };
 
 export type DiaryMealGroup = {
@@ -89,6 +95,7 @@ export type DiaryMealGroup = {
   entries: DiaryEntry[];
   canCopyPrevious?: boolean;
   stapleCount?: number;
+  staples?: DiaryMealStaple[];
 };
 
 export type DiaryDayResponse = {

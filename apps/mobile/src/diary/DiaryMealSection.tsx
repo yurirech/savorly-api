@@ -1,4 +1,4 @@
-import { CaretDown, CaretUp, ChartPie, Check, PencilSimple, Trash } from "phosphor-react-native";
+import { Basket, CaretDown, CaretUp, ChartPie, Check, PencilSimple, Trash } from "phosphor-react-native";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Animated, PanResponder, Pressable, StyleSheet, TextInput, View } from "react-native";
 import {
@@ -17,7 +17,9 @@ import { AppText } from "../components/AppText";
 import { Button } from "../components/Button";
 import NutrientDetailList from "../components/NutrientDetailList";
 import { tokens } from "../theme/tokens";
+import { useTheme, useThemedStyles, type ThemeColors } from "../theme/theme";
 import { parseFoodAmount } from "./FoodAmountFields";
+import CategoryPill from "./CategoryPill";
 import FoodEmojiBadge from "./FoodEmojiBadge";
 
 interface DiaryMealSectionProps {
@@ -30,6 +32,7 @@ interface DiaryMealSectionProps {
   onAddFood: () => void;
   onCopyPrevious?: () => void;
   onAddStaples?: () => void;
+  onManageStaples?: () => void;
   onRename: () => void;
   onDelete: () => void;
   editing: boolean;
@@ -45,10 +48,13 @@ interface DiaryMealSectionProps {
 
 function formatMealMacros(meal: DiaryMealGroup): string {
   const { totals } = meal;
-  return `${formatDiaryNumber(totals.kcal)} kcal · ${formatDiaryNumber(totals.proteinG)}g protein · ${formatDiaryNumber(totals.carbsG)}g carbs · ${formatDiaryNumber(totals.fatG)}g fat`;
+  return `${formatDiaryNumber(totals.kcal)} kcal · ${formatDiaryNumber(totals.proteinG)}g protein · ${formatDiaryNumber(totals.fiberG ?? 0)}g fiber · ${formatDiaryNumber(totals.fatG)}g fat`;
 }
 
 function DiaryMealSection(props: DiaryMealSectionProps) {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   const {
     meal,
     collapsed,
@@ -59,6 +65,7 @@ function DiaryMealSection(props: DiaryMealSectionProps) {
     onAddFood,
     onCopyPrevious,
     onAddStaples,
+    onManageStaples,
     onRename,
     onDelete,
     editing,
@@ -92,16 +99,16 @@ function DiaryMealSection(props: DiaryMealSectionProps) {
         </Pressable>
         {editing ? (
           <IconButton label="Rename" onPress={onRename}>
-            <PencilSimple size={22} color={tokens.text} />
+            <PencilSimple size={22} color={colors.text} />
           </IconButton>
         ) : null}
         {editing ? (
           <IconButton label="Delete group" onPress={onDelete}>
-            <Trash size={22} color={tokens.danger} />
+            <Trash size={22} color={colors.danger} />
           </IconButton>
         ) : null}
         <IconButton label={collapsed ? "Expand group" : "Collapse group"} onPress={onToggleCollapse}>
-          {collapsed ? <CaretDown size={22} color={tokens.text} /> : <CaretUp size={22} color={tokens.text} />}
+          {collapsed ? <CaretDown size={22} color={colors.text} /> : <CaretUp size={22} color={colors.text} />}
         </IconButton>
       </View>
       {!collapsed && (
@@ -139,16 +146,16 @@ function DiaryMealSection(props: DiaryMealSectionProps) {
                 <AppText variant="body">↩</AppText>
               </IconButton>
             ) : null}
-            {meal.entries.length === 0 && onAddStaples ? (
-              <IconButton label="Add staples" onPress={onAddStaples}>
-                <AppText variant="body">🥣</AppText>
+            {onAddStaples ? (
+              <IconButton label="Add staples" hint="Long press to edit staples" onPress={onAddStaples} onLongPress={onManageStaples}>
+                <Basket size={22} color={colors.text} />
               </IconButton>
             ) : null}
             <IconButton
               label={nutrientsOpen ? "Hide nutrients" : "Nutrients"}
               onPress={() => setNutrientsOpen((open) => !open)}
             >
-              <ChartPie size={22} color={nutrientsOpen ? tokens.accent : tokens.text} />
+              <ChartPie size={22} color={nutrientsOpen ? colors.accent : colors.text} />
             </IconButton>
           </View>
           {nutrientsOpen ? <NutrientDetailList groups={nutrientGroups} /> : null}
@@ -164,13 +171,24 @@ const SWIPE_TRIGGER = 56;
 interface IconButtonProps {
   label: string;
   onPress: () => void;
+  onLongPress?: () => void;
+  hint?: string;
   children: ReactNode;
 }
 
 function IconButton(props: IconButtonProps) {
-  const { label, onPress, children } = props;
+  const styles = useThemedStyles(createStyles);
+
+  const { label, onPress, onLongPress, hint, children } = props;
   return (
-    <Pressable onPress={onPress} style={styles.iconButton} accessibilityRole="button" accessibilityLabel={label}>
+    <Pressable
+      onPress={onPress}
+      onLongPress={onLongPress}
+      style={styles.iconButton}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityHint={hint}
+    >
       {children}
     </Pressable>
   );
@@ -194,6 +212,9 @@ interface DiaryEntryRowProps {
 }
 
 function DiaryEntryRow(props: DiaryEntryRowProps) {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   const {
     entry,
     active,
@@ -323,7 +344,7 @@ function DiaryEntryRow(props: DiaryEntryRowProps) {
       <View style={[styles.entryRow, { transform: [{ translateX: selecting ? 0 : offset }] }]}>
         {selecting ? (
           <View style={[styles.check, selected && styles.checkOn]}>
-            {selected ? <Check size={16} color={tokens.bg} weight="bold" /> : null}
+            {selected ? <Check size={16} color={colors.bg} weight="bold" /> : null}
           </View>
         ) : null}
         <View style={styles.entryCopy}>
@@ -347,9 +368,12 @@ function DiaryEntryRow(props: DiaryEntryRowProps) {
             accessibilityLabel={entry.foodName}
           >
             <FoodEmojiBadge emoji={entry.kind === "quick" ? "⚡" : foodEmoji({ name: entry.foodName })} />
-            <AppText variant="body" style={styles.entryName}>
-              {entry.foodName}
-            </AppText>
+            <View style={styles.nameLine}>
+              <AppText variant="body" style={styles.entryName} numberOfLines={1}>
+                {entry.foodName}
+              </AppText>
+              {entry.category ? <CategoryPill category={entry.category} /> : null}
+            </View>
           </Pressable>
           <Pressable
             onPress={() => {
@@ -435,12 +459,13 @@ function DiaryEntryRow(props: DiaryEntryRowProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   section: {
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
     borderRadius: tokens.radius.md,
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
     overflow: "hidden",
   },
   header: {
@@ -458,7 +483,7 @@ const styles = StyleSheet.create({
     paddingBottom: tokens.space.md,
     gap: tokens.space.sm,
     borderTopWidth: 1,
-    borderTopColor: tokens.border,
+    borderTopColor: colors.border,
   },
   addFoodSlot: {
     height: 44,
@@ -476,16 +501,22 @@ const styles = StyleSheet.create({
     gap: tokens.space.sm,
     paddingVertical: tokens.space.sm,
     borderBottomWidth: 1,
-    borderBottomColor: tokens.border,
-    backgroundColor: tokens.surface,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.surface,
   },
   entryMain: {
     flexDirection: "row",
     alignItems: "center",
     gap: tokens.space.sm,
   },
-  entryName: {
+  nameLine: {
     flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.space.sm,
+  },
+  entryName: {
+    flexShrink: 1,
   },
   entryAmount: {
     paddingLeft: 40 + tokens.space.sm,
@@ -495,13 +526,13 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: tokens.radius.sm,
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
     alignItems: "center",
     justifyContent: "center",
   },
   checkOn: {
-    backgroundColor: tokens.accent,
-    borderColor: tokens.accent,
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
   swipe: {
     overflow: "hidden",
@@ -518,17 +549,17 @@ const styles = StyleSheet.create({
   },
   copyUnder: {
     alignItems: "flex-start",
-    backgroundColor: tokens.accent,
+    backgroundColor: colors.accent,
   },
   deleteUnder: {
     alignItems: "flex-end",
-    backgroundColor: tokens.danger,
+    backgroundColor: colors.danger,
   },
   copyLabel: {
-    color: tokens.bg,
+    color: colors.bg,
   },
   deleteLabel: {
-    color: tokens.text,
+    color: colors.text,
   },
   entryCopy: {
     flex: 1,
@@ -543,19 +574,19 @@ const styles = StyleSheet.create({
   amountInput: {
     flex: 1,
     minHeight: 40,
-    color: tokens.text,
+    color: colors.text,
     fontSize: tokens.type.body.fontSize,
     fontFamily: tokens.font.body,
-    backgroundColor: tokens.bgElevated,
+    backgroundColor: colors.bgElevated,
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
     borderRadius: tokens.radius.sm,
     paddingHorizontal: tokens.space.sm,
     paddingVertical: tokens.space.xs,
   },
   unitToggle: {
     flexDirection: "row",
-    backgroundColor: tokens.bgElevated,
+    backgroundColor: colors.bgElevated,
     borderRadius: tokens.radius.full,
     padding: tokens.space.xs,
     gap: tokens.space.xs,
@@ -569,10 +600,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: tokens.space.sm,
   },
   unitChipOn: {
-    backgroundColor: tokens.accent,
+    backgroundColor: colors.accent,
   },
   unitChipOnLabel: {
-    color: tokens.bg,
+    color: colors.bg,
     fontFamily: tokens.font.bodyBold,
   },
   actions: {
@@ -583,5 +614,7 @@ const styles = StyleSheet.create({
     marginTop: tokens.space.sm,
   },
 });
+}
+
 
 export default DiaryMealSection;

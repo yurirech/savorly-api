@@ -29,6 +29,7 @@ import { PANTRY_ENABLED } from "../../../src/config/features";
 import { usePantryMatchForRecipes } from "../../../src/hooks/useRecipePantry";
 
 import { tokens } from "../../../src/theme/tokens";
+import { useTheme, useThemedStyles, type ThemeColors } from "../../../src/theme/theme";
 
 
 
@@ -37,6 +38,9 @@ type RecipesSegment = "cookbooks" | "recipes";
 
 
 export default function RecipesScreen() {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
+
 
   const [query, setQuery] = useState("");
 
@@ -234,7 +238,7 @@ export default function RecipesScreen() {
 
             >
 
-              <Jar size={22} color={tokens.accent} weight="regular" />
+              <Jar size={22} color={colors.accent} weight="regular" />
 
             </Pressable>
 
@@ -252,7 +256,7 @@ export default function RecipesScreen() {
 
             >
 
-              <Plus size={22} color={tokens.accent} weight="bold" />
+              <Plus size={22} color={colors.accent} weight="bold" />
 
             </Pressable>
 
@@ -396,7 +400,8 @@ export default function RecipesScreen() {
 
 
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
 
   header: {
 
@@ -426,7 +431,7 @@ const styles = StyleSheet.create({
 
     borderRadius: tokens.radius.full,
 
-    backgroundColor: tokens.accentMuted,
+    backgroundColor: colors.accentMuted,
 
     alignItems: "center",
 
@@ -459,5 +464,7 @@ const styles = StyleSheet.create({
   },
 
 });
+}
+
 
 

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
+  alreadyInGroupMessage,
   foodMatchesQuery,
   scaleNutrition,
   type FatsecretFoodHit,
@@ -42,7 +43,9 @@ import DiaryMealNameSheet from "../../../src/diary/DiaryMealNameSheet";
 import DiaryMealPickerSheet from "../../../src/diary/DiaryMealPickerSheet";
 import { pickMealFromDay, resolveMealForDate, writeLastDiaryMeal } from "../../../src/diary/lastDiaryMealStorage";
 import { tokens } from "../../../src/theme/tokens";
-import { confirmDestructive } from "../../../src/utils/confirmDestructive";
+import { useTheme, useThemedStyles, type ThemeColors } from "../../../src/theme/theme";
+import { confirmChoice, confirmDestructive } from "../../../src/utils/confirmDestructive";
+import CategoryPill from "../../../src/diary/CategoryPill";
 import { todayIsoDate } from "../../../src/utils/isoDate";
 import type { DiaryMealGroup } from "@savorly/shared";
 
@@ -102,6 +105,9 @@ function foodMatchesLibraryTab(food: UserFood, tab: string): boolean {
 }
 
 export default function DiaryFoodsScreen() {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   const params = useLocalSearchParams<{ date?: string; mealId?: string; nutritionRecipeId?: string; itemId?: string }>();
   const date = firstParam(params.date) ?? todayIsoDate();
   const mealIdParam = firstParam(params.mealId);
@@ -308,15 +314,24 @@ export default function DiaryFoodsScreen() {
     }
   }
 
-  async function logFoodToMeal(food: UserFood, targetMealId: string) {
+  async function logFoodToMeal(food: UserFood, targetMealId: string): Promise<boolean> {
+    const meal = meals.find((row) => row.id === targetMealId);
+    if (meal?.entries.some((entry) => entry.foodId === food.id)) {
+      setError(alreadyInGroupMessage(food.name));
+      return false;
+    }
+    if (date !== todayIsoDate()) {
+      const confirmed = await confirmChoice("Not today", `Log this on ${date}? This isn't today.`, "Log");
+      if (!confirmed) return false;
+    }
     const grams = await gramsForFood(food.id);
     await addDiaryEntry(targetMealId, food.id, grams, date);
     setLoggedGrams((current) => ({ ...current, [food.id]: grams }));
-    const meal = meals.find((row) => row.id === targetMealId);
     if (meal) {
       await writeLastDiaryMeal({ mealId: meal.id, mealName: meal.name, date });
       setBoundMeal({ id: meal.id, name: meal.name });
     }
+    return true;
   }
 
   async function onCheckFood(food: UserFood) {
@@ -338,8 +353,10 @@ export default function DiaryFoodsScreen() {
     setError(null);
     try {
       if (boundMeal) {
-        await logFoodToMeal(food, boundMeal.id);
-        setCheckedIds((current) => new Set(current).add(food.id));
+        const logged = await logFoodToMeal(food, boundMeal.id);
+        if (logged) {
+          setCheckedIds((current) => new Set(current).add(food.id));
+        }
       } else {
         const day = await fetchDiaryDay(date);
         setMeals(day.meals);
@@ -496,7 +513,7 @@ export default function DiaryFoodsScreen() {
             >
               <FunnelSimple
                 size={20}
-                color={filter !== "library" ? tokens.accent : tokens.text}
+                color={filter !== "library" ? colors.accent : colors.text}
                 weight={filter !== "library" ? "fill" : "regular"}
               />
             </Pressable>
@@ -666,8 +683,10 @@ export default function DiaryFoodsScreen() {
           void (async () => {
             setLoggingId(food.id);
             try {
-              await logFoodToMeal(food, nextMealId);
-              setCheckedIds((current) => new Set(current).add(food.id));
+              const logged = await logFoodToMeal(food, nextMealId);
+              if (logged) {
+                setCheckedIds((current) => new Set(current).add(food.id));
+              }
             } catch (err) {
               setError(err instanceof ApiRequestError ? err.message : "Could not log that food.");
             } finally {
@@ -697,8 +716,10 @@ export default function DiaryFoodsScreen() {
             setMeals(live.meals);
             setCreateMealVisible(false);
             if (created) {
-              await logFoodToMeal(pendingFood, created.id);
-              setCheckedIds((current) => new Set(current).add(pendingFood.id));
+              const logged = await logFoodToMeal(pendingFood, created.id);
+              if (logged) {
+                setCheckedIds((current) => new Set(current).add(pendingFood.id));
+              }
             }
             setPendingFood(null);
           } catch (err) {
@@ -715,6 +736,8 @@ export default function DiaryFoodsScreen() {
 }
 
 function FoodsListSkeleton(props: { rows?: number }) {
+  const styles = useThemedStyles(createStyles);
+
   const { rows = 6 } = props;
   return (
     <View style={styles.skeleton}>
@@ -743,6 +766,9 @@ interface FoodRowProps {
 }
 
 function FoodRow(props: FoodRowProps) {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   const { food, caption, checked, checking, showCheck, onCheck, onOpen, onDelete } = props;
   const menuRef = useRef<View>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -760,7 +786,7 @@ function FoodRow(props: FoodRowProps) {
             accessibilityState={{ checked, busy: checking }}
             accessibilityLabel={`Log ${food.name}`}
           >
-            {checked ? <Check size={16} color={tokens.bg} weight="bold" /> : null}
+            {checked ? <Check size={16} color={colors.bg} weight="bold" /> : null}
           </Pressable>
         ) : null}
         <Pressable
@@ -769,7 +795,12 @@ function FoodRow(props: FoodRowProps) {
           accessibilityRole="button"
           accessibilityLabel={food.name}
         >
-          <AppText variant="title">{food.name}</AppText>
+          <View style={styles.nameLine}>
+            <AppText variant="title" style={styles.foodName} numberOfLines={1}>
+              {food.name}
+            </AppText>
+            {food.category ? <CategoryPill category={food.category} /> : null}
+          </View>
           <AppText variant="caption" color="muted">
             {caption}
           </AppText>
@@ -787,7 +818,7 @@ function FoodRow(props: FoodRowProps) {
           accessibilityLabel={`More actions for ${food.name}`}
           hitSlop={8}
         >
-          <DotsThreeVertical size={22} color={tokens.text} weight="bold" />
+          <DotsThreeVertical size={22} color={colors.text} weight="bold" />
         </Pressable>
       </View>
       <ContextMenu
@@ -811,6 +842,8 @@ interface CatalogRowProps {
 }
 
 function CatalogRow(props: CatalogRowProps) {
+  const styles = useThemedStyles(createStyles);
+
   const { title, caption, loading, onPress } = props;
   return (
     <Pressable
@@ -830,7 +863,8 @@ function CatalogRow(props: CatalogRowProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   titleRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -851,13 +885,13 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: tokens.radius.full,
     borderWidth: 1,
-    borderColor: tokens.border,
-    backgroundColor: tokens.bgElevated,
+    borderColor: colors.border,
+    backgroundColor: colors.bgElevated,
     alignItems: "center",
     justifyContent: "center",
   },
   filterButtonOn: {
-    borderColor: tokens.accent,
+    borderColor: colors.accent,
   },
   filterPanel: {
     gap: tokens.space.sm,
@@ -874,7 +908,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     minWidth: "100%",
-    backgroundColor: tokens.bgElevated,
+    backgroundColor: colors.bgElevated,
     borderRadius: tokens.radius.full,
     padding: tokens.space.xs,
     gap: tokens.space.xs,
@@ -888,14 +922,14 @@ const styles = StyleSheet.create({
     paddingVertical: tokens.space.xs,
   },
   libraryTabOn: {
-    backgroundColor: tokens.accent,
+    backgroundColor: colors.accent,
   },
   libraryTabLabel: {
-    color: tokens.textMuted,
+    color: colors.textMuted,
     fontFamily: tokens.font.bodyBold,
   },
   libraryTabLabelOn: {
-    color: tokens.bg,
+    color: colors.bg,
     fontFamily: tokens.font.bodyBold,
   },
   filterChip: {
@@ -903,19 +937,19 @@ const styles = StyleSheet.create({
     paddingVertical: tokens.space.xs,
     borderRadius: tokens.radius.full,
     borderWidth: 1,
-    borderColor: tokens.border,
-    backgroundColor: tokens.bgElevated,
+    borderColor: colors.border,
+    backgroundColor: colors.bgElevated,
   },
   filterChipOn: {
-    backgroundColor: tokens.accent,
-    borderColor: tokens.accent,
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
   filterChipLabel: {
-    color: tokens.textMuted,
+    color: colors.textMuted,
     fontFamily: tokens.font.bodyBold,
   },
   filterChipLabelOn: {
-    color: tokens.bg,
+    color: colors.bg,
     fontFamily: tokens.font.bodyBold,
   },
   row: {
@@ -925,24 +959,32 @@ const styles = StyleSheet.create({
     gap: tokens.space.md,
     paddingVertical: tokens.space.sm,
     borderBottomWidth: 1,
-    borderBottomColor: tokens.border,
+    borderBottomColor: colors.border,
   },
   copy: {
     flex: 1,
     gap: tokens.space.xs,
+  },
+  nameLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.space.sm,
+  },
+  foodName: {
+    flexShrink: 1,
   },
   check: {
     width: 22,
     height: 22,
     borderRadius: tokens.radius.sm,
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
     alignItems: "center",
     justifyContent: "center",
   },
   checkOn: {
-    backgroundColor: tokens.accent,
-    borderColor: tokens.accent,
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
   menuButton: {
     width: 44,
@@ -969,7 +1011,7 @@ const styles = StyleSheet.create({
     minHeight: 56,
     paddingHorizontal: tokens.space.lg,
     borderRadius: tokens.radius.full,
-    backgroundColor: tokens.accent,
+    backgroundColor: colors.accent,
     alignItems: "center",
     justifyContent: "center",
     zIndex: 20,
@@ -979,10 +1021,12 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.98 }],
   },
   fabLabel: {
-    color: tokens.bg,
+    color: colors.bg,
     fontFamily: tokens.font.bodyBold,
   },
   fabClearance: {
     height: 72,
   },
 });
+}
+

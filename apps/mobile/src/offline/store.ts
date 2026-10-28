@@ -608,6 +608,7 @@ export function localEntry(input: {
   nutrients: NutrientVector;
   kind: DiaryEntry["kind"];
   label?: string;
+  category?: string | null;
 }): DiaryEntry {
   return {
     id: input.id,
@@ -617,6 +618,7 @@ export function localEntry(input: {
     foodId: input.foodId,
     label: input.label,
     foodName: input.foodName,
+    category: input.category ?? null,
     grams: input.grams,
     amountUnit: input.amountUnit ?? "grams",
     nutrients: input.nutrients,
@@ -667,6 +669,7 @@ export function scaledFoodEntry(
     mealId,
     foodId: food.id,
     foodName: food.name,
+    category: food.category,
     grams,
     amountUnit,
     nutrients: scaleNutrition(food.per100g, grams),

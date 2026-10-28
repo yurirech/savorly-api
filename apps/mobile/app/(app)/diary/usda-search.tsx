@@ -1,3 +1,4 @@
+import { useThemedStyles, type ThemeColors } from "../../../src/theme/theme";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
@@ -11,6 +12,8 @@ import { Screen } from "../../../src/components/Screen";
 import { tokens } from "../../../src/theme/tokens";
 
 export default function UsdaSearchScreen() {
+  const styles = useThemedStyles(createStyles);
+
   const params = useLocalSearchParams<{ q?: string; recipeId?: string; itemId?: string }>();
   const recipeId = Array.isArray(params.recipeId) ? params.recipeId[0] : params.recipeId;
   const itemId = Array.isArray(params.itemId) ? params.itemId[0] : params.itemId;
@@ -116,7 +119,8 @@ export default function UsdaSearchScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   hit: {
     flexDirection: "row",
     alignItems: "center",
@@ -124,10 +128,12 @@ const styles = StyleSheet.create({
     gap: tokens.space.md,
     paddingVertical: tokens.space.sm,
     borderBottomWidth: 1,
-    borderBottomColor: tokens.border,
+    borderBottomColor: colors.border,
   },
   copy: {
     flex: 1,
     gap: tokens.space.xs,
   },
 });
+}
+

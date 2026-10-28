@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { CookbookSummary } from "@savorly/shared";
 import { createCookbook } from "../api/client";
 import { tokens } from "../theme/tokens";
+import { useTheme, useThemedStyles, type ThemeColors } from "../theme/theme";
 import { AppText } from "./AppText";
 import { Button } from "./Button";
 import { Field } from "./Field";
@@ -21,6 +22,9 @@ type CookbookPickerSheetProps = {
 };
 
 export function CookbookPickerSheet(props: CookbookPickerSheetProps) {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   const { visible, cookbooks, selectedIds, saving, onToggle, onCreated, onSave, onClose } = props;
   const insets = useSafeAreaInsets();
   const [name, setName] = useState("");
@@ -86,7 +90,7 @@ export function CookbookPickerSheet(props: CookbookPickerSheetProps) {
                       </AppText>
                     </View>
                     {selected ? (
-                      <Check size={20} color={tokens.accent} weight="bold" />
+                      <Check size={20} color={colors.accent} weight="bold" />
                     ) : (
                       <View style={styles.unchecked} />
                     )}
@@ -108,7 +112,8 @@ export function CookbookPickerSheet(props: CookbookPickerSheetProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   frame: {
     flex: 1,
     justifyContent: "flex-end",
@@ -119,11 +124,11 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     left: 0,
-    backgroundColor: tokens.bg,
+    backgroundColor: colors.bg,
     opacity: 0.72,
   },
   sheet: {
-    backgroundColor: tokens.bgElevated,
+    backgroundColor: colors.bgElevated,
     borderTopLeftRadius: tokens.radius.lg,
     borderTopRightRadius: tokens.radius.lg,
     padding: tokens.space.lg,
@@ -139,10 +144,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: tokens.space.md,
     borderBottomWidth: 1,
-    borderBottomColor: tokens.border,
+    borderBottomColor: colors.border,
   },
   rowSelected: {
-    borderBottomColor: tokens.accent,
+    borderBottomColor: colors.accent,
   },
   rowCopy: {
     flex: 1,
@@ -154,6 +159,8 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: tokens.radius.full,
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
   },
 });
+}
+

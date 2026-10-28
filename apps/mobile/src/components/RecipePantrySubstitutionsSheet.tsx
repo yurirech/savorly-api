@@ -1,3 +1,4 @@
+import { useThemedStyles, type ThemeColors } from "../theme/theme";
 import { Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { PantrySubstitutionResponse } from "@savorly/shared";
@@ -17,6 +18,8 @@ type RecipePantrySubstitutionsSheetProps = {
 };
 
 export function RecipePantrySubstitutionsSheet(props: RecipePantrySubstitutionsSheetProps) {
+  const styles = useThemedStyles(createStyles);
+
   const { visible, result, error, applying, onClose, onApply } = props;
   const insets = useSafeAreaInsets();
 
@@ -61,17 +64,18 @@ export function RecipePantrySubstitutionsSheet(props: RecipePantrySubstitutionsS
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   frame: {
     flex: 1,
     justifyContent: "flex-end",
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: colors.scrim,
   },
   sheet: {
-    backgroundColor: tokens.bgElevated,
+    backgroundColor: colors.bgElevated,
     borderTopLeftRadius: tokens.radius.lg,
     borderTopRightRadius: tokens.radius.lg,
     padding: tokens.space.lg,
@@ -85,6 +89,8 @@ const styles = StyleSheet.create({
     gap: tokens.space.xs,
     paddingVertical: tokens.space.sm,
     borderBottomWidth: 1,
-    borderBottomColor: tokens.border,
+    borderBottomColor: colors.border,
   },
 });
+}
+

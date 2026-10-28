@@ -6,6 +6,7 @@ import { foodEmoji, foodMatchesQuery, type UserFood } from "@savorly/shared";
 import {
   addNutritionRecipeItem,
   ApiRequestError,
+  copyNutritionRecipe,
   deleteNutritionRecipe,
   deleteNutritionRecipeItem,
   fetchNutritionRecipe,
@@ -26,6 +27,7 @@ import { Field } from "../../../../src/components/Field";
 import { Screen } from "../../../../src/components/Screen";
 import FoodEmojiBadge from "../../../../src/diary/FoodEmojiBadge";
 import { tokens } from "../../../../src/theme/tokens";
+import { useTheme, useThemedStyles, type ThemeColors } from "../../../../src/theme/theme";
 import { confirmDestructive } from "../../../../src/utils/confirmDestructive";
 
 function ingredientCaption(matched: boolean, grams: number | null, kcalPer100g: number | undefined): string {
@@ -36,6 +38,9 @@ function ingredientCaption(matched: boolean, grams: number | null, kcalPer100g: 
 }
 
 export default function NutritionRecipeScreen() {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
+
   const params = useLocalSearchParams<{ id?: string; addFoodId?: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const [detail, setDetail] = useState<NutritionRecipeDetail | null>(null);
@@ -54,6 +59,7 @@ export default function NutritionRecipeScreen() {
   const [cookbookRecipes, setCookbookRecipes] = useState<Array<{ id: string; title: string }>>([]);
   const [cookbookLoaded, setCookbookLoaded] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [copying, setCopying] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<ContextMenuAnchor | null>(null);
   const menuButtonRef = useRef<View>(null);
@@ -116,6 +122,23 @@ export default function NutritionRecipeScreen() {
     });
   }
 
+  function copyRecipe() {
+    if (!detail || copying || deleting) return;
+    const recipeId = detail.id;
+    void (async () => {
+      setCopying(true);
+      setError(null);
+      try {
+        const created = await copyNutritionRecipe(recipeId);
+        router.push(`/(app)/diary/nutrition-recipe/${created.id}` as Href);
+      } catch (err) {
+        setError(err instanceof ApiRequestError ? err.message : "Could not copy this recipe.");
+      } finally {
+        setCopying(false);
+      }
+    })();
+  }
+
   function confirmDelete() {
     if (!detail || deleting) return;
     const recipeId = detail.id;
@@ -153,7 +176,7 @@ export default function NutritionRecipeScreen() {
             accessibilityRole="button"
             accessibilityLabel="Recipe menu"
           >
-            <DotsThreeVertical size={22} color={tokens.text} weight="bold" />
+            <DotsThreeVertical size={22} color={colors.text} weight="bold" />
           </Pressable>
         ) : null}
       </View>
@@ -164,7 +187,10 @@ export default function NutritionRecipeScreen() {
           setMenuOpen(false);
           setMenuAnchor(null);
         }}
-        items={[{ label: "Delete recipe", destructive: true, disabled: deleting, onPress: confirmDelete }]}
+        items={[
+          { label: "Copy recipe", disabled: copying || deleting, onPress: copyRecipe },
+          { label: "Delete recipe", destructive: true, disabled: deleting || copying, onPress: confirmDelete },
+        ]}
       />
       <AppText variant="body" color="muted">
         Match every ingredient to a food in My foods, or delete the line. You can add extras.
@@ -215,7 +241,7 @@ export default function NutritionRecipeScreen() {
                 value={cookedDraft ?? (detail.cookedWeightG != null ? String(detail.cookedWeightG) : "")}
                 keyboardType="numeric"
                 placeholder={String(detail.ingredientGramsTotal || "")}
-                placeholderTextColor={tokens.textMuted}
+                placeholderTextColor={colors.textMuted}
                 accessibilityLabel="Cooked weight g"
                 onChangeText={setCookedDraft}
                 onEndEditing={(event) => {
@@ -328,7 +354,7 @@ export default function NutritionRecipeScreen() {
                       value={gramDrafts[item.id] ?? (item.grams != null ? String(item.grams) : "")}
                       keyboardType="numeric"
                       placeholder="g"
-                      placeholderTextColor={tokens.textMuted}
+                      placeholderTextColor={colors.textMuted}
                       accessibilityLabel={`Grams for ${label}`}
                       onChangeText={(value) => setGramDrafts((current) => ({ ...current, [item.id]: value }))}
                       onEndEditing={(event) => commitGrams(item.id, item.grams, event.nativeEvent.text)}
@@ -359,6 +385,20 @@ export default function NutritionRecipeScreen() {
                       <AppText variant="caption" color="danger">Delete</AppText>
                     </Pressable>
                   </View>
+                  {pickingItemId === item.id && (
+                    <IngredientMatchPicker
+                      recipeId={detail.id}
+                      itemId={item.id}
+                      foods={libraryFoods}
+                      query={foodQuery}
+                      onQueryChange={setFoodQuery}
+                      onPick={(foodId) => {
+                        void run(() => updateNutritionRecipeItem(detail.id, item.id, { foodId }));
+                        setPickingItemId(null);
+                        setFoodQuery("");
+                      }}
+                    />
+                  )}
                 </View>
               );
             })}
@@ -393,65 +433,6 @@ export default function NutritionRecipeScreen() {
                   });
                 }}
               />
-            </View>
-          ) : null}
-          {pickingItemId ? (
-            <View style={styles.picker}>
-              <Field
-                label="Search My foods"
-                value={foodQuery}
-                onChangeText={setFoodQuery}
-                placeholder="Type a food name"
-                variant="search"
-              />
-              {foodQuery.trim()
-                ? libraryFoods
-                    .filter((food) => foodMatchesQuery(food, foodQuery))
-                    .map((food) => (
-                      <Pressable
-                        key={food.id}
-                        style={styles.food}
-                        onPress={() => {
-                          void run(() => updateNutritionRecipeItem(detail.id, pickingItemId, { foodId: food.id }));
-                          setPickingItemId(null);
-                          setFoodQuery("");
-                        }}
-                      >
-                        <AppText variant="body">{food.name}</AppText>
-                      </Pressable>
-                    ))
-                : null}
-              {pickingItemId &&
-              foodQuery.trim() &&
-              !libraryFoods.some((food) => foodMatchesQuery(food, foodQuery)) ? (
-                <View style={styles.database}>
-                  <AppText variant="caption" color="muted">
-                    Nothing in My foods matches that name.
-                  </AppText>
-                  <View style={styles.actionRow}>
-                  <Button size="compact"
-                    label="Search NEVO"
-                    variant="secondary"
-                    onPress={() =>
-                      router.push({
-                        pathname: "/(app)/diary/nevo-search",
-                        params: { q: foodQuery.trim(), recipeId: detail.id, itemId: pickingItemId },
-                      })
-                    }
-                  />
-                  <Button size="compact"
-                    label="Search USDA"
-                    variant="secondary"
-                    onPress={() =>
-                      router.push({
-                        pathname: "/(app)/diary/usda-search",
-                        params: { q: foodQuery.trim(), recipeId: detail.id, itemId: pickingItemId },
-                      })
-                    }
-                  />
-                  </View>
-                </View>
-              ) : null}
             </View>
           ) : null}
           <AppText variant="caption" color="muted">
@@ -493,7 +474,78 @@ export default function NutritionRecipeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+interface IngredientMatchPickerProps {
+  recipeId: string;
+  itemId: string;
+  foods: UserFood[];
+  query: string;
+  onQueryChange: (value: string) => void;
+  onPick: (foodId: string) => void;
+}
+
+function IngredientMatchPicker(props: IngredientMatchPickerProps) {
+  const styles = useThemedStyles(createStyles);
+  const { recipeId, itemId, foods, query, onQueryChange, onPick } = props;
+  const trimmed = query.trim();
+  const matches = trimmed ? foods.filter((food) => foodMatchesQuery(food, query)) : [];
+
+  return (
+    <View style={styles.picker}>
+      <Field
+        label="Search My foods"
+        value={query}
+        onChangeText={onQueryChange}
+        placeholder="Type a food name"
+        variant="search"
+      />
+      {matches.map((food) => (
+        <Pressable
+          key={food.id}
+          style={styles.food}
+          onPress={() => onPick(food.id)}
+          accessibilityRole="button"
+          accessibilityLabel={food.name}
+        >
+          <AppText variant="body">{food.name}</AppText>
+        </Pressable>
+      ))}
+      {trimmed && matches.length === 0 && (
+        <View style={styles.database}>
+          <AppText variant="caption" color="muted">
+            Nothing in My foods matches that name.
+          </AppText>
+          <View style={styles.actionRow}>
+            <Button
+              size="compact"
+              label="Search NEVO"
+              variant="secondary"
+              onPress={() =>
+                router.push({
+                  pathname: "/(app)/diary/nevo-search",
+                  params: { q: trimmed, recipeId, itemId },
+                })
+              }
+            />
+            <Button
+              size="compact"
+              label="Search USDA"
+              variant="secondary"
+              onPress={() =>
+                router.push({
+                  pathname: "/(app)/diary/usda-search",
+                  params: { q: trimmed, recipeId, itemId },
+                })
+              }
+            />
+          </View>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   titleRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -517,12 +569,12 @@ const styles = StyleSheet.create({
     gap: tokens.space.xs,
   },
   metaInput: {
-    color: tokens.text,
+    color: colors.text,
     fontSize: tokens.type.body.fontSize,
     fontFamily: tokens.font.body,
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
     borderRadius: tokens.radius.sm,
     paddingHorizontal: tokens.space.sm,
     paddingVertical: tokens.space.xs,
@@ -530,13 +582,13 @@ const styles = StyleSheet.create({
   },
   list: {
     borderTopWidth: 1,
-    borderTopColor: tokens.border,
+    borderTopColor: colors.border,
   },
   row: {
     gap: tokens.space.sm,
     paddingVertical: tokens.space.md,
     borderBottomWidth: 1,
-    borderBottomColor: tokens.border,
+    borderBottomColor: colors.border,
   },
   rowMain: {
     flexDirection: "row",
@@ -558,13 +610,13 @@ const styles = StyleSheet.create({
   },
   grams: {
     width: 72,
-    color: tokens.text,
+    color: colors.text,
     fontSize: tokens.type.body.fontSize,
     fontFamily: tokens.font.body,
     textAlign: "right",
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
     borderRadius: tokens.radius.sm,
     paddingHorizontal: tokens.space.sm,
     paddingVertical: tokens.space.xs,
@@ -577,8 +629,8 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: tokens.radius.full,
     borderWidth: 1,
-    borderColor: tokens.border,
-    backgroundColor: tokens.surface,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -590,7 +642,7 @@ const styles = StyleSheet.create({
   },
   action: {
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
     borderRadius: tokens.radius.sm,
     paddingHorizontal: tokens.space.sm,
     paddingVertical: tokens.space.xs,
@@ -598,6 +650,8 @@ const styles = StyleSheet.create({
   food: {
     paddingVertical: tokens.space.sm,
     borderBottomWidth: 1,
-    borderBottomColor: tokens.border,
+    borderBottomColor: colors.border,
   },
 });
+}
+

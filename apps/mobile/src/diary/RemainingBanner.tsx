@@ -2,6 +2,7 @@ import { Pressable, StyleSheet } from "react-native";
 import { formatDiaryNumber, type DiaryDayResponse } from "@savorly/shared";
 import { AppText } from "../components/AppText";
 import { tokens } from "../theme/tokens";
+import { useThemedStyles, type ThemeColors } from "../theme/theme";
 
 interface RemainingBannerProps {
   remaining: DiaryDayResponse["remaining"];
@@ -11,6 +12,8 @@ interface RemainingBannerProps {
 }
 
 function RemainingBanner(props: RemainingBannerProps) {
+  const styles = useThemedStyles(createStyles);
+
   const { remaining, totalsKcal, targetKcal, onPress } = props;
   const hasTargets = targetKcal != null;
 
@@ -56,15 +59,18 @@ function RemainingBanner(props: RemainingBannerProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   card: {
-    backgroundColor: tokens.surface,
+    backgroundColor: colors.surface,
     borderRadius: tokens.radius.md,
     borderWidth: 1,
-    borderColor: tokens.border,
+    borderColor: colors.border,
     padding: tokens.space.md,
     gap: tokens.space.xs,
   },
 });
+}
+
 
 export default RemainingBanner;

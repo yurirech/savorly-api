@@ -4,8 +4,8 @@ import { DMSans_400Regular, DMSans_500Medium, DMSans_700Bold } from "@expo-googl
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import { useEffect } from "react";
 import { tokens } from "../src/theme/tokens";
+import { ThemeProvider, useTheme } from "../src/theme/theme";
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -17,26 +17,30 @@ export default function RootLayout() {
     DMSans_700Bold,
   });
 
-  useEffect(() => {
-    if (loaded) {
-      void SplashScreen.hideAsync();
-    }
-  }, [loaded]);
-
   if (!loaded) {
     return null;
   }
+
+  return (
+    <ThemeProvider>
+      <RootNavigator />
+    </ThemeProvider>
+  );
+}
+
+function RootNavigator() {
+  const colors = useTheme();
 
   return (
     <>
       <StatusBar style="light" />
       <Stack
         screenOptions={{
-          headerStyle: { backgroundColor: tokens.bg },
-          headerTintColor: tokens.text,
-          headerTitleStyle: { fontFamily: tokens.font.bodyBold, color: tokens.text },
+          headerStyle: { backgroundColor: colors.bg },
+          headerTintColor: colors.text,
+          headerTitleStyle: { fontFamily: tokens.font.bodyBold, color: colors.text },
           headerShadowVisible: false,
-          contentStyle: { backgroundColor: tokens.bg },
+          contentStyle: { backgroundColor: colors.bg },
         }}
       >
         <Stack.Screen name="index" options={{ headerShown: false }} />
